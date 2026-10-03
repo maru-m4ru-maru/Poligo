@@ -1,0 +1,26 @@
+services:
+  poligo-runner:
+    build:
+      context: ../..
+      dockerfile: services/runner/Dockerfile
+    container_name: poligo-runner
+    restart: unless-stopped
+    ports:
+      - "10001:10001"
+    environment:
+      PORT: 10001
+      RUNNER_TOKEN: ${RUNNER_TOKEN}
+      DOCKER_SOCKET: /var/run/docker.sock
+      EXECUTION_CONCURRENCY: 1
+      EXECUTION_TIMEOUT_MS: 10000
+      EXECUTION_MEMORY_BYTES: 268435456
+      EXECUTION_NANO_CPUS: 500000000
+      EXECUTION_PIDS_LIMIT: 128
+      MAX_PROJECT_BYTES: 2000000
+      MAX_OUTPUT_BYTES: 65536
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - poligo-runner-work:/tmp/poligo-runner
+
+volumes:
+  poligo-runner-work:
