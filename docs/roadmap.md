@@ -13,8 +13,14 @@
 
 ## Phase 2
 
-- Project persistence
+- Local project persistence with IndexedDB
+- Project switching
+- Project creation
+- Project rename
+- Project duplication
+- Project deletion
 - Authentication
+- Cloud project synchronization
 - Multi-file project creation
 - File and folder operations
 - Execution history
