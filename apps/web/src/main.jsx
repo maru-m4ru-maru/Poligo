@@ -66,7 +66,18 @@ function setupEditor(monaco) {
   monaco.editor.defineTheme('poligo-neutral', {
     base: 'vs-dark',
     inherit: true,
-    rules: [],
+    rules: [
+      { token: 'comment', foreground: '77776F' },
+      { token: 'keyword', foreground: 'D0D0C7' },
+      { token: 'keyword.control', foreground: 'D0D0C7' },
+      { token: 'type', foreground: 'C0BAB0' },
+      { token: 'type.identifier', foreground: 'C0BAB0' },
+      { token: 'string', foreground: 'B8AD91' },
+      { token: 'number', foreground: 'C3BFAE' },
+      { token: 'regexp', foreground: 'B8AD91' },
+      { token: 'delimiter', foreground: 'A6A69F' },
+      { token: 'identifier', foreground: 'D9D9D2' }
+    ],
     colors: {
       'editor.background': '#11110f',
       'editor.foreground': '#e1e1dc',
