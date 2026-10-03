@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: poligo-web
+    runtime: static
+    buildCommand: pnpm install --frozen-lockfile=false && pnpm build:web
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://poligo-api.onrender.com
+
+  - type: web
+    name: poligo-api
+    runtime: node
+    buildCommand: pnpm install --frozen-lockfile=false
+    startCommand: pnpm --dir services/api start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: RUNNER_URL
+        fromService:
+          name: poligo-runner
+          type: pserv
+          property: hostport
+      - key: CORS_ORIGIN
+        value: https://poligo-web.onrender.com
+
+  - type: pserv
+    name: poligo-runner
+    runtime: docker
+    dockerfilePath: ./services/runner/Dockerfile
+    dockerContext: .
