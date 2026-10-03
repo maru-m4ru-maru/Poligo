@@ -1,7 +1,7 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #e8edf2;
-  background: #080a0f;
+  color: #e1e1dc;
+  background: #0b0b09;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -20,6 +20,7 @@ body,
 
 body {
   overflow: hidden;
+  background: #0b0b09;
 }
 
 button {
@@ -32,7 +33,7 @@ button {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0b0d12;
+  background: #11110f;
 }
 
 .topbar {
@@ -40,20 +41,21 @@ button {
   align-items: center;
   gap: 18px;
   padding: 0 14px;
-  border-bottom: 1px solid #1d222c;
-  background: #0d1016;
+  border-bottom: 1px solid #292923;
+  background: #151512;
 }
 
 .brand {
   font-size: 13px;
   font-weight: 800;
   letter-spacing: .14em;
+  color: #ededE6;
 }
 
 .project-name {
   flex: 1;
   min-width: 0;
-  color: #8f99a6;
+  color: #96968f;
   font-size: 13px;
 }
 
@@ -61,7 +63,7 @@ button {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #737d89;
+  color: #7f7f78;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: .06em;
@@ -71,15 +73,15 @@ button {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #6f7782;
+  background: #66665f;
 }
 
 .status-dot.online {
-  background: #49b675;
+  background: #6c8a62;
 }
 
 .status-dot.offline {
-  background: #bf5959;
+  background: #98615c;
 }
 
 .top-actions {
@@ -89,23 +91,27 @@ button {
 
 .top-actions button,
 .preview-header button {
-  border: 1px solid #252c37;
+  border: 1px solid #34342e;
   border-radius: 6px;
   padding: 6px 10px;
-  background: #12161d;
-  color: #cfd6de;
+  background: #1b1b17;
+  color: #d1d1ca;
   cursor: pointer;
 }
 
 .top-actions button:hover,
 .preview-header button:hover {
-  background: #171c24;
+  background: #24241f;
 }
 
 .top-actions .run {
-  border-color: #4264b6;
-  background: #2b4d9d;
-  color: #fff;
+  border-color: #5c5c54;
+  background: #ddddD3;
+  color: #171713;
+}
+
+.top-actions .run:hover {
+  background: #efefe7;
 }
 
 .workspace {
@@ -116,14 +122,14 @@ button {
 
 .sidebar {
   min-width: 0;
-  border-right: 1px solid #1d222c;
-  background: #0c0f15;
+  border-right: 1px solid #292923;
+  background: #13130f;
   padding: 12px 8px;
 }
 
 .sidebar-title {
   padding: 0 8px 12px;
-  color: #7e8996;
+  color: #85857e;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .12em;
@@ -131,7 +137,7 @@ button {
 
 .folder {
   padding: 6px 8px;
-  color: #b5bdc8;
+  color: #b8b8af;
   font-size: 12px;
 }
 
@@ -144,23 +150,23 @@ button {
   border-radius: 5px;
   padding: 7px 8px;
   background: transparent;
-  color: #acb5c0;
+  color: #aaa9a1;
   text-align: left;
   cursor: pointer;
 }
 
 .file-row:hover {
-  background: #151922;
+  background: #20201b;
 }
 
 .file-row.active {
-  background: #1a202b;
-  color: #f3f6fa;
+  background: #292923;
+  color: #eeeeE7;
 }
 
 .file-icon {
   min-width: 27px;
-  color: #718095;
+  color: #77776f;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .04em;
@@ -171,14 +177,14 @@ button {
   grid-template-rows: 34px minmax(0, 1fr) 0;
   min-width: 0;
   min-height: 0;
-  background: #0a0c10;
+  background: #11110f;
 }
 
 .tabs {
   display: flex;
   min-width: 0;
-  border-bottom: 1px solid #1d222c;
-  background: #0d1016;
+  border-bottom: 1px solid #292923;
+  background: #151512;
 }
 
 .tab {
@@ -188,8 +194,8 @@ button {
   min-width: 130px;
   height: 34px;
   padding: 0 11px;
-  border-right: 1px solid #1d222c;
-  color: #d9dee5;
+  border-right: 1px solid #292923;
+  color: #dfdfd8;
   font-size: 12px;
 }
 
@@ -202,8 +208,8 @@ button {
   grid-template-rows: 34px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid #1d222c;
-  background: #f4f5f7;
+  border-left: 1px solid #292923;
+  background: #ecece7;
 }
 
 .preview-header {
@@ -211,9 +217,9 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
-  border-bottom: 1px solid #d3d7dd;
-  background: #fff;
-  color: #4f5864;
+  border-bottom: 1px solid #cecec7;
+  background: #f4f4ef;
+  color: #5f5f58;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .1em;
@@ -221,9 +227,9 @@ button {
 
 .preview-header button {
   padding: 4px 8px;
-  border-color: #c9cfd7;
-  background: #f7f8fa;
-  color: #4f5864;
+  border-color: #c2c2ba;
+  background: #ededE7;
+  color: #5f5f58;
   font-size: 11px;
 }
 
@@ -237,8 +243,8 @@ button {
 .bottom-panel.open {
   grid-row: 3;
   min-height: 180px;
-  border-top: 1px solid #1d222c;
-  background: #090b0f;
+  border-top: 1px solid #292923;
+  background: #0e0e0c;
 }
 
 .editor-area:has(.bottom-panel.open) {
@@ -249,7 +255,7 @@ button {
   display: flex;
   align-items: center;
   height: 32px;
-  border-bottom: 1px solid #1b2028;
+  border-bottom: 1px solid #24241f;
 }
 
 .panel-tab,
@@ -257,7 +263,7 @@ button {
   height: 32px;
   border: 0;
   background: transparent;
-  color: #75808e;
+  color: #7f7f78;
   cursor: pointer;
 }
 
@@ -268,8 +274,8 @@ button {
 }
 
 .panel-tab.active {
-  color: #e8edf2;
-  border-bottom: 1px solid #d5dbe3;
+  color: #e2e2db;
+  border-bottom: 1px solid #c8c8c0;
 }
 
 .panel-toggle {
