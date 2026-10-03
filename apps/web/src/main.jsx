@@ -62,6 +62,36 @@ async function request(path, options = {}) {
   return response.json()
 }
 
+function setupEditor(monaco) {
+  monaco.editor.defineTheme('poligo-neutral', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#11110f',
+      'editor.foreground': '#e1e1dc',
+      'editorLineNumber.foreground': '#64645f',
+      'editorLineNumber.activeForeground': '#a7a7a0',
+      'editorCursor.foreground': '#eeeeea',
+      'editor.selectionBackground': '#383834',
+      'editor.inactiveSelectionBackground': '#292925',
+      'editor.lineHighlightBackground': '#181815',
+      'editorIndentGuide.background1': '#20201c',
+      'editorIndentGuide.activeBackground1': '#30302b',
+      'editorWidget.background': '#181814',
+      'editorWidget.border': '#33332d',
+      'editorSuggestWidget.background': '#181814',
+      'editorSuggestWidget.border': '#33332d',
+      'editorSuggestWidget.selectedBackground': '#2b2b26',
+      'editorHoverWidget.background': '#181814',
+      'editorHoverWidget.border': '#33332d',
+      'scrollbarSlider.background': '#3a3a35',
+      'scrollbarSlider.hoverBackground': '#4a4a43',
+      'scrollbarSlider.activeBackground': '#55554e'
+    }
+  })
+}
+
 function App() {
   const [files, setFiles] = useState(loadFiles)
   const [activeFile, setActiveFile] = useState('index.html')
@@ -244,9 +274,10 @@ function App() {
             <Editor
               height="100%"
               language={currentLanguage}
+              beforeMount={setupEditor}
               value={currentValue}
               onChange={updateFile}
-              theme="vs-dark"
+              theme="poligo-neutral"
               options={{
                 minimap: { enabled: false },
                 fontSize: 14,
