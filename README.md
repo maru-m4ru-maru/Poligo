@@ -1,22 +1,31 @@
 # Poligo
 
-Poligo is a self-hosted browser IDE designed around a modular execution architecture.
+Poligo is a browser IDE built around a replaceable execution backend.
 
 ## Repository layout
 
 - apps/web: browser IDE
-- services/api: public API and project gateway
-- services/runner: private code execution service
-- packages/protocol: shared API contracts
+- services/api: lightweight public API gateway
+- services/runner: local and future external execution implementation
+- packages/protocol: shared execution contracts
 - docs: architecture and development notes
 
-## Core principles
+## Runtime architecture
 
-- Browser-first development
-- Local execution for browser-native workloads
-- Private execution workers for server-side languages
-- Service boundaries that can scale independently
-- No dependency on a hosted IDE vendor for the core product
+The Render deployment only hosts the browser IDE and lightweight API.
+
+The code execution runner is deliberately external to Render so normal IDE traffic and untrusted compilation workloads are separated.
+
+```text
+Browser
+  |
+  +--> Static Web
+  |
+  +--> API
+          |
+          v
+      External Runner
+```
 
 ## Development
 
@@ -29,6 +38,11 @@ pnpm dev:runner
 
 ## Deployment
 
-Render configuration is provided in `render.yaml`.
+Render hosts the web app and API.
 
-The runner is configured as a private service. The API reaches it over Render's private network.
+Set these API environment variables in Render:
+
+- CORS_ORIGIN
+- RUNNER_URL
+
+The runner can be hosted independently and replaced without changing the IDE frontend.
