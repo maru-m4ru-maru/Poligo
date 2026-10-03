@@ -4,10 +4,14 @@ services:
     runtime: static
     buildCommand: pnpm install --frozen-lockfile=false && pnpm build:web
     staticPublishPath: ./apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://poligo-api.onrender.com
 
   - type: web
     name: poligo-api
     runtime: node
+    plan: free
     buildCommand: pnpm install --frozen-lockfile=false
     startCommand: pnpm --dir services/api start
     healthCheckPath: /api/health
@@ -17,4 +21,4 @@ services:
       - key: RUNNER_URL
         sync: false
       - key: CORS_ORIGIN
-        sync: false
+        value: https://poligo-web.onrender.com
