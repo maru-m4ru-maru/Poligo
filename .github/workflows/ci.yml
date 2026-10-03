@@ -29,4 +29,6 @@ jobs:
         with:
           node-version: 22
       - run: node --check services/api/src/server.js
+      - run: node --check services/runner/src/languages.js
+      - run: node --check services/runner/src/executor.js
       - run: node --check services/runner/src/server.js
