@@ -20,6 +20,7 @@ async function readJson(request) {
 
   for await (const chunk of request) {
     body += chunk
+
     if (body.length > 2_000_000) {
       throw new Error('request too large')
     }
@@ -30,18 +31,17 @@ async function readJson(request) {
 
 async function handleExecution(request, response) {
   const payload = await readJson(request)
-  const id = randomUUID()
 
   if (!runnerUrl) {
-    send(response, 202, {
-      id,
-      status: 'queued',
-      runner: 'not-configured'
+    send(response, 503, {
+      error: 'runner is not configured'
     })
     return
   }
 
-  const runnerResponse = await fetch(runnerUrl + '/v1/run', {
+  const id = randomUUID()
+
+  const runnerResponse = await fetch(runnerUrl.replace(/\/$/, '') + '/v1/run', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -53,7 +53,15 @@ async function handleExecution(request, response) {
     })
   })
 
-  const result = await runnerResponse.json()
+  let result
+
+  try {
+    result = await runnerResponse.json()
+  } catch {
+    result = {
+      error: 'runner returned invalid JSON'
+    }
+  }
 
   send(response, runnerResponse.ok ? 202 : 502, {
     id,
@@ -70,7 +78,8 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/api/health') {
     send(response, 200, {
       status: 'ok',
-      service: 'api'
+      service: 'api',
+      runner: Boolean(runnerUrl)
     })
     return
   }
@@ -79,8 +88,8 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleExecution(request, response)
     } catch (error) {
-      send(response, 400, {
-        error: error instanceof Error ? error.message : 'invalid request'
+      send(response, 502, {
+        error: error instanceof Error ? error.message : 'runner request failed'
       })
     }
     return
