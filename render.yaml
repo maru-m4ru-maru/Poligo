@@ -4,9 +4,6 @@ services:
     runtime: static
     buildCommand: pnpm install --frozen-lockfile=false && pnpm build:web
     staticPublishPath: ./apps/web/dist
-    envVars:
-      - key: VITE_API_URL
-        value: https://poligo-api.onrender.com
 
   - type: web
     name: poligo-api
@@ -18,15 +15,6 @@ services:
       - key: NODE_VERSION
         value: 22
       - key: RUNNER_URL
-        fromService:
-          name: poligo-runner
-          type: pserv
-          property: hostport
+        sync: false
       - key: CORS_ORIGIN
-        value: https://poligo-web.onrender.com
-
-  - type: pserv
-    name: poligo-runner
-    runtime: docker
-    dockerfilePath: ./services/runner/Dockerfile
-    dockerContext: .
+        sync: false
