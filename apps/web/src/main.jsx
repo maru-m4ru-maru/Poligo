@@ -5,6 +5,15 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import './styles.css'
+import {
+  createProject,
+  deleteProject,
+  duplicateProject,
+  getProject,
+  initializeWorkspace,
+  listProjects,
+  saveProject
+} from './projectStore'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build without an IDE vendor lock-in.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -123,7 +132,7 @@ function ActivityIcon({ type }) {
     return <svg {...common}><circle cx="5" cy="5" r="2" /><circle cx="15" cy="15" r="2" /><path d="M7 6.3 13 13.7M7 15h4a4 4 0 0 0 4-4V7" /></svg>
   }
 
-  return <svg {...common}><circle cx="10" cy="10" r="3" /><path d="m10 2.6.8 1.8 2 .5 1.6-1.1 1.8 1.8-1.1 1.6.5 2 1.8.8v2.6l-1.8.8-.5 2 1.1 1.6-1.8 1.8-1.6-1.1-2 .5-.8 1.8H7.4l-.8-1.8-2-.5L3 16.4l-1.8-1.8 1.1-1.6-.5-2-1.8-.8V7.6l1.8-.8.5-2-1.1-1.6L3 1.4l1.6 1.1 2-.5.8-1.8z" /></svg>
+  return <svg {...common}><circle cx="10" cy="10" r="3" /><path d="m10 2.6.8 1.8 2 .5 1.6-1.1 1.8 1.8-1.1 1.6.5 2 1.8.8v2.6l-1.8.8-.5 2 1.1 1.6-1.8 1.8-1.6-1.1-2 .5-.8 1.8H7.4l-.8-1.8-2-.5L3 16.4l1.1-1.6-.5-2-1.8-.8V7.6l1.8-.8-.5-2L3 3.2l1.6 1.1 2-.5.8-1.8z" /></svg>
 }
 
 function setupEditor(monaco) {
@@ -167,15 +176,6 @@ function setupEditor(monaco) {
   })
 }
 
-function loadFiles() {
-  try {
-    const stored = localStorage.getItem('poligo-files')
-    return stored ? { ...DEFAULT_FILES, ...JSON.parse(stored) } : DEFAULT_FILES
-  } catch {
-    return DEFAULT_FILES
-  }
-}
-
 function buildPreview(files) {
   const html = files['index.html'] || ''
   const css = files['style.css'] || ''
@@ -205,8 +205,16 @@ async function request(path, options = {}) {
   return response.json()
 }
 
+function firstFile(files) {
+  return Object.keys(files)[0] || 'index.html'
+}
+
 function App() {
-  const [files, setFiles] = useState(loadFiles)
+  const [workspaceReady, setWorkspaceReady] = useState(false)
+  const [projects, setProjects] = useState([])
+  const [currentProjectId, setCurrentProjectId] = useState('')
+  const [projectName, setProjectName] = useState('Untitled Project')
+  const [files, setFiles] = useState({})
   const [activeFile, setActiveFile] = useState('index.html')
   const [openFiles, setOpenFiles] = useState(['index.html'])
   const [activeView, setActiveView] = useState('files')
@@ -214,6 +222,8 @@ function App() {
   const [bottomOpen, setBottomOpen] = useState(true)
   const [preview, setPreview] = useState('')
   const [apiStatus, setApiStatus] = useState('checking')
+  const [saveStatus, setSaveStatus] = useState('saved')
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [previewKey, setPreviewKey] = useState(0)
   const terminalRef = useRef(null)
   const terminal = useRef(null)
@@ -221,11 +231,80 @@ function App() {
 
   const currentLanguage = FILE_META[activeFile]?.language || 'plaintext'
   const currentValue = files[activeFile] ?? ''
+  const currentProject = projects.find(project => project.id === currentProjectId)
 
   useEffect(() => {
-    localStorage.setItem('poligo-files', JSON.stringify(files))
+    let cancelled = false
+
+    initializeWorkspace(DEFAULT_FILES)
+      .then(({ projects: initialProjects, currentProject: initialProject }) => {
+        if (cancelled) return
+
+        setProjects(initialProjects)
+        setCurrentProjectId(initialProject.id)
+        setProjectName(initialProject.name)
+        setFiles(initialProject.files)
+        setActiveFile(firstFile(initialProject.files))
+        setOpenFiles([firstFile(initialProject.files)])
+        setWorkspaceReady(true)
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setSaveStatus('storage error')
+          console.error(error)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     filesRef.current = files
   }, [files])
+
+  useEffect(() => {
+    if (!workspaceReady || !currentProjectId) return
+
+    setSaveStatus('saving')
+
+    const timer = window.setTimeout(async () => {
+      try {
+        const timestamp = Date.now()
+
+        await saveProject({
+          id: currentProjectId,
+          name: projectName,
+          files,
+          createdAt: currentProject?.createdAt || timestamp,
+          updatedAt: timestamp
+        })
+
+        setProjects(current => current.map(project => (
+          project.id === currentProjectId
+            ? {
+                ...project,
+                name: projectName,
+                files,
+                updatedAt: timestamp
+              }
+            : project
+        )))
+
+        setSaveStatus('saved')
+      } catch {
+        setSaveStatus('storage error')
+      }
+    }, 500)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    workspaceReady,
+    currentProjectId,
+    projectName,
+    files
+  ])
 
   useEffect(() => {
     request('/api/health')
@@ -330,16 +409,154 @@ function App() {
       const next = current.filter(file => file !== name)
 
       if (name === activeFile) {
-        setActiveFile(next[next.length - 1] || 'index.html')
+        setActiveFile(next[next.length - 1] || firstFile(files))
       }
 
-      return next.length ? next : ['index.html']
+      return next.length ? next : [firstFile(files)]
     })
   }
 
   function refreshPreview() {
     setPreview(buildPreview(files))
     setPreviewKey(value => value + 1)
+  }
+
+  async function switchProject(id) {
+    if (id === currentProjectId) {
+      setProjectMenuOpen(false)
+      return
+    }
+
+    try {
+      const project = await getProject(id)
+
+      if (!project) return
+
+      const timestamp = Date.now()
+
+      await saveProject({
+        id: currentProjectId,
+        name: projectName,
+        files,
+        createdAt: currentProject?.createdAt || timestamp,
+        updatedAt: timestamp
+      })
+
+      setProjects(current => current.map(item => (
+        item.id === currentProjectId
+          ? { ...item, name: projectName, files, updatedAt: timestamp }
+          : item
+      )))
+
+      setCurrentProjectId(project.id)
+      setProjectName(project.name)
+      setFiles(project.files)
+      setActiveFile(firstFile(project.files))
+      setOpenFiles([firstFile(project.files)])
+      setPreview('')
+      setPreviewKey(value => value + 1)
+      localStorage.setItem('poligo-current-project', project.id)
+      setProjectMenuOpen(false)
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('storage error')
+    }
+  }
+
+  async function newProject() {
+    try {
+      const project = await createProject('Untitled Project', DEFAULT_FILES)
+
+      setProjects(current => [project, ...current])
+      setCurrentProjectId(project.id)
+      setProjectName(project.name)
+      setFiles(project.files)
+      setActiveFile('index.html')
+      setOpenFiles(['index.html'])
+      setPreview('')
+      setPreviewKey(value => value + 1)
+      setProjectMenuOpen(false)
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('storage error')
+    }
+  }
+
+  async function renameProject() {
+    const name = window.prompt('Project name', projectName)?.trim()
+
+    if (!name || name === projectName) return
+
+    setProjectName(name)
+    setProjectMenuOpen(false)
+  }
+
+  async function duplicateCurrentProject() {
+    if (!currentProject) return
+
+    try {
+      const project = await duplicateProject({
+        ...currentProject,
+        name: projectName,
+        files
+      })
+
+      setProjects(current => [project, ...current])
+      setCurrentProjectId(project.id)
+      setProjectName(project.name)
+      setFiles(project.files)
+      setActiveFile(firstFile(project.files))
+      setOpenFiles([firstFile(project.files)])
+      setPreview('')
+      setPreviewKey(value => value + 1)
+      setProjectMenuOpen(false)
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('storage error')
+    }
+  }
+
+  async function removeCurrentProject() {
+    if (!currentProject) return
+
+    const confirmed = window.confirm('Delete "' + projectName + '"?')
+
+    if (!confirmed) return
+
+    try {
+      await saveProject({
+        id: currentProjectId,
+        name: projectName,
+        files,
+        createdAt: currentProject.createdAt,
+        updatedAt: Date.now()
+      })
+
+      await deleteProject(currentProjectId)
+
+      const remaining = await listProjects()
+
+      if (!remaining.length) {
+        await newProject()
+        return
+      }
+
+      const nextProject = remaining[0]
+
+      setProjects(remaining)
+      setCurrentProjectId(nextProject.id)
+      setProjectName(nextProject.name)
+      setFiles(nextProject.files)
+      setActiveFile(firstFile(nextProject.files))
+      setOpenFiles([firstFile(nextProject.files)])
+      setPreview('')
+      setPreviewKey(value => value + 1)
+      localStorage.setItem('poligo-current-project', nextProject.id)
+      setProjectMenuOpen(false)
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('storage error')
+    }
   }
 
   async function runProject() {
@@ -414,6 +631,15 @@ function App() {
     setPreviewKey(value => value + 1)
   }
 
+  if (!workspaceReady) {
+    return (
+      <div className="app-loading">
+        <div className="app-loading-title">Poligo</div>
+        <div className="app-loading-text">Loading workspace...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -424,8 +650,40 @@ function App() {
           <button className="menu-button">View</button>
         </div>
         <div className="project-title-wrap">
-          <span className="project-title">Untitled Project</span>
-          <span className="project-visibility">Private</span>
+          <button
+            className={'project-picker ' + (projectMenuOpen ? 'open' : '')}
+            onClick={() => setProjectMenuOpen(value => !value)}
+          >
+            <span className="project-title">{projectName}</span>
+            <span className="project-picker-arrow">⌄</span>
+            <span className="project-visibility">Private</span>
+            <span className={'save-status ' + saveStatus.replace(/\s/g, '-').replace(' ', '-')}>
+              {saveStatus}
+            </span>
+          </button>
+          {projectMenuOpen && (
+            <div className="project-menu">
+              <div className="project-menu-head">PROJECTS</div>
+              <div className="project-menu-list">
+                {projects.map(project => (
+                  <button
+                    key={project.id}
+                    className={'project-menu-item ' + (project.id === currentProjectId ? 'active' : '')}
+                    onClick={() => switchProject(project.id)}
+                  >
+                    <span>{project.name}</span>
+                    <small>{project.id === currentProjectId ? 'current' : ''}</small>
+                  </button>
+                ))}
+              </div>
+              <div className="project-menu-actions">
+                <button onClick={newProject}>New</button>
+                <button onClick={duplicateCurrentProject}>Duplicate</button>
+                <button onClick={renameProject}>Rename</button>
+                <button className="danger" onClick={removeCurrentProject}>Delete</button>
+              </div>
+            </div>
+          )}
         </div>
         <div className="topbar-right">
           <button className="top-icon" title="Settings"><ActivityIcon type="settings" /></button>
