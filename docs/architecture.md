@@ -8,11 +8,15 @@ The browser IDE owns the editor, file tree, local project state, preview, termin
 
 ### API
 
-The API owns projects, authentication boundaries, execution job creation, sharing, and service orchestration.
+The API is a lightweight gateway for project operations and execution requests.
+
+It must not execute untrusted user code.
 
 ### Runner
 
-The runner is isolated from the public internet. It accepts execution jobs from the API and is the future home for language-specific sandboxes.
+The runner is intentionally outside the Render deployment.
+
+It accepts execution jobs from the API and is responsible for language-specific sandboxing.
 
 ## Execution model
 
@@ -27,12 +31,12 @@ Web
 API
   |
   v
-Runner
+External Runner
   |
   +--> language sandbox
 ```
 
-The API never exposes the runner directly to the browser.
+The browser never talks directly to the runner.
 
 ## Planned language layers
 
@@ -45,18 +49,22 @@ The API never exposes the runner directly to the browser.
 - Java and Kotlin: isolated worker
 - Additional languages through runner profiles
 
-## Data
-
-The first milestone keeps project state client-side.
-
-A persistent database will be introduced after the editor and execution contract stabilize.
-
 ## Security
 
 Untrusted user code must never execute inside the API process.
 
-The runner will be private, resource-limited, network-isolated, and disposable at the sandbox level.
+The runner must provide:
 
-## Deployment
+- process isolation
+- CPU limits
+- memory limits
+- execution timeouts
+- filesystem isolation
+- restricted network access
+- disposable workspaces
 
-Render hosts the web application as a static site, the API as a public web service, and the runner as a private service.
+## Render role
+
+Render hosts the static IDE and lightweight API.
+
+Render is not used as the primary code-execution infrastructure.
