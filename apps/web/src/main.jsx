@@ -24,6 +24,12 @@ const FILE_META = {
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
+const SERVER_LANGUAGES = new Set([
+  'python',
+  'c',
+  'cpp'
+])
+
 function FileIcon({ kind, size = 16 }) {
   const common = {
     width: size,
@@ -341,20 +347,60 @@ function App() {
     setBottomOpen(true)
     setBottomTab('terminal')
 
+    if (!SERVER_LANGUAGES.has(currentLanguage)) {
+      terminal.current?.writeln('')
+      terminal.current?.writeln('Browser preview updated.')
+      terminal.current?.write('$ ')
+      return
+    }
+
     try {
       const result = await request('/api/executions', {
         method: 'POST',
         body: JSON.stringify({
           language: currentLanguage,
+          entrypoint: activeFile,
           files
         })
       })
 
       terminal.current?.writeln('')
-      terminal.current?.writeln('Execution request accepted: ' + result.id)
+      terminal.current?.writeln('Execution queued: ' + result.id)
+
+      let completed = false
+
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        const status = await request('/api/executions/' + encodeURIComponent(result.id))
+
+        if (status.status === 'running') {
+          terminal.current?.writeln('Running...')
+          continue
+        }
+
+        if (
+          status.status === 'succeeded' ||
+          status.status === 'failed' ||
+          status.status === 'timeout'
+        ) {
+          const executionResult = status.result || {}
+          terminal.current?.writeln('')
+          terminal.current?.writeln('Status: ' + status.status)
+          terminal.current?.writeln('Exit code: ' + executionResult.exitCode)
+          terminal.current?.writeln(executionResult.stdout || executionResult.stderr || '')
+          completed = true
+          break
+        }
+      }
+
+      if (!completed) {
+        terminal.current?.writeln('')
+        terminal.current?.writeln('Execution polling timed out.')
+      }
     } catch (error) {
       terminal.current?.writeln('')
-      terminal.current?.writeln('API error: ' + error.message)
+      terminal.current?.writeln('Execution error: ' + error.message)
     }
 
     terminal.current?.write('$ ')
