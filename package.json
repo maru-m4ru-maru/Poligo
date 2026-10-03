@@ -1,0 +1,13 @@
+{
+  "name": "poligo",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "dev:web": "pnpm --dir apps/web dev",
+    "build:web": "pnpm --dir apps/web build",
+    "dev:api": "pnpm --dir services/api dev",
+    "dev:runner": "pnpm --dir services/runner dev",
+    "build": "pnpm build:web"
+  }
+}
