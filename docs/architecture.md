@@ -59,4 +59,4 @@ The runner will be private, resource-limited, network-isolated, and disposable a
 
 ## Deployment
 
-Render hosts the web application as a static site, the API as a public web service, and the runner as a private service. Render supports static sites, web services, and private services in a single Blueprint. citeturn753908search0turn753908search1
+Render hosts the web application as a static site, the API as a public web service, and the runner as a private service.
