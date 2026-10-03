@@ -27,6 +27,16 @@ Browser
       External Runner
 ```
 
+## Project storage
+
+Poligo now stores projects locally in IndexedDB.
+
+Each project includes a project ID, name, timestamps, and its complete file map. The workspace remembers the last active project across reloads and supports creating, switching, renaming, duplicating, deleting, and automatically saving projects.
+
+The old single-project `poligo-files` localStorage format is migrated automatically when present.
+
+Cloud synchronization and authentication will be added as a separate persistence layer.
+
 ## Development
 
 ```text
