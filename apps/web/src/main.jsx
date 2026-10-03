@@ -70,12 +70,14 @@ function App() {
   const [apiStatus, setApiStatus] = useState('checking')
   const terminalRef = useRef(null)
   const terminal = useRef(null)
+  const filesRef = useRef(files)
 
   const currentLanguage = FILE_META[activeFile]?.language || 'plaintext'
   const currentValue = files[activeFile] ?? ''
 
   useEffect(() => {
     localStorage.setItem('poligo-files', JSON.stringify(files))
+    filesRef.current = files
   }, [files])
 
   useEffect(() => {
@@ -118,13 +120,13 @@ function App() {
         } else if (buffer === 'help') {
           instance.writeln('commands: help, clear, run, files, health')
         } else if (buffer === 'files') {
-          Object.keys(files).forEach(name => instance.writeln(name))
+          Object.keys(filesRef.current).forEach(name => instance.writeln(name))
         } else if (buffer === 'health') {
           request('/api/health')
             .then(result => instance.writeln(JSON.stringify(result)))
             .catch(error => instance.writeln(error.message))
         } else if (buffer === 'run') {
-          setPreview(buildPreview(files))
+          setPreview(buildPreview(filesRef.current))
           instance.writeln('Browser preview updated.')
         } else if (buffer) {
           instance.writeln(buffer + ': command not found')
@@ -158,7 +160,7 @@ function App() {
       window.removeEventListener('resize', resize)
       instance.dispose()
     }
-  }, [files])
+  }, [])
 
   const previewDoc = useMemo(() => preview || buildPreview(files), [files, preview])
 
