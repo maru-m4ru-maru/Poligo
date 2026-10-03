@@ -6,6 +6,10 @@
 
 The browser IDE owns the editor, file tree, local project state, preview, terminal presentation, and client-side execution.
 
+Project metadata and source files are currently persisted in the browser with IndexedDB. This gives Poligo durable local workspaces without coupling the editor to a hosted database.
+
+Cloud synchronization and account ownership are planned separately so local editing remains useful even when the network is unavailable.
+
 ### API
 
 The API is a lightweight gateway for project operations and execution requests.
@@ -68,3 +72,24 @@ The runner must provide:
 Render hosts the static IDE and lightweight API.
 
 Render is not used as the primary code-execution infrastructure.
+
+## Project persistence
+
+The current workspace layer uses one IndexedDB database:
+
+```text
+Browser
+  |
+  +--> poligo-workspace
+          |
+          +--> projects
+                  |
+                  +--> metadata
+                  +--> files
+```
+
+Each project has its own identifier, name, timestamps, and complete file map.
+
+The browser remembers the last active project and migrates the previous single-project `poligo-files` localStorage format when it finds one.
+
+The next persistence layer can sync the same project model to a server without changing the editor data model.
