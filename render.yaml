@@ -6,7 +6,7 @@ services:
     staticPublishPath: ./apps/web/dist
     envVars:
       - key: VITE_API_URL
-        value: https://poligo-api.onrender.com
+        value: https://poligo-api-g0wc.onrender.com
 
   - type: web
     name: poligo-api
@@ -20,5 +20,7 @@ services:
         value: 22
       - key: RUNNER_URL
         sync: false
+      - key: RUNNER_TOKEN
+        sync: false
       - key: CORS_ORIGIN
-        value: https://poligo-web.onrender.com
+        value: https://poligo-web-2n2l.onrender.com
