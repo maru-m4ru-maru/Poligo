@@ -463,14 +463,17 @@ const server = http.createServer(async (request, response) => {
       await handleProjectRequest(request, response)
     } catch (error) {
       const status =
-        error.message === 'invalid workspace id' ||
-        error.message.includes('required') ||
-        error.message.includes('invalid project') ||
-        error.message.includes('project files') ||
-        error.message.includes('project is too large') ||
-        error.message.includes('too many project files')
-          ? 400
-          : 500
+        error.statusCode ||
+        (
+          error.message === 'invalid workspace id' ||
+          error.message.includes('required') ||
+          error.message.includes('invalid project') ||
+          error.message.includes('project files') ||
+          error.message.includes('project is too large') ||
+          error.message.includes('too many project files')
+            ? 400
+            : 500
+        )
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
@@ -511,7 +514,7 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleExecution(request, response)
     } catch (error) {
-      send(response, 502, {
+      send(response, error.statusCode || 502, {
         error: error instanceof Error ? error.message : 'runner request failed'
       })
     }
