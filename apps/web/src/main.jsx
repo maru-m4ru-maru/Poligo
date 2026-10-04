@@ -1,12 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  getAccessToken,
-  isAuthConfigured,
-  signIn,
-  signOut,
-  signUp,
-  supabase
-} from './auth.js'
 import { createRoot } from 'react-dom/client'
 import Editor from '@monaco-editor/react'
 import { Terminal } from '@xterm/xterm'
@@ -15,7 +7,6 @@ import '@xterm/xterm/css/xterm.css'
 import './styles.css'
 import {
   createProject,
-  claimWorkspace,
   deleteProject,
   duplicateProject,
   getProject,
@@ -199,12 +190,10 @@ function buildPreview(files) {
 }
 
 async function request(path, options = {}) {
-  const accessToken = await getAccessToken()
   const response = await fetch(API_URL + path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: 'Bearer ' + accessToken } : {}),
       ...(options.headers || {})
     }
   })
@@ -220,145 +209,7 @@ function firstFile(files) {
   return Object.keys(files)[0] || 'index.html'
 }
 
-function AuthPanel() {
-  const [mode, setMode] = useState('signin')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
-
-  async function submit(event) {
-    event.preventDefault()
-    setBusy(true)
-    setMessage('')
-
-    try {
-      if (mode === 'signin') {
-        await signIn(email.trim(), password)
-      } else {
-        const result = await signUp(email.trim(), password)
-        setMessage(
-          result.session
-            ? 'Account created.'
-            : 'Check your email to confirm your account.'
-        )
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Authentication failed')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!isAuthConfigured()) {
-    return (
-      <div className="auth-screen">
-        <div className="auth-card">
-          <div className="auth-brand">Poligo</div>
-          <div className="auth-title">Authentication is not configured</div>
-          <div className="auth-message">
-            Configure the Supabase environment variables for the web and API services.
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="auth-screen">
-      <div className="auth-card">
-        <div className="auth-brand">Poligo</div>
-        <div className="auth-title">{mode === 'signin' ? 'Sign in' : 'Create account'}</div>
-        <div className="auth-subtitle">Cloud projects are tied to your account.</div>
-        <form onSubmit={submit} className="auth-form">
-          <label>
-            <span>Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={event => setEmail(event.target.value)}
-              autoComplete="email"
-              required
-            />
-          </label>
-          <label>
-            <span>Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-              minLength={6}
-              required
-            />
-          </label>
-          <button className="auth-submit" disabled={busy}>
-            {busy ? 'Working...' : mode === 'signin' ? 'Sign in' : 'Create account'}
-          </button>
-        </form>
-        {message && <div className="auth-message">{message}</div>}
-        <button
-          className="auth-switch"
-          onClick={() => {
-            setMode(value => value === 'signin' ? 'signup' : 'signin')
-            setMessage('')
-          }}
-        >
-          {mode === 'signin' ? 'Create an account' : 'Back to sign in'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function AuthGate() {
-  const [ready, setReady] = useState(false)
-  const [user, setUser] = useState(null)
-
-  useEffect(() => {
-    if (!supabase) {
-      setReady(true)
-      return
-    }
-
-    let active = true
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!active) return
-      setUser(session?.user || null)
-      setReady(true)
-    })
-
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null)
-      setReady(true)
-    })
-
-    return () => {
-      active = false
-      subscription.unsubscribe()
-    }
-  }, [])
-
-  if (!ready) {
-    return (
-      <div className="app-loading">
-        <div className="app-loading-title">Poligo</div>
-        <div className="app-loading-text">Checking session...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <AuthPanel />
-  }
-
-  return <AuthenticatedApp user={user} />
-}
-
-function AuthenticatedApp({ user }) {
+function App() {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState('')
@@ -385,8 +236,7 @@ function AuthenticatedApp({ user }) {
   useEffect(() => {
     let cancelled = false
 
-    claimWorkspace()
-      .then(() => initializeWorkspace(DEFAULT_FILES))
+    initializeWorkspace(DEFAULT_FILES)
       .then(({ projects: initialProjects, currentProject: initialProject }) => {
         if (cancelled) return
 
@@ -836,8 +686,6 @@ function AuthenticatedApp({ user }) {
           )}
         </div>
         <div className="topbar-right">
-          <span className="account-email" title={user.email}>{user.email}</span>
-          <button className="top-button" onClick={() => signOut().catch(() => {})}>Sign out</button>
           <button className="top-icon" title="Settings"><ActivityIcon type="settings" /></button>
           <span className="connection-status">
             <span className={'status-dot ' + apiStatus} />
@@ -1009,4 +857,4 @@ function AuthenticatedApp({ user }) {
   )
 }
 
-createRoot(document.getElementById('root')).render(<AuthGate />)
+createRoot(document.getElementById('root')).render(<App />)
