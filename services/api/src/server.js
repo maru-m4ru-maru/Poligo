@@ -509,8 +509,17 @@ const server = http.createServer(async (request, response) => {
   })
 })
 
-initializeDatabase().then(() => {
-  server.listen(port, '0.0.0.0', () => {
-    console.log('Poligo API listening on ' + port)
-  })
+server.listen(port, '0.0.0.0', () => {
+  console.log('Poligo API listening on ' + port)
+
+  initializeDatabase()
+    .then(initialized => {
+      console.log('Poligo database ' + (initialized ? 'ready' : 'not configured'))
+    })
+    .catch(error => {
+      console.error(
+        'Poligo database initialization failed: ' +
+        (error instanceof Error ? error.message : String(error))
+      )
+    })
 })
