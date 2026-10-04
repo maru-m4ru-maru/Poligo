@@ -13,14 +13,14 @@
 
 ## Phase 2
 
-- Local project persistence with IndexedDB
+- Turso project persistence
 - Project switching
 - Project creation
 - Project rename
 - Project duplication
 - Project deletion
 - Authentication
-- Cloud project synchronization
+- Account-backed cloud ownership
 - Multi-file project creation
 - File and folder operations
 - Execution history
