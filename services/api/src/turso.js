@@ -37,10 +37,9 @@ export async function initializeDatabase() {
 
   try {
     await database.batch([
-      'PRAGMA foreign_keys = ON',
       `CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY,
-        owner_id TEXT,
+        owner_id TEXT NOT NULL,
         name TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
@@ -53,8 +52,9 @@ export async function initializeDatabase() {
         FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
       )`,
       'CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id)',
-      'CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at)'
-    ])
+      'CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at)',
+      'CREATE INDEX IF NOT EXISTS idx_project_files_project_id ON project_files(project_id)'
+    ], 'immediate')
 
     status = 'online'
     error = null
