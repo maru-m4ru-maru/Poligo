@@ -8,7 +8,6 @@
     "start": "node src/server.js"
   },
   "dependencies": {
-    "@tursodatabase/serverless": "1.4.0",
-    "@supabase/supabase-js": "2.117.2"
+    "@tursodatabase/serverless": "1.4.0"
   }
 }
