@@ -7,10 +7,6 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://poligo-api-g0wc.onrender.com
-      - key: VITE_SUPABASE_URL
-        sync: false
-      - key: VITE_SUPABASE_PUBLISHABLE_KEY
-        sync: false
 
   - type: web
     name: poligo-api
@@ -32,7 +28,3 @@ services:
         sync: false
       - key: CORS_ORIGIN
         value: https://poligo-web-2n2l.onrender.com
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_PUBLISHABLE_KEY
-        sync: false
