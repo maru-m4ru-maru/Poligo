@@ -214,11 +214,24 @@ async function updateProject(projectId, ownerId, payload) {
 
 async function deleteProject(projectId, ownerId) {
   const database = getDatabase()
-  const result = await database.prepare(
-    'DELETE FROM projects WHERE id = ? AND owner_id = ?'
-  ).run([projectId, ownerId])
+  const current = await getProjectById(projectId, ownerId)
 
-  return Number(result.rowsAffected || 0) > 0
+  if (!current) {
+    return false
+  }
+
+  await database.batch([
+    {
+      sql: 'DELETE FROM project_files WHERE project_id = ?',
+      args: [projectId]
+    },
+    {
+      sql: 'DELETE FROM projects WHERE id = ? AND owner_id = ?',
+      args: [projectId, ownerId]
+    }
+  ], 'immediate')
+
+  return true
 }
 
 async function handleProjectRequest(request, response) {
@@ -292,7 +305,7 @@ async function handleProjectRequest(request, response) {
       return
     }
 
-    send(response, 204, {})
+    send(response, 200, { ok: true })
   }
 }
 
