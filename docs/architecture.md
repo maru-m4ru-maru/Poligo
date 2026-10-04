@@ -4,15 +4,15 @@
 
 ### Web
 
-The browser IDE owns the editor, file tree, local project state, preview, terminal presentation, and client-side execution.
+The browser IDE owns the editor, file tree, project state, preview, terminal presentation, and client-side execution.
 
-Project metadata and source files are currently persisted in the browser with IndexedDB. This gives Poligo durable local workspaces without coupling the editor to a hosted database.
-
-Cloud synchronization and account ownership are planned separately so local editing remains useful even when the network is unavailable.
+Project metadata and source files are stored in Turso through the Poligo API. The browser keeps only a small anonymous workspace identifier and the active project identifier in localStorage.
 
 ### API
 
 The API is a lightweight gateway for project operations and execution requests.
+
+It is the only component that talks to Turso and the external runner.
 
 It must not execute untrusted user code.
 
@@ -31,16 +31,12 @@ Server-side workloads use this flow:
 ```text
 Web
   |
-  v
-API
+  +--> API --> Turso
   |
-  v
-External Runner
-  |
-  +--> language sandbox
+  +--> API --> External Runner
 ```
 
-The browser never talks directly to the runner.
+The browser never talks directly to Turso or the runner.
 
 ## Planned language layers
 
@@ -67,6 +63,8 @@ The runner must provide:
 - restricted network access
 - disposable workspaces
 
+Project APIs currently use an anonymous browser-generated workspace identifier as the owner key. This is a persistence boundary, not an authentication boundary. Account authentication will replace the anonymous identifier before Poligo exposes private cloud projects to multiple users.
+
 ## Render role
 
 Render hosts the static IDE and lightweight API.
@@ -75,21 +73,26 @@ Render is not used as the primary code-execution infrastructure.
 
 ## Project persistence
 
-The current workspace layer uses one IndexedDB database:
+Turso stores project metadata separately from source files:
 
 ```text
-Browser
-  |
-  +--> poligo-workspace
-          |
-          +--> projects
-                  |
-                  +--> metadata
-                  +--> files
+Turso
+ |
+ +--> projects
+ |     +--> id
+ |     +--> owner_id
+ |     +--> name
+ |     +--> created_at
+ |     +--> updated_at
+ |
+ +--> project_files
+       +--> project_id
+       +--> path
+       +--> content
 ```
 
-Each project has its own identifier, name, timestamps, and complete file map.
+Project create and update operations write metadata and all files atomically.
 
-The browser remembers the last active project and migrates the previous single-project `poligo-files` localStorage format when it finds one.
+The browser sends the workspace identifier in the API request. The API validates project ownership against that identifier before reading or mutating a project.
 
-The next persistence layer can sync the same project model to a server without changing the editor data model.
+Authentication can later replace this anonymous owner key with a verified account identifier without changing the project schema.
