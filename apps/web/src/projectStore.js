@@ -1,119 +1,102 @@
-const DB_NAME = 'poligo-workspace'
-const STORE_NAME = 'projects'
-const DB_VERSION = 1
+const API_URL = import.meta.env.VITE_API_URL || ''
+const WORKSPACE_KEY = 'poligo-workspace-id'
+const CURRENT_PROJECT_KEY = 'poligo-current-project'
 
-function createId() {
+function createId(prefix) {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID()
   }
 
-  return 'project-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+  return prefix + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
 }
 
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION)
+function getWorkspaceId() {
+  let workspaceId = localStorage.getItem(WORKSPACE_KEY)
 
-    request.onupgradeneeded = () => {
-      const database = request.result
+  if (!workspaceId) {
+    workspaceId = createId('workspace')
+    localStorage.setItem(WORKSPACE_KEY, workspaceId)
+  }
 
-      if (!database.objectStoreNames.contains(STORE_NAME)) {
-        database.createObjectStore(STORE_NAME, {
-          keyPath: 'id'
-        })
-      }
+  return workspaceId
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(API_URL + path, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Poligo-Workspace': getWorkspaceId(),
+      ...(options.headers || {})
     }
-
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error || new Error('failed to open project database'))
   })
-}
 
-function requestResult(request) {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error || new Error('project database request failed'))
-  })
+  if (!response.ok) {
+    let message = response.status + ' ' + response.statusText
+
+    try {
+      const body = await response.json()
+
+      if (body.error) {
+        message = body.error
+      }
+    } catch {}
+
+    throw new Error(message)
+  }
+
+  return response.status === 204 ? null : response.json()
 }
 
 export async function listProjects() {
-  const database = await openDatabase()
-
-  try {
-    const transaction = database.transaction(STORE_NAME, 'readonly')
-    const request = transaction.objectStore(STORE_NAME).getAll()
-    const projects = await requestResult(request)
-
-    return projects.sort((a, b) => b.updatedAt - a.updatedAt)
-  } finally {
-    database.close()
-  }
+  return request('/api/projects')
 }
 
 export async function getProject(id) {
-  const database = await openDatabase()
-
-  try {
-    const transaction = database.transaction(STORE_NAME, 'readonly')
-    const request = transaction.objectStore(STORE_NAME).get(id)
-
-    return await requestResult(request)
-  } finally {
-    database.close()
-  }
+  return request('/api/projects/' + encodeURIComponent(id))
 }
 
 export async function saveProject(project) {
-  const database = await openDatabase()
+  const saved = await request(
+    '/api/projects/' + encodeURIComponent(project.id),
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: project.name,
+        files: project.files
+      })
+    }
+  )
 
-  try {
-    const transaction = database.transaction(STORE_NAME, 'readwrite')
-    const request = transaction.objectStore(STORE_NAME).put({
-      id: project.id,
-      name: project.name,
-      files: project.files,
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt || Date.now()
-    })
+  localStorage.setItem(CURRENT_PROJECT_KEY, project.id)
 
-    await requestResult(request)
-    localStorage.setItem('poligo-current-project', project.id)
-  } finally {
-    database.close()
-  }
+  return saved
 }
 
 export async function createProject(name, files) {
-  const now = Date.now()
-  const project = {
-    id: createId(),
-    name: name?.trim() || 'Untitled Project',
-    files: { ...files },
-    createdAt: now,
-    updatedAt: now
-  }
+  const project = await request('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: name?.trim() || 'Untitled Project',
+      files: { ...files }
+    })
+  })
 
-  await saveProject(project)
+  localStorage.setItem(CURRENT_PROJECT_KEY, project.id)
 
   return project
 }
 
 export async function deleteProject(id) {
-  const database = await openDatabase()
-
-  try {
-    const transaction = database.transaction(STORE_NAME, 'readwrite')
-    const request = transaction.objectStore(STORE_NAME).delete(id)
-
-    await requestResult(request)
-
-    const currentProjectId = localStorage.getItem('poligo-current-project')
-
-    if (currentProjectId === id) {
-      localStorage.removeItem('poligo-current-project')
+  await request(
+    '/api/projects/' + encodeURIComponent(id),
+    {
+      method: 'DELETE'
     }
-  } finally {
-    database.close()
+  )
+
+  if (localStorage.getItem(CURRENT_PROJECT_KEY) === id) {
+    localStorage.removeItem(CURRENT_PROJECT_KEY)
   }
 }
 
@@ -153,12 +136,12 @@ export async function initializeWorkspace(defaultFiles) {
     projects = [project]
   }
 
-  const savedCurrentId = localStorage.getItem('poligo-current-project')
+  const savedCurrentId = localStorage.getItem(CURRENT_PROJECT_KEY)
   const currentProject =
     projects.find(project => project.id === savedCurrentId) ||
     projects[0]
 
-  localStorage.setItem('poligo-current-project', currentProject.id)
+  localStorage.setItem(CURRENT_PROJECT_KEY, currentProject.id)
 
   return {
     projects,
