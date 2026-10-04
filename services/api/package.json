@@ -8,6 +8,6 @@
     "start": "node src/server.js"
   },
   "dependencies": {
-    "@tursodatabase/serverless": "latest"
+    "@tursodatabase/serverless": "1.4.0"
   }
 }
