@@ -1,6 +1,5 @@
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { authenticateRequest, getAuthStatus } from './auth.js'
 import { getDatabase, getDatabaseStatus, initializeDatabase } from './turso.js'
 
 const port = Number(process.env.PORT || 10000)
@@ -15,7 +14,7 @@ function send(response, status, body) {
   response.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
     'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Poligo-Workspace',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Poligo-Workspace',
     'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
   })
   response.end(JSON.stringify(body))
@@ -33,10 +32,6 @@ async function readJson(request) {
   }
 
   return body ? JSON.parse(body) : {}
-}
-
-async function getAuthenticatedUser(request) {
-  return authenticateRequest(request)
 }
 
 function getWorkspaceId(request) {
@@ -239,24 +234,10 @@ async function deleteProject(projectId, ownerId) {
   return true
 }
 
-async function handleClaimWorkspace(request, response) {
-  const user = await getAuthenticatedUser(request)
-  const workspaceId = getWorkspaceId(request)
-  const database = getDatabase()
-  const result = await database.prepare(
-    'UPDATE projects SET owner_id = ? WHERE owner_id = ?'
-  ).run([user.id, workspaceId])
-
-  send(response, 200, {
-    claimed: Number(result.rowsAffected || 0)
-  })
-}
-
 async function handleProjectRequest(request, response) {
   const url = new URL(request.url, 'http://localhost')
   const parts = url.pathname.split('/').filter(Boolean)
-  const user = await getAuthenticatedUser(request)
-  const ownerId = user.id
+  const ownerId = getWorkspaceId(request)
 
   if (parts[1] !== 'projects') {
     send(response, 404, {
@@ -341,7 +322,6 @@ function runnerHeaders() {
 }
 
 async function handleExecution(request, response) {
-  await getAuthenticatedUser(request)
   const payload = await readJson(request)
 
   if (!runnerUrl) {
@@ -383,9 +363,7 @@ async function handleExecution(request, response) {
   })
 }
 
-async function handleExecutionStatus(request, response, id) {
-  await getAuthenticatedUser(request)
-
+async function handleExecutionStatus(response, id) {
   if (!runnerUrl) {
     send(response, 503, {
       error: 'runner is not configured'
@@ -425,31 +403,19 @@ const server = http.createServer(async (request, response) => {
       status: 'ok',
       service: 'api',
       runner: Boolean(runnerUrl),
-      database: getDatabaseStatus(),
-      auth: getAuthStatus()
+      database: getDatabaseStatus()
     })
     return
   }
 
-  if (request.method === 'POST' && request.url === '/api/projects/claim') {
-    try {
-      await handleClaimWorkspace(request, response)
-    } catch (error) {
-      send(response, error.statusCode || 500, {
-        error: error instanceof Error ? error.message : 'workspace claim failed'
-      })
-    }
-    return
-  }
-
   if (
-    (request.method === 'GET' || request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE') &&
+    request.method === 'GET' &&
     (request.url === '/api/projects' || request.url.startsWith('/api/projects/'))
   ) {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
-      const status = error.statusCode || (error.message === 'invalid workspace id' ? 400 : 500)
+      const status = error.message === 'invalid workspace id' ? 400 : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
@@ -463,17 +429,14 @@ const server = http.createServer(async (request, response) => {
       await handleProjectRequest(request, response)
     } catch (error) {
       const status =
-        error.statusCode ||
-        (
-          error.message === 'invalid workspace id' ||
-          error.message.includes('required') ||
-          error.message.includes('invalid project') ||
-          error.message.includes('project files') ||
-          error.message.includes('project is too large') ||
-          error.message.includes('too many project files')
-            ? 400
-            : 500
-        )
+        error.message === 'invalid workspace id' ||
+        error.message.includes('required') ||
+        error.message.includes('invalid project') ||
+        error.message.includes('project files') ||
+        error.message.includes('project is too large') ||
+        error.message.includes('too many project files')
+          ? 400
+          : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
@@ -514,7 +477,7 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleExecution(request, response)
     } catch (error) {
-      send(response, error.statusCode || 502, {
+      send(response, 502, {
         error: error instanceof Error ? error.message : 'runner request failed'
       })
     }
@@ -532,7 +495,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     try {
-      await handleExecutionStatus(request, response, id)
+      await handleExecutionStatus(response, id)
     } catch (error) {
       send(response, 502, {
         error: error instanceof Error ? error.message : 'runner request failed'
