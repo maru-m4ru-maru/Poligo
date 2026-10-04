@@ -141,10 +141,16 @@ export async function initializeWorkspace(defaultFiles) {
     projects.find(project => project.id === savedCurrentId) ||
     projects[0]
 
-  localStorage.setItem(CURRENT_PROJECT_KEY, currentProject.id)
+  const fullCurrentProject = await getProject(currentProject.id)
+
+  if (!fullCurrentProject) {
+    throw new Error('current project could not be loaded')
+  }
+
+  localStorage.setItem(CURRENT_PROJECT_KEY, fullCurrentProject.id)
 
   return {
     projects,
-    currentProject
+    currentProject: fullCurrentProject
   }
 }
