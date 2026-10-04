@@ -23,19 +23,20 @@ Browser
   |
   +--> API
           |
-          v
-      External Runner
+          +--> Turso
+          |
+          +--> External Runner
 ```
 
 ## Project storage
 
-Poligo now stores projects locally in IndexedDB.
+Poligo stores projects in Turso through the API.
 
-Each project includes a project ID, name, timestamps, and its complete file map. The workspace remembers the last active project across reloads and supports creating, switching, renaming, duplicating, deleting, and automatically saving projects.
+Each project has a project ID, anonymous workspace owner ID, name, timestamps, and a separate set of source files. The editor automatically saves changes to the cloud and restores the selected project after reload.
 
-The old single-project `poligo-files` localStorage format is migrated automatically when present.
+The browser does not connect directly to Turso.
 
-Cloud synchronization and authentication will be added as a separate persistence layer.
+The anonymous workspace identifier is temporary. Authentication will replace it with an account-backed owner ID so projects can move between devices and users can sign in.
 
 ## Development
 
@@ -53,6 +54,8 @@ Render hosts the web app and API.
 Set these API environment variables in Render:
 
 - CORS_ORIGIN
+- TURSO_DATABASE_URL
+- TURSO_AUTH_TOKEN
 - RUNNER_URL
 
 The runner can be hosted independently and replaced without changing the IDE frontend.
