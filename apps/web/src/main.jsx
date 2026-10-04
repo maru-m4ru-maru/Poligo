@@ -360,8 +360,6 @@ function AuthGate() {
 
 function AuthenticatedApp({ user }) {
   const [workspaceReady, setWorkspaceReady] = useState(false)
-
-  const [workspaceReady, setWorkspaceReady] = useState(false)
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState('')
   const [projectName, setProjectName] = useState('Untitled Project')
