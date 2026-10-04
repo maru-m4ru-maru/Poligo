@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { getDatabaseStatus, initializeDatabase } from './turso.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -123,7 +124,8 @@ const server = http.createServer(async (request, response) => {
     send(response, 200, {
       status: 'ok',
       service: 'api',
-      runner: Boolean(runnerUrl)
+      runner: Boolean(runnerUrl),
+      database: getDatabaseStatus()
     })
     return
   }
@@ -164,6 +166,8 @@ const server = http.createServer(async (request, response) => {
   })
 })
 
-server.listen(port, '0.0.0.0', () => {
-  console.log('Poligo API listening on ' + port)
+initializeDatabase().then(() => {
+  server.listen(port, '0.0.0.0', () => {
+    console.log('Poligo API listening on ' + port)
+  })
 })
