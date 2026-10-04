@@ -27,6 +27,9 @@ async function request(path, options = {}) {
     headers: {
       'Content-Type': 'application/json',
       'X-Poligo-Workspace': getWorkspaceId(),
+      ...(await getAccessToken()
+        ? { Authorization: 'Bearer ' + (await getAccessToken()) }
+        : {}),
       ...(options.headers || {})
     }
   })
@@ -46,6 +49,12 @@ async function request(path, options = {}) {
   }
 
   return response.status === 204 ? null : response.json()
+}
+
+export async function claimWorkspace() {
+  return request('/api/projects/claim', {
+    method: 'POST'
+  })
 }
 
 export async function listProjects() {
