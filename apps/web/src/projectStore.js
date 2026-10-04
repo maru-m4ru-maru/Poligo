@@ -1,3 +1,5 @@
+import { getAccessToken } from './auth.js'
+
 const API_URL = import.meta.env.VITE_API_URL || ''
 const WORKSPACE_KEY = 'poligo-workspace-id'
 const CURRENT_PROJECT_KEY = 'poligo-current-project'
@@ -22,16 +24,20 @@ function getWorkspaceId() {
 }
 
 async function request(path, options = {}) {
+  const accessToken = await getAccessToken()
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Poligo-Workspace': getWorkspaceId(),
+    ...(options.headers || {})
+  }
+
+  if (accessToken) {
+    headers.Authorization = 'Bearer ' + accessToken
+  }
+
   const response = await fetch(API_URL + path, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Poligo-Workspace': getWorkspaceId(),
-      ...(await getAccessToken()
-        ? { Authorization: 'Bearer ' + (await getAccessToken()) }
-        : {}),
-      ...(options.headers || {})
-    }
+    headers
   })
 
   if (!response.ok) {
