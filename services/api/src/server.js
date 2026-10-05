@@ -334,7 +334,7 @@ async function handleDashboardRequest(request, response) {
       MAX(p.updated_at) AS last_updated
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
-    WHERE p.owner_id IN (?, ?)`
+    WHERE p.owner_id IN (${ownerPlaceholders})`
   )
   const statsRows = await statsStatement.all(ownerIds)
   const stats = statsRows[0] || {}
@@ -355,7 +355,7 @@ async function handleDashboardRequest(request, response) {
       COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
-    WHERE p.owner_id = ?
+    WHERE p.owner_id IN (${ownerPlaceholders})
     GROUP BY p.id, p.name, p.created_at, p.updated_at
     ORDER BY p.updated_at DESC
     LIMIT ?`
