@@ -275,6 +275,295 @@ async function updateProject(projectId, ownerId, payload) {
   }
 }
 
+function normalizeCommitMessage(value) {
+  const message = typeof value === 'string'
+    ? value.trim().slice(0, 200)
+    : ''
+
+  if (!message) {
+    throw new Error('commit message is required')
+  }
+
+  return message
+}
+
+async function listCommits(projectId, ownerId) {
+  const database = getDatabase()
+  const project = await getProjectById(projectId, ownerId)
+
+  if (!project) {
+    return null
+  }
+
+  const commitStatement = await database.prepare(
+    'SELECT id, author_id, message, created_at FROM project_commits WHERE project_id = ? ORDER BY created_at DESC'
+  )
+  const commits = await commitStatement.all([projectId])
+
+  return commits.map(commit => ({
+    id: commit.id,
+    authorId: commit.author_id,
+    message: commit.message,
+    createdAt: Number(commit.created_at)
+  }))
+}
+
+async function getCommit(projectId, ownerId, commitId) {
+  const database = getDatabase()
+  const project = await getProjectById(projectId, ownerId)
+
+  if (!project) {
+    return null
+  }
+
+  const commitStatement = await database.prepare(
+    'SELECT id, author_id, message, created_at FROM project_commits WHERE id = ? AND project_id = ?'
+  )
+  const commits = await commitStatement.all([commitId, projectId])
+  const commit = commits[0]
+
+  if (!commit) {
+    return null
+  }
+
+  const fileStatement = await database.prepare(
+    'SELECT path, content FROM project_commit_files WHERE commit_id = ? ORDER BY path'
+  )
+  const fileRows = await fileStatement.all([commitId])
+  const files = {}
+
+  for (const file of fileRows) {
+    files[file.path] = file.content
+  }
+
+  return {
+    id: commit.id,
+    authorId: commit.author_id,
+    message: commit.message,
+    createdAt: Number(commit.created_at),
+    files
+  }
+}
+
+async function ensureInitialCommit(projectId, ownerId) {
+  const commits = await listCommits(projectId, ownerId)
+
+  if (commits === null) {
+    return null
+  }
+
+  if (commits.length) {
+    return commits
+  }
+
+  const project = await getProjectById(projectId, ownerId)
+
+  if (!project) {
+    return null
+  }
+
+  const database = getDatabase()
+  const commitId = randomUUID()
+  const now = Date.now()
+  const statements = [
+    {
+      sql: 'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
+      args: [commitId, projectId, ownerId, 'Initial commit', now]
+    }
+  ]
+
+  for (const [filePath, fileContent] of Object.entries(project.files)) {
+    statements.push({
+      sql: 'INSERT INTO project_commit_files (commit_id, path, content) VALUES (?, ?, ?)',
+      args: [commitId, filePath, fileContent]
+    })
+  }
+
+  await database.batch(statements, 'immediate')
+
+  return [{
+    id: commitId,
+    authorId: ownerId,
+    message: 'Initial commit',
+    createdAt: now
+  }]
+}
+
+async function commitProject(projectId, ownerId, payload) {
+  const project = await getProjectById(projectId, ownerId)
+
+  if (!project) {
+    return null
+  }
+
+  const message = normalizeCommitMessage(payload.message)
+  const database = getDatabase()
+  const commitId = randomUUID()
+  const now = Date.now()
+  const statements = [
+    {
+      sql: 'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
+      args: [commitId, projectId, ownerId, message, now]
+    }
+  ]
+
+  for (const [filePath, fileContent] of Object.entries(project.files)) {
+    statements.push({
+      sql: 'INSERT INTO project_commit_files (commit_id, path, content) VALUES (?, ?, ?)',
+      args: [commitId, filePath, fileContent]
+    })
+  }
+
+  await database.batch(statements, 'immediate')
+
+  return {
+    id: commitId,
+    message,
+    createdAt: now,
+    files: project.files
+  }
+}
+
+function buildFileDiff(baseFiles, currentFiles) {
+  const paths = [...new Set([
+    ...Object.keys(baseFiles),
+    ...Object.keys(currentFiles)
+  ])].sort()
+
+  return paths.map(filePath => {
+    const before = baseFiles[filePath]
+    const after = currentFiles[filePath]
+
+    if (before === undefined) {
+      return { path: filePath, status: 'added', before: '', after }
+    }
+
+    if (after === undefined) {
+      return { path: filePath, status: 'deleted', before, after: '' }
+    }
+
+    if (before !== after) {
+      return { path: filePath, status: 'modified', before, after }
+    }
+
+    return null
+  }).filter(Boolean)
+}
+
+async function getCommitDiff(projectId, ownerId, commitId) {
+  const project = await getProjectById(projectId, ownerId)
+  const commit = await getCommit(projectId, ownerId, commitId)
+
+  if (!project || !commit) {
+    return null
+  }
+
+  return {
+    commit: {
+      id: commit.id,
+      message: commit.message,
+      createdAt: commit.createdAt
+    },
+    files: buildFileDiff(commit.files, project.files)
+  }
+}
+
+async function restoreCommit(projectId, ownerId, commitId) {
+  const commit = await getCommit(projectId, ownerId, commitId)
+  const project = await getProjectById(projectId, ownerId)
+
+  if (!commit || !project) {
+    return null
+  }
+
+  return updateProject(projectId, ownerId, {
+    name: project.name,
+    files: commit.files
+  })
+}
+
+async function handleSourceControlRequest(request, response) {
+  const url = new URL(request.url, 'http://localhost')
+  const parts = url.pathname.split('/').filter(Boolean)
+  const projectId = parts[2]
+  const commitId = parts[4]
+  const ownerId = await getOwnerId(request)
+
+  if (!projectId || parts[1] !== 'projects') {
+    send(response, 400, { error: 'invalid source control route' })
+    return
+  }
+
+  if (request.method === 'GET' && parts[3] === 'commits' && !commitId) {
+    let commits = await listCommits(projectId, ownerId)
+
+    if (commits === null) {
+      send(response, 404, { error: 'project not found' })
+      return
+    }
+
+    if (!commits.length) {
+      commits = await ensureInitialCommit(projectId, ownerId)
+    }
+
+    send(response, 200, { commits })
+    return
+  }
+
+  if (request.method === 'GET' && parts[3] === 'commits' && commitId && parts[5] === 'diff') {
+    const diff = await getCommitDiff(projectId, ownerId, commitId)
+
+    if (!diff) {
+      send(response, 404, { error: 'commit not found' })
+      return
+    }
+
+    send(response, 200, diff)
+    return
+  }
+
+  if (request.method === 'GET' && parts[3] === 'commits' && commitId) {
+    const commit = await getCommit(projectId, ownerId, commitId)
+
+
+    if (!commit) {
+      send(response, 404, { error: 'commit not found' })
+      return
+    }
+
+    send(response, 200, commit)
+    return
+  }
+
+  if (request.method === 'POST' && parts[3] === 'commits' && !commitId) {
+    const commit = await commitProject(projectId, ownerId, await readJson(request))
+
+
+    if (!commit) {
+      send(response, 404, { error: 'project not found' })
+      return
+    }
+
+
+    send(response, 201, commit)
+    return
+  }
+
+  if (request.method === 'POST' && parts[3] === 'commits' && commitId && parts[5] === 'restore') {
+    const restored = await restoreCommit(projectId, ownerId, commitId)
+
+
+    if (!restored) {
+      send(response, 404, { error: 'commit not found' })
+      return
+    }
+
+    send(response, 200, restored)
+    return
+  }
+
+  send(response, 404, { error: 'not found' })
+}
 async function deleteProject(projectId, ownerId) {
   const database = getDatabase()
   const current = await getProjectById(projectId, ownerId)
@@ -777,6 +1066,27 @@ const server = http.createServer(async (request, response) => {
     } catch (error) {
       send(response, error.message === 'authentication required' ? 401 : 500, {
         error: error instanceof Error ? error.message : 'dashboard request failed'
+      })
+    }
+    return
+  }
+
+  if (
+    request.url.startsWith('/api/projects/') &&
+    request.url.includes('/commits')
+  ) {
+    try {
+      await handleSourceControlRequest(request, response)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'source control request failed'
+      const status =
+        message === 'invalid workspace id' ||
+        message === 'commit message is required'
+          ? 400
+          : 500
+
+      send(response, status, {
+        error: message
       })
     }
     return
