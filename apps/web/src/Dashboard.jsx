@@ -673,7 +673,10 @@ export default function Dashboard({ session }) {
                       tabIndex={0}
                       onClick={() => openProject(project.id)}
                       onKeyDown={event => {
-                        if (event.key === 'Enter' || event.key === ' ') {
+                        if (
+                          event.target === event.currentTarget &&
+                          (event.key === 'Enter' || event.key === ' ')
+                        ) {
                           event.preventDefault()
                           openProject(project.id)
                         }
