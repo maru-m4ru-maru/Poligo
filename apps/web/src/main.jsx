@@ -39,6 +39,12 @@ const FILE_META = {
   ts: { language: 'typescript', kind: 'js' },
   tsx: { language: 'typescript', kind: 'js' },
   py: { language: 'python', kind: 'python' },
+  java: { language: 'java', kind: 'text' },
+  go: { language: 'go', kind: 'text' },
+  rs: { language: 'rust', kind: 'text' },
+  php: { language: 'php', kind: 'text' },
+  rb: { language: 'ruby', kind: 'text' },
+  kt: { language: 'kotlin', kind: 'text' },
   cs: { language: 'csharp', kind: 'text' },
   c: { language: 'c', kind: 'c' },
   h: { language: 'c', kind: 'c' },
@@ -55,6 +61,12 @@ const API_URL = import.meta.env.VITE_API_URL || ''
 
 const SERVER_LANGUAGES = new Set([
   'python',
+  'java',
+  'go',
+  'rust',
+  'php',
+  'ruby',
+  'kotlin',
   'c',
   'cpp',
   'csharp'
