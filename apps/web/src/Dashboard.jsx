@@ -53,6 +53,16 @@ const TEMPLATES = [
     files: {
       'main.c': '#include <stdio.h>\n\nint main(void) {\n    printf("Hello from Poligo\\n");\n    return 0;\n}'
     }
+  },
+  {
+    id: 'csharp',
+    title: 'C#',
+    subtitle: '.NET',
+    type: 'C#',
+    categories: ['Popular', 'Backend', 'Native Languages'],
+    files: {
+      'main.cs': 'using System;\n\nConsole.WriteLine("Hello from Poligo");'
+    }
   }
 ]
 
@@ -120,7 +130,8 @@ function TemplateIcon({ type }) {
     HTML: '/icons/html5.svg',
     Python: '/icons/python.svg',
     'C++': '/icons/cplusplus.svg',
-    C: '/icons/c.svg'
+    C: '/icons/c.svg',
+    'C#': null
   }
 
   if (type === 'Web') {
