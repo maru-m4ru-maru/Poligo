@@ -272,11 +272,11 @@ function IDE() {
       }
 
       const line = value
-        .split('\\n')
+        .split('\n')
         .findIndex(item => item.toLowerCase().includes(query))
 
       if (line >= 0) {
-        const text = value.split('\\n')[line].trim()
+        const text = value.split('\n')[line].trim()
 
         results.push({
           name,
@@ -1294,7 +1294,7 @@ function IDE() {
                         >
                           <span>!</span>
                           <div>
-                            <strong>{execution.result.stderr.split('\\n')[0]}</strong>
+                            <strong>{execution.result.stderr.split('\n')[0]}</strong>
                             <small>Execution output</small>
                           </div>
                         </button>
