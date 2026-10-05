@@ -649,7 +649,7 @@ function IDE() {
   if (!workspaceReady) {
     return (
       <div className="app-loading">
-        <div className="app-loading-title">Poligo</div>
+        <img className="app-loading-logo" src="/poligo-logo.svg" alt="Poligo" />
         <div className="app-loading-text">Loading workspace...</div>
       </div>
     )
@@ -659,7 +659,9 @@ function IDE() {
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
-          <button className="product-button" aria-label="Poligo menu">P</button>
+          <button className="product-button" aria-label="Poligo menu">
+            <img src="/poligo-mark.svg" alt="" />
+          </button>
           <button className="menu-button">File</button>
           <button className="menu-button">Edit</button>
           <button className="menu-button">View</button>
