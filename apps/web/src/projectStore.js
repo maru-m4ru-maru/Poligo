@@ -24,6 +24,7 @@ function getWorkspaceId() {
 async function request(path, options = {}) {
   const response = await fetch(API_URL + path, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       'X-Poligo-Workspace': getWorkspaceId(),
@@ -46,6 +47,12 @@ async function request(path, options = {}) {
   }
 
   return response.status === 204 ? null : response.json()
+}
+
+export async function claimWorkspace() {
+  return request('/api/workspace/claim', {
+    method: 'POST'
+  })
 }
 
 export async function listProjects() {
