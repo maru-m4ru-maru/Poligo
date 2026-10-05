@@ -296,6 +296,74 @@ async function deleteProject(projectId, ownerId) {
   return true
 }
 
+
+async function handleDashboardRequest(request, response) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  const database = getDatabase()
+  const ownerId = session.user.id
+
+  const statsStatement = await database.prepare(
+    `SELECT
+      COUNT(DISTINCT p.id) AS project_count,
+      COUNT(pf.path) AS file_count,
+      COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes,
+      MAX(p.updated_at) AS last_updated
+    FROM projects p
+    LEFT JOIN project_files pf ON pf.project_id = p.id
+    WHERE p.owner_id = ?`
+  )
+  const statsRows = await statsStatement.all([ownerId])
+  const stats = statsRows[0] || {}
+
+  const projectStatement = await database.prepare(
+    `SELECT
+      p.id,
+      p.name,
+      p.created_at,
+      p.updated_at,
+      COUNT(pf.path) AS file_count,
+      COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes
+    FROM projects p
+    LEFT JOIN project_files pf ON pf.project_id = p.id
+    WHERE p.owner_id = ?
+    GROUP BY p.id, p.name, p.created_at, p.updated_at
+    ORDER BY p.updated_at DESC
+    LIMIT 8`
+  )
+  const projects = await projectStatement.all([ownerId])
+
+  send(response, 200, {
+    user: {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+      image: session.user.image || null
+    },
+    stats: {
+      projectCount: Number(stats.project_count || 0),
+      fileCount: Number(stats.file_count || 0),
+      storageBytes: Number(stats.storage_bytes || 0),
+      lastUpdated: Number(stats.last_updated || 0)
+    },
+    projects: projects.map(project => ({
+      id: project.id,
+      name: project.name,
+      createdAt: Number(project.created_at),
+      updatedAt: Number(project.updated_at),
+      fileCount: Number(project.file_count || 0),
+      storageBytes: Number(project.storage_bytes || 0)
+    }))
+  })
+}
+
 async function handleProjectRequest(request, response) {
   const url = new URL(request.url, 'http://localhost')
   const parts = url.pathname.split('/').filter(Boolean)
@@ -486,6 +554,17 @@ const server = http.createServer(async (request, response) => {
       runner: Boolean(runnerUrl),
       database: getDatabaseStatus()
     })
+    return
+  }
+
+  if (request.method === 'GET' && request.url === '/api/dashboard') {
+    try {
+      await handleDashboardRequest(request, response)
+    } catch (error) {
+      send(response, error.message === 'authentication required' ? 401 : 500, {
+        error: error instanceof Error ? error.message : 'dashboard request failed'
+      })
+    }
     return
   }
 
