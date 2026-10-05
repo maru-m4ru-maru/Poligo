@@ -514,6 +514,17 @@ function findJudge0LanguageId(languages, language) {
     return candidates[0].id
   }
 
+  if (language === 'csharp') {
+    const candidates = names.filter(item =>
+      item.lower.startsWith('c#') ||
+      item.lower.startsWith('csharp')
+    )
+    if (!candidates.length) return null
+
+    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
+    return candidates[0].id
+  }
+
   if (language === 'c') {
     const candidates = names.filter(item => item.lower.startsWith('c (gcc '))
     if (!candidates.length) return null
