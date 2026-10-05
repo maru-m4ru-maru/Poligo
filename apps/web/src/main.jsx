@@ -883,13 +883,15 @@ function IDE() {
 }
 
 
+function navigate(path) {
+  window.history.pushState({}, '', path)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 function AppRouter() {
   const [pathname, setPathname] = useState(window.location.pathname)
   const { data: session, isPending } = authClient.useSession()
-  const authPath =
-    pathname === '/signin' ||
-    pathname === '/Createaccount' ||
-    pathname === '/createaccount'
+  const authPath = pathname === '/signin' || pathname === '/createaccount'
 
   useEffect(() => {
     function updatePath() {
@@ -907,12 +909,12 @@ function AppRouter() {
     if (isPending) return
 
     if (session?.user && authPath) {
-      window.location.replace('/')
+      navigate('/')
       return
     }
 
     if (!session?.user && !authPath) {
-      window.location.replace('/signin')
+      navigate('/signin')
     }
   }, [authPath, isPending, session])
 
@@ -929,7 +931,7 @@ function AppRouter() {
     return <AuthPage mode="signin" />
   }
 
-  if (pathname === '/Createaccount' || pathname === '/createaccount') {
+  if (pathname === '/createaccount') {
     return <AuthPage mode="signup" />
   }
 
