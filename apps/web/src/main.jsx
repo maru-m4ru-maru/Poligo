@@ -237,7 +237,6 @@ function IDE() {
     result: null,
     error: ''
   })
-  const [stdin, setStdin] = useState('')
   const terminalRef = useRef(null)
   const terminal = useRef(null)
   const filesRef = useRef(files)
@@ -711,8 +710,7 @@ function IDE() {
         body: JSON.stringify({
           language: currentLanguage,
           entrypoint: activeFile,
-          files,
-          stdin
+          files
         })
       })
 
@@ -999,86 +997,17 @@ function IDE() {
                   {bottomTab === 'terminal' && <div className="terminal" ref={terminalRef} />}
                   {bottomTab === 'output' && (
                     <div className="output-panel">
-                      <div className="output-toolbar">
-                        <div className="output-toolbar-left">
-                          <span className="output-status-dot" data-status={execution.status} />
-                          <strong>
-                            {execution.status === 'idle' && 'Ready'}
-                            {execution.status === 'queued' && 'Queued'}
-                            {execution.status === 'running' && 'Running'}
-                            {execution.status === 'succeeded' && 'Succeeded'}
-                            {execution.status === 'failed' && 'Failed'}
-                            {execution.status === 'timeout' && 'Timed out'}
-                          </strong>
-                          {execution.id && <span className="output-execution-id">{execution.id}</span>}
-                        </div>
-                        <button
-                          className="output-clear"
-                          onClick={() => setExecution({
-                            id: '',
-                            status: 'idle',
-                            result: null,
-                            error: ''
-                          })}
-                        >
-                          Clear
-                        </button>
-                      </div>
-
-                      {SERVER_LANGUAGES.has(currentLanguage) && (
-                        <div className="output-stdin">
-                          <div className="output-section-label">STANDARD INPUT</div>
-                          <textarea
-                            value={stdin}
-                            onChange={event => setStdin(event.target.value)}
-                            placeholder="Input passed to the program..."
-                            spellCheck={false}
-                          />
-                        </div>
-                      )}
-
                       {execution.error && (
-                        <div className="output-error">
-                          {execution.error}
-                        </div>
+                        <pre className="output-raw output-error-raw">{execution.error}</pre>
                       )}
 
-                      {execution.result && (
-                        <div className="output-result">
-                          <div className="output-meta">
-                            <span>Exit code: {execution.result.exitCode ?? '—'}</span>
-                            {execution.result.time && <span>{execution.result.time}s</span>}
-                            {execution.result.memory && <span>{execution.result.memory} KB</span>}
-                          </div>
-
-                          {execution.result.stdout && (
-                            <div className="output-block">
-                              <div className="output-section-label">STDOUT</div>
-                              <pre>{execution.result.stdout}</pre>
-                            </div>
-                          )}
-
-                          {execution.result.stderr && (
-                            <div className="output-block output-block-error">
-                              <div className="output-section-label">STDERR</div>
-                              <pre>{execution.result.stderr}</pre>
-                            </div>
-                          )}
-
-                          {!execution.result.stdout && !execution.result.stderr && (
-                            <div className="output-empty">Program finished without output.</div>
-                          )}
-                        </div>
-                      )}
-
-                      {!execution.error && !execution.result && execution.status !== 'idle' && (
-                        <div className="output-running">
-                          Waiting for execution result...
-                        </div>
-                      )}
-
-                      {execution.status === 'idle' && (
-                        <div className="output-empty">Run the current file to see execution output here.</div>
+                      {!execution.error && execution.result && (
+                        <pre className="output-raw">
+                          {(execution.result.stdout || '') +
+                            (execution.result.stderr
+                              ? (execution.result.stdout ? '\n' : '') + execution.result.stderr
+                              : '')}
+                        </pre>
                       )}
                     </div>
                   )}
