@@ -46,7 +46,7 @@ export default function AuthPage({ mode }) {
         throw new Error('Sign-in succeeded, but the session could not be confirmed.')
       }
 
-      navigate('/')
+      window.location.replace('/')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Authentication failed')
       setBusy(false)
