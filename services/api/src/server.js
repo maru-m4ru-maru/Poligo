@@ -778,48 +778,100 @@ async function getJudge0Languages() {
   return judge0LanguagesPromise
 }
 
-function findJudge0LanguageId(languages, language) {
-  const names = languages
+function findLatestJudge0LanguageId(languages, patterns) {
+  const candidates = languages
     .filter(item => Number.isInteger(item?.id) && typeof item?.name === 'string')
     .map(item => ({
       id: item.id,
       name: item.name,
       lower: item.name.toLowerCase()
     }))
+    .filter(item => patterns.some(pattern => pattern(item.lower)));
 
+  if (!candidates.length) return null
+
+  candidates.sort((a, b) =>
+    b.lower.localeCompare(a.lower, undefined, { numeric: true })
+  )
+
+  return candidates[0].id
+}
+
+function findJudge0LanguageId(languages, language) {
   if (language === 'python') {
-    const candidates = names.filter(item => item.lower.startsWith('python (3.'))
-    if (!candidates.length) return null
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('python (3.')]
+    )
+  }
 
-    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
-    return candidates[0].id
+  if (language === 'java') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [
+        name => name.startsWith('java ('),
+        name => name.includes('openjdk')
+      ]
+    )
+  }
+
+  if (language === 'go') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('go (')]
+    )
+  }
+
+  if (language === 'rust') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('rust (')]
+    )
+  }
+
+  if (language === 'php') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('php (')]
+    )
+  }
+
+  if (language === 'ruby') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('ruby (')]
+    )
+  }
+
+  if (language === 'kotlin') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('kotlin (')]
+    )
   }
 
   if (language === 'cpp') {
-    const candidates = names.filter(item => item.lower.startsWith('c++ (gcc '))
-    if (!candidates.length) return null
-
-    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
-    return candidates[0].id
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('c++ (gcc ')]
+    )
   }
 
   if (language === 'csharp') {
-    const candidates = names.filter(item =>
-      item.lower.startsWith('c#') ||
-      item.lower.startsWith('csharp')
+    return findLatestJudge0LanguageId(
+      languages,
+      [
+        name => name.startsWith('c#'),
+        name => name.startsWith('csharp')
+      ]
     )
-    if (!candidates.length) return null
-
-    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
-    return candidates[0].id
   }
 
   if (language === 'c') {
-    const candidates = names.filter(item => item.lower.startsWith('c (gcc '))
-    if (!candidates.length) return null
-
-    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
-    return candidates[0].id
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('c (gcc ')]
+    )
   }
 
   return null
