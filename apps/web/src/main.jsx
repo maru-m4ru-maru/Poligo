@@ -28,11 +28,22 @@ const DEFAULT_FILES = {
 }
 
 const FILE_META = {
-  'index.html': { language: 'html', kind: 'html' },
-  'style.css': { language: 'css', kind: 'css' },
-  'app.js': { language: 'javascript', kind: 'js' },
-  'main.py': { language: 'python', kind: 'python' },
-  'main.cpp': { language: 'cpp', kind: 'cpp' }
+  html: { language: 'html', kind: 'html' },
+  css: { language: 'css', kind: 'css' },
+  js: { language: 'javascript', kind: 'js' },
+  jsx: { language: 'javascript', kind: 'js' },
+  ts: { language: 'typescript', kind: 'js' },
+  tsx: { language: 'typescript', kind: 'js' },
+  py: { language: 'python', kind: 'python' },
+  c: { language: 'c', kind: 'c' },
+  h: { language: 'c', kind: 'c' },
+  cpp: { language: 'cpp', kind: 'cpp' },
+  cc: { language: 'cpp', kind: 'cpp' },
+  cxx: { language: 'cpp', kind: 'cpp' },
+  hpp: { language: 'cpp', kind: 'cpp' },
+  json: { language: 'json', kind: 'text' },
+  md: { language: 'markdown', kind: 'text' },
+  txt: { language: 'plaintext', kind: 'text' }
 }
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -48,8 +59,19 @@ const FILE_ICONS = {
   css: '/icons/css.svg',
   js: '/icons/javascript.svg',
   python: '/icons/python.svg',
-  c: null,
+  c: '/icons/c.svg',
   cpp: '/icons/cplusplus.svg'
+}
+
+function getFileMeta(name) {
+  const extension = name.includes('.')
+    ? name.split('.').pop().toLowerCase()
+    : ''
+
+  return FILE_META[extension] || {
+    language: 'plaintext',
+    kind: 'text'
+  }
 }
 
 function FileIcon({ kind, size = 16 }) {
@@ -212,7 +234,7 @@ function IDE() {
   const filesRef = useRef(files)
 
   const { data: session } = authClient.useSession()
-  const currentLanguage = FILE_META[activeFile]?.language || 'plaintext'
+  const currentLanguage = getFileMeta(activeFile).language
   const currentValue = files[activeFile] ?? ''
   const currentProject = projects.find(project => project.id === currentProjectId)
 
@@ -417,6 +439,83 @@ function IDE() {
     setPreviewKey(value => value + 1)
   }
 
+  async function saveCurrentProject() {
+    if (!currentProjectId) return
+
+    try {
+      const timestamp = Date.now()
+
+      await saveProject({
+        id: currentProjectId,
+        name: projectName,
+        files,
+        createdAt: currentProject?.createdAt || timestamp,
+        updatedAt: timestamp
+      })
+
+      setProjects(current => current.map(project => (
+        project.id === currentProjectId
+          ? {
+              ...project,
+              name: projectName,
+              files,
+              updatedAt: timestamp
+            }
+          : project
+      )))
+
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('storage error')
+    }
+  }
+
+  async function createFile() {
+    const name = window.prompt('New file name')
+
+    if (!name) return
+
+    const normalized = name.trim()
+
+    if (!normalized || normalized.includes('/') || normalized.includes('\\')) {
+      return
+    }
+
+    if (Object.prototype.hasOwnProperty.call(files, normalized)) {
+      setActiveFile(normalized)
+      setOpenFiles(current => current.includes(normalized) ? current : [...current, normalized])
+      return
+    }
+
+    setFiles(current => ({
+      ...current,
+      [normalized]: ''
+    }))
+    setActiveFile(normalized)
+    setOpenFiles(current => [...current, normalized])
+    setSaveStatus('saving')
+  }
+
+  async function deleteFile(name = activeFile) {
+    if (Object.keys(files).length <= 1) return
+
+    const confirmed = window.confirm('Delete "' + name + '"?')
+
+    if (!confirmed) return
+
+    const remainingNames = Object.keys(files).filter(file => file !== name)
+    const nextFile = remainingNames[0]
+
+    setFiles(current => {
+      const next = { ...current }
+      delete next[name]
+      return next
+    })
+
+    setOpenFiles(current => current.filter(file => file !== name))
+    setActiveFile(current => current === name ? nextFile : current)
+  }
+
   async function switchProject(id) {
     if (id === currentProjectId) {
       setProjectMenuOpen(false)
@@ -537,7 +636,11 @@ function IDE() {
         return
       }
 
-      const nextProject = remaining[0]
+      const nextProject = await getProject(remaining[0].id)
+
+      if (!nextProject) {
+        throw new Error('next project could not be loaded')
+      }
 
       setProjects(remaining)
       setCurrentProjectId(nextProject.id)
@@ -554,6 +657,23 @@ function IDE() {
       setSaveStatus('storage error')
     }
   }
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') {
+        return
+      }
+
+      event.preventDefault()
+      void saveCurrentProject()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [currentProjectId, projectName, files])
 
   async function runProject() {
     refreshPreview()
@@ -738,7 +858,12 @@ function IDE() {
         <aside className="explorer">
           <div className="explorer-head">
             <span>{activeView === 'files' ? 'EXPLORER' : activeView.toUpperCase()}</span>
-            <button className="more-button">•••</button>
+            {activeView === 'files' && (
+              <div className="explorer-actions">
+                <button className="more-button" onClick={() => void createFile()} title="New file">＋</button>
+                <button className="more-button" onClick={() => void deleteFile()} title="Delete file">−</button>
+              </div>
+            )}
           </div>
 
           {activeView === 'files' && (
@@ -751,7 +876,7 @@ function IDE() {
                     className={'explorer-file ' + (activeFile === name ? 'active' : '')}
                     onClick={() => openFile(name)}
                   >
-                    <FileIcon kind={FILE_META[name]?.kind} />
+                    <FileIcon kind={getFileMeta(name).kind} />
                     <span>{name}</span>
                   </button>
                 ))}
@@ -776,7 +901,7 @@ function IDE() {
                   className={'editor-tab ' + (activeFile === name ? 'active' : '')}
                   onClick={() => setActiveFile(name)}
                 >
-                  <FileIcon kind={FILE_META[name]?.kind} size={14} />
+                  <FileIcon kind={getFileMeta(name).kind} size={14} />
                   <span>{name}</span>
                   <button
                     className="tab-close"
