@@ -309,6 +309,16 @@ async function handleDashboardRequest(request, response) {
 
   const database = getDatabase()
   const ownerId = session.user.id
+  const workspaceId = getWorkspaceId(request)
+
+  if (workspaceId !== ownerId) {
+    await database.batch([
+      {
+        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
+        args: [ownerId, workspaceId]
+      }
+    ], 'immediate')
+  }
 
   const statsStatement = await database.prepare(
     `SELECT
