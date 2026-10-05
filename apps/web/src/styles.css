@@ -3133,3 +3133,25 @@ body {
     padding: 0 12px;
   }
 }
+
+
+.explorer-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.explorer-actions .more-button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.explorer-actions .more-button:hover {
+  background: #202a38;
+  color: #dce7f4;
+}
