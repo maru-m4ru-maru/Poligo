@@ -108,11 +108,22 @@ function TemplateIcon({ type }) {
 
   if (type === 'Web') {
     return (
-      <div className="stack-web-template-icons" aria-hidden="true">
-        <img src="/icons/html5.svg" alt="" />
-        <img src="/icons/css.svg" alt="" />
-        <img src="/icons/javascript.svg" alt="" />
-      </div>
+      <svg
+        width="27"
+        height="27"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18" />
+        <path d="M12 3c2.5 2.5 3.7 5.5 3.7 9S14.5 16.5 12 21" />
+        <path d="M12 3c-2.5 2.5-3.7 5.5-3.7 9S9.5 18.5 12 21" />
+      </svg>
     )
   }
 
@@ -393,36 +404,6 @@ export default function Dashboard({ session }) {
             <div className="stack-cloud-pill">
               <span />
               Turso connected
-            </div>
-          </section>
-
-          <section id="new-projects" className="stack-section">
-            <div className="stack-section-heading">
-              <div>
-                <span>START HERE</span>
-                <h2>Create a new project</h2>
-              </div>
-              <p>Start with the tools you already use.</p>
-            </div>
-
-            <div className="stack-template-grid">
-              {TEMPLATES.map(template => (
-                <button
-                  key={template.id}
-                  className="stack-template-card"
-                  onClick={() => void createTemplate(template)}
-                  disabled={Boolean(creating)}
-                >
-                  <div className="stack-template-icon">
-                    <TemplateIcon type={template.type} />
-                  </div>
-                  <div className="stack-template-copy">
-                    <strong>{template.title}</strong>
-                    <span>{creating === template.id ? 'Creating project...' : template.subtitle}</span>
-                  </div>
-                  <span className="stack-template-arrow">→</span>
-                </button>
-              ))}
             </div>
           </section>
 
