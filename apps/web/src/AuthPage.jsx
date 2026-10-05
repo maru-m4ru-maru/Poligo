@@ -67,7 +67,7 @@ export default function AuthPage({ mode }) {
   return (
     <div className="auth-page">
       <div className="auth-page-card">
-        <div className="auth-page-brand">Poligo</div>
+        <img className="auth-page-logo" src="/poligo-logo.svg" alt="Poligo" />
         <div className="auth-page-accent" />
         <h1>{isSignUp ? 'Create account' : 'Sign in'}</h1>
         <p>
