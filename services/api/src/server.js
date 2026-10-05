@@ -877,6 +877,61 @@ function findJudge0LanguageId(languages, language) {
   return null
 }
 
+async function submitJudge0(source, languageId, stdin) {
+  let lastResponse = null
+  let lastResult = null
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const judge0Response = await fetch(
+      judge0Url + '/submissions/?base64_encoded=false&wait=false',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          source_code: source,
+          language_id: languageId,
+          stdin: typeof stdin === 'string'
+            ? stdin.slice(0, 32_000)
+            : ''
+        })
+      }
+    )
+
+    let result
+
+    try {
+      result = await judge0Response.json()
+    } catch {
+      result = {}
+    }
+
+    if (judge0Response.ok && result.token) {
+      return {
+        response: judge0Response,
+        result
+      }
+    }
+
+    lastResponse = judge0Response
+    lastResult = result
+
+    if (judge0Response.status !== 429 && judge0Response.status !== 502 && judge0Response.status !== 503) {
+      break
+    }
+
+    if (attempt < 2) {
+      await new Promise(resolve => setTimeout(resolve, 700 * (attempt + 1)))
+    }
+  }
+
+  return {
+    response: lastResponse,
+    result: lastResult || {}
+  }
+}
+
 async function handleJudge0Execution(request, response) {
   const payload = await readJson(request)
   const files = payload.files && typeof payload.files === 'object'
@@ -905,34 +960,25 @@ async function handleJudge0Execution(request, response) {
     return
   }
 
-  const judge0Response = await fetch(
-    judge0Url + '/submissions/?base64_encoded=false&wait=false',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        source_code: source,
-        language_id: languageId,
-        stdin: typeof payload.stdin === 'string'
-          ? payload.stdin.slice(0, 32_000)
-          : ''
-      })
-    }
+  const submitted = await submitJudge0(
+    source,
+    languageId,
+    payload.stdin
   )
+  const judge0Response = submitted.response
+  const result = submitted.result
 
-  let result
+  if (!judge0Response?.ok || !result?.token) {
+    const upstreamStatus = judge0Response?.status || 502
+    const busy = upstreamStatus === 429 ||
+      upstreamStatus === 502 ||
+      upstreamStatus === 503
 
-  try {
-    result = await judge0Response.json()
-  } catch {
-    result = {}
-  }
-
-  if (!judge0Response.ok || !result.token) {
-    send(response, 502, {
-      error: result.error || result.message || 'Judge0 submission failed'
+    send(response, busy ? 503 : 502, {
+      error: result.error ||
+        result.message ||
+        'Judge0 submission failed',
+      upstreamStatus
     })
     return
   }
