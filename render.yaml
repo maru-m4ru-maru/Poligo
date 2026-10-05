@@ -28,3 +28,7 @@ services:
         sync: false
       - key: CORS_ORIGIN
         value: https://poligo-web-2n2l.onrender.com
+      - key: BETTER_AUTH_URL
+        value: https://poligo-api-g0wc.onrender.com
+      - key: BETTER_AUTH_SECRET
+        sync: false
