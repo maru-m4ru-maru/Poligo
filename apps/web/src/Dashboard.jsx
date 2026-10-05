@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { authClient } from './auth-client'
+import { deleteProject } from './projectStore'
 
 const TEMPLATES = [
   {
@@ -95,6 +96,20 @@ function formatBytes(bytes) {
     : value.toFixed(1) + ' ' + units[unit]
 }
 
+function getProjectDescription(project) {
+  const name = project.name.toLowerCase()
+
+  if (name.includes('python')) return 'Python 3 project'
+  if (name.includes('c++')) return 'C++ project'
+  if (name.includes('c#')) return '.NET project'
+  if (name === 'web' || name.includes('html')) return 'HTML/CSS/JavaScript'
+  if (name.includes('static')) return 'HTML/CSS/JS Starter'
+
+  return project.fileCount
+    ? project.fileCount + ' files in Poligo'
+    : 'Poligo project'
+}
+
 function formatDate(timestamp) {
   if (!timestamp) return 'No activity'
 
@@ -180,6 +195,8 @@ export default function Dashboard({ session }) {
   const [activeSection, setActiveSection] = useState('projects')
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [templateCategory, setTemplateCategory] = useState('Popular')
+  const [projectContextMenu, setProjectContextMenu] = useState(null)
+  const [deletingProjectId, setDeletingProjectId] = useState('')
 
   async function loadDashboard() {
     setLoading(true)
@@ -273,6 +290,7 @@ export default function Dashboard({ session }) {
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
         setNewProjectOpen(false)
+        setProjectContextMenu(null)
       }
     }
 
@@ -302,6 +320,49 @@ export default function Dashboard({ session }) {
   function openProject(id) {
     localStorage.setItem('poligo-current-project', id)
     navigate('/')
+  }
+
+  function openProjectContextMenu(event, project) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const width = 190
+    const height = 52
+    const x = Math.min(event.clientX, window.innerWidth - width - 10)
+    const y = Math.min(event.clientY, window.innerHeight - height - 10)
+
+    setProjectContextMenu({
+      project,
+      x: Math.max(10, x),
+      y: Math.max(10, y)
+    })
+  }
+
+  async function handleDeleteProject(project) {
+    if (deletingProjectId) return
+
+    const confirmed = window.confirm(
+      'Delete "' + project.name + '"? This cannot be undone.'
+    )
+
+    if (!confirmed) {
+      setProjectContextMenu(null)
+      return
+    }
+
+    setDeletingProjectId(project.id)
+    setError('')
+    setProjectContextMenu(null)
+
+    try {
+      await deleteProject(project.id)
+      await loadDashboard()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project deletion failed')
+      setLoading(false)
+    } finally {
+      setDeletingProjectId('')
+    }
   }
 
   async function createTemplate(template) {
@@ -533,37 +594,98 @@ export default function Dashboard({ session }) {
           <section id="projects" className="stack-section">
             <div className="stack-section-heading stack-project-heading">
               <div>
-                <span>YOUR WORKSPACE</span>
-                <h2>Projects</h2>
+                <h2>Recent projects</h2>
               </div>
-              <span className="stack-project-count">{projects.length} shown</span>
+              <button
+                className="stack-show-all"
+                type="button"
+                onClick={() => setQuery('')}
+              >
+                Show all
+                <span>›</span>
+              </button>
             </div>
 
             {projects.length ? (
-              <div className="stack-project-list">
-                {projects.map(project => (
-                  <button
-                    key={project.id}
-                    className="stack-project-list-row"
-                    onClick={() => openProject(project.id)}
-                  >
-                    <div className="stack-project-list-icon">
-                      <img src="/poligo-mark.svg" alt="" />
-                    </div>
+              <div className="stack-project-table">
+                <div className="stack-project-table-head">
+                  <span aria-hidden="true" />
+                  <span>Title</span>
+                  <span>Description</span>
+                  <span>Files</span>
+                  <span>Updated</span>
+                  <span aria-hidden="true" />
+                </div>
 
-                    <div className="stack-project-list-name">
-                      <strong>{project.name}</strong>
-                      <span>{project.fileCount} files</span>
-                    </div>
+                <div className="stack-project-table-body">
+                  {projects.map(project => (
+                    <div
+                      key={project.id}
+                      className={
+                        'stack-project-list-row' +
+                        (deletingProjectId === project.id ? ' deleting' : '')
+                      }
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openProject(project.id)}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openProject(project.id)
+                        }
+                      }}
+                      onContextMenu={event => openProjectContextMenu(event, project)}
+                    >
+                      <input
+                        className="stack-project-check"
+                        type="checkbox"
+                        aria-label={'Select ' + project.name}
+                        onClick={event => event.stopPropagation()}
+                      />
 
-                    <div className="stack-project-list-meta">
-                      <span>{formatBytes(project.storageBytes)}</span>
-                      <span>{formatDate(project.updatedAt)}</span>
-                    </div>
+                      <div className="stack-project-list-title">
+                        <span className="stack-project-project-icon">
+                          <img src="/poligo-mark.svg" alt="" />
+                        </span>
+                        <span className="stack-project-title-copy">
+                          <strong>{project.name}</strong>
+                          <small>{formatBytes(project.storageBytes)}</small>
+                        </span>
+                      </div>
 
-                    <span className="stack-project-list-arrow">→</span>
-                  </button>
-                ))}
+                      <span className="stack-project-description">
+                        {getProjectDescription(project)}
+                      </span>
+
+                      <span className="stack-project-files">
+                        {project.fileCount}
+                      </span>
+
+                      <span className="stack-project-updated">
+                        {formatDate(project.updatedAt)}
+                      </span>
+
+                      <button
+                        className="stack-project-menu-button"
+                        type="button"
+                        aria-label={'Project actions for ' + project.name}
+                        aria-haspopup="menu"
+                        aria-expanded={projectContextMenu?.project?.id === project.id}
+                        onClick={event => {
+                          event.stopPropagation()
+                          const rect = event.currentTarget.getBoundingClientRect()
+                          setProjectContextMenu({
+                            project,
+                            x: Math.min(rect.right - 190, window.innerWidth - 200),
+                            y: Math.min(rect.bottom + 4, window.innerHeight - 62)
+                          })
+                        }}
+                      >
+                        ···
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="stack-empty">
