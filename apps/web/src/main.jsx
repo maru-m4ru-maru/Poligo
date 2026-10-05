@@ -16,6 +16,7 @@ import {
   claimWorkspace
 } from './projectStore'
 import { authClient } from './auth-client'
+import AuthPage from './AuthPage'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build without an IDE vendor lock-in.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -212,7 +213,7 @@ function firstFile(files) {
   return Object.keys(files)[0] || 'index.html'
 }
 
-function App() {
+function IDE() {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState('')
@@ -228,33 +229,22 @@ function App() {
   const [saveStatus, setSaveStatus] = useState('saved')
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [previewKey, setPreviewKey] = useState(0)
-  const [authModalOpen, setAuthModalOpen] = useState(false)
-  const [authMode, setAuthMode] = useState('login')
-  const [authName, setAuthName] = useState('')
-  const [authEmail, setAuthEmail] = useState('')
-  const [authPassword, setAuthPassword] = useState('')
-  const [authError, setAuthError] = useState('')
-  const [authBusy, setAuthBusy] = useState(false)
   const terminalRef = useRef(null)
   const terminal = useRef(null)
   const filesRef = useRef(files)
 
-  const { data: session, isPending: authPending } = authClient.useSession()
+  const { data: session } = authClient.useSession()
   const currentLanguage = FILE_META[activeFile]?.language || 'plaintext'
   const currentValue = files[activeFile] ?? ''
   const currentProject = projects.find(project => project.id === currentProjectId)
 
   useEffect(() => {
-    if (authPending) return
-
     let cancelled = false
 
     async function loadWorkspace() {
-      if (session?.user?.id) {
-        try {
-          await claimWorkspace()
-        } catch {}
-      }
+      try {
+        await claimWorkspace()
+      } catch {}
 
       try {
         const result = await initializeWorkspace(DEFAULT_FILES)
@@ -281,7 +271,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [authPending, session?.user?.id])
+  }, [])
 
   useEffect(() => {
     filesRef.current = files
@@ -415,54 +405,9 @@ function App() {
 
   const previewDoc = useMemo(() => preview || buildPreview(files), [files, preview])
 
-  async function handleAuthSubmit(event) {
-    event.preventDefault()
-    setAuthBusy(true)
-    setAuthError('')
-
-    try {
-      const result = authMode === 'login'
-        ? await authClient.signIn.email({
-            email: authEmail,
-            password: authPassword
-          })
-        : await authClient.signUp.email({
-            email: authEmail,
-            password: authPassword,
-            name: authName
-          })
-
-      if (result.error) {
-        throw new Error(result.error.message || 'Authentication failed')
-      }
-
-      setAuthPassword('')
-      setAuthModalOpen(false)
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Authentication failed')
-    } finally {
-      setAuthBusy(false)
-    }
-  }
-
   async function handleSignOut() {
-    setAuthBusy(true)
-    setAuthError('')
-
-    try {
-      await authClient.signOut()
-      setAuthModalOpen(false)
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Sign out failed')
-    } finally {
-      setAuthBusy(false)
-    }
-  }
-
-  function openAuthModal(mode = 'login') {
-    setAuthMode(mode)
-    setAuthError('')
-    setAuthModalOpen(true)
+    await authClient.signOut()
+    window.location.assign('/signin')
   }
 
   function updateFile(value) {
@@ -760,11 +705,11 @@ function App() {
         </div>
         <div className="topbar-right">
           <button className="top-icon" title="Settings"><ActivityIcon type="settings" /></button>
-          <button
-            className="account-button"
-            onClick={() => openAuthModal(session?.user ? 'account' : 'login')}
-          >
-            {session?.user ? session.user.name : 'Sign in'}
+          <span className="account-name">
+            {session?.user?.name}
+          </span>
+          <button className="signout-button" onClick={handleSignOut}>
+            Sign out
           </button>
           <span className="connection-status">
             <span className={'status-dot ' + apiStatus} />
@@ -933,89 +878,62 @@ function App() {
         </main>
       </div>
 
-      {authModalOpen && (
-        <div className="auth-backdrop" onMouseDown={() => !authBusy && setAuthModalOpen(false)}>
-          <div className="auth-dialog" onMouseDown={event => event.stopPropagation()}>
-            {session?.user ? (
-              <>
-                <div className="auth-eyebrow">ACCOUNT</div>
-                <h2>{session.user.name}</h2>
-                <p className="auth-subtitle">{session.user.email}</p>
-                {authError && <div className="auth-error">{authError}</div>}
-                <button className="auth-primary" onClick={handleSignOut} disabled={authBusy}>
-                  {authBusy ? 'Signing out...' : 'Sign out'}
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="auth-eyebrow">POLIGO ACCOUNT</div>
-                <h2>{authMode === 'login' ? 'Sign in' : 'Create account'}</h2>
-                <p className="auth-subtitle">
-                  {authMode === 'login'
-                    ? 'Save your projects to your account.'
-                    : 'Keep your Poligo projects with you.'}
-                </p>
-                <div className="auth-switch">
-                  <button
-                    className={authMode === 'login' ? 'active' : ''}
-                    onClick={() => {
-                      setAuthMode('login')
-                      setAuthError('')
-                    }}
-                  >
-                    Sign in
-                  </button>
-                  <button
-                    className={authMode === 'signup' ? 'active' : ''}
-                    onClick={() => {
-                      setAuthMode('signup')
-                      setAuthError('')
-                    }}
-                  >
-                    Create account
-                  </button>
-                </div>
-                <form className="auth-form" onSubmit={handleAuthSubmit}>
-                  {authMode === 'signup' && (
-                    <input
-                      value={authName}
-                      onChange={event => setAuthName(event.target.value)}
-                      placeholder="Display name"
-                      autoComplete="name"
-                      required
-                    />
-                  )}
-                  <input
-                    value={authEmail}
-                    onChange={event => setAuthEmail(event.target.value)}
-                    placeholder="Email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                  />
-                  <input
-                    value={authPassword}
-                    onChange={event => setAuthPassword(event.target.value)}
-                    placeholder="Password"
-                    type="password"
-                    autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
-                    minLength={8}
-                    required
-                  />
-                  {authError && <div className="auth-error">{authError}</div>}
-                  <button className="auth-primary" type="submit" disabled={authBusy}>
-                    {authBusy
-                      ? 'Working...'
-                      : authMode === 'login' ? 'Sign in' : 'Create account'}
-                  </button>
-                </form>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-createRoot(document.getElementById('root')).render(<App />)
+
+function AppRouter() {
+  const [pathname, setPathname] = useState(window.location.pathname)
+  const { data: session, isPending } = authClient.useSession()
+  const authPath =
+    pathname === '/signin' ||
+    pathname === '/Createaccount' ||
+    pathname === '/createaccount'
+
+  useEffect(() => {
+    function updatePath() {
+      setPathname(window.location.pathname)
+    }
+
+    window.addEventListener('popstate', updatePath)
+
+    return () => {
+      window.removeEventListener('popstate', updatePath)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isPending) return
+
+    if (session?.user && authPath) {
+      window.location.replace('/')
+      return
+    }
+
+    if (!session?.user && !authPath) {
+      window.location.replace('/signin')
+    }
+  }, [authPath, isPending, session])
+
+  if (isPending || (!session?.user && !authPath)) {
+    return (
+      <div className="app-loading">
+        <div className="app-loading-title">Poligo</div>
+        <div className="app-loading-text">Checking account...</div>
+      </div>
+    )
+  }
+
+  if (pathname === '/signin') {
+    return <AuthPage mode="signin" />
+  }
+
+  if (pathname === '/Createaccount' || pathname === '/createaccount') {
+    return <AuthPage mode="signup" />
+  }
+
+  return <IDE />
+}
+
+createRoot(document.getElementById('root')).render(<AppRouter />)
