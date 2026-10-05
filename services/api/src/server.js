@@ -880,21 +880,23 @@ function findJudge0LanguageId(languages, language) {
 async function submitJudge0(source, languageId, stdin) {
   let lastResponse = null
   let lastResult = null
+  const sourceCode = Buffer.from(source, 'utf8').toString('base64')
+  const input = typeof stdin === 'string'
+    ? Buffer.from(stdin.slice(0, 32_000), 'utf8').toString('base64')
+    : ''
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const judge0Response = await fetch(
-      judge0Url + '/submissions/?base64_encoded=false&wait=false',
+      judge0Url + '/submissions/?base64_encoded=true&wait=false',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          source_code: source,
+          source_code: sourceCode,
           language_id: languageId,
-          stdin: typeof stdin === 'string'
-            ? stdin.slice(0, 32_000)
-            : ''
+          stdin: input
         })
       }
     )
