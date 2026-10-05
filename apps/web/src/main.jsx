@@ -17,14 +17,6 @@ import {
 } from './projectStore'
 import { authClient } from './auth-client'
 import AuthPage from './AuthPage'
-import {
-  siC,
-  siCplusplus,
-  siCss3,
-  siHtml5,
-  siJavascript,
-  siPython
-} from 'simple-icons'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build without an IDE vendor lock-in.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -51,35 +43,27 @@ const SERVER_LANGUAGES = new Set([
 ])
 
 const FILE_ICONS = {
-  html: siHtml5,
-  css: siCss3,
-  js: siJavascript,
-  python: siPython,
-  c: siC,
-  cpp: siCplusplus
+  html: '/icons/html5.svg',
+  css: '/icons/css.svg',
+  js: '/icons/javascript.svg',
+  python: '/icons/python.svg',
+  c: null,
+  cpp: '/icons/cplusplus.svg'
 }
 
 function FileIcon({ kind, size = 16 }) {
-  const icon = FILE_ICONS[kind]
+  const src = FILE_ICONS[kind]
 
-  if (!icon) {
+  if (src) {
     return (
-      <svg
+      <img
+        src={src}
+        alt=""
         width={size}
         height={size}
-        viewBox="0 0 24 24"
-        fill="none"
+        className="file-icon-image"
         aria-hidden="true"
-      >
-        <path
-          d="M5 3.5h9l5 5v12H5z"
-          fill="#64748B"
-        />
-        <path
-          d="M14 3.5v5h5"
-          fill="#94A3B8"
-        />
-      </svg>
+      />
     )
   }
 
@@ -88,12 +72,16 @@ function FileIcon({ kind, size = 16 }) {
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="currentColor"
+      fill="none"
       aria-hidden="true"
     >
       <path
-        d={icon.path}
-        fill={'#' + icon.hex}
+        d="M5 3.5h9l5 5v12H5z"
+        fill="#64748B"
+      />
+      <path
+        d="M14 3.5v5h5"
+        fill="#94A3B8"
       />
     </svg>
   )
