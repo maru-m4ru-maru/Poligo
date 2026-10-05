@@ -1,5 +1,46 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { authClient } from './auth-client'
+
+const TEMPLATES = [
+  {
+    id: 'web',
+    title: 'Web',
+    subtitle: 'HTML, CSS and JavaScript',
+    type: 'Web',
+    files: {
+      'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo Web</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build something great.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
+      'style.css': 'body {\n  margin: 0;\n  min-height: 100vh;\n  font-family: system-ui, sans-serif;\n  background: #ffffff;\n  color: #111827;\n}\n\n.app {\n  max-width: 760px;\n  margin: 0 auto;\n  padding: 64px 24px;\n}',
+      'app.js': "const title = document.querySelector('h1')\n\ntitle.addEventListener('click', () => {\n  title.textContent = 'It works.'\n})"
+    }
+  },
+  {
+    id: 'html',
+    title: 'Static HTML',
+    subtitle: 'A minimal HTML project',
+    type: 'HTML',
+    files: {
+      'index.html': '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <h1>Hello, Poligo.</h1>\n  </body>\n</html>'
+    }
+  },
+  {
+    id: 'python',
+    title: 'Python',
+    subtitle: 'Run Python in Poligo',
+    type: 'Python',
+    files: {
+      'main.py': 'print("Hello from Poligo")'
+    }
+  },
+  {
+    id: 'cpp',
+    title: 'C++',
+    subtitle: 'Run C++ in Poligo',
+    type: 'C++',
+    files: {
+      'main.cpp': '#include <iostream>\n\nint main() {\n    std::cout << "Hello from Poligo\\n";\n    return 0;\n}'
+    }
+  }
+]
 
 function formatBytes(bytes) {
   if (!bytes) return '0 B'
@@ -22,7 +63,6 @@ function formatDate(timestamp) {
   if (!timestamp) return 'No activity'
 
   return new Intl.DateTimeFormat('ja-JP', {
-    year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -35,95 +75,78 @@ function navigate(path) {
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
-function DashboardIcon({ type }) {
+function TemplateIcon({ type }) {
   const common = {
-    width: 18,
-    height: 18,
+    width: 26,
+    height: 26,
     viewBox: '0 0 24 24',
     fill: 'none',
     stroke: 'currentColor',
-    strokeWidth: 1.8,
+    strokeWidth: 1.7,
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
     'aria-hidden': true
   }
 
-  if (type === 'projects') {
-    return (
-      <svg {...common}>
-        <path d="M4 7h6l2 2h8v10H4z" />
-        <path d="M4 7V5h6l2 2" />
-      </svg>
-    )
+  if (type === 'Web') {
+    return <svg {...common}><path d="m8 8-3 4 3 4M16 8l3 4-3 4M14 5l-4 14" /></svg>
   }
 
-  if (type === 'files') {
-    return (
-      <svg {...common}>
-        <path d="M5 3h9l5 5v13H5z" />
-        <path d="M14 3v5h5" />
-      </svg>
-    )
+  if (type === 'HTML') {
+    return <svg {...common}><path d="m7 4-4 16 9 2 9-2-4-16Z" /><path d="M8 8h8M7 12h8M6 16h8" /></svg>
   }
 
-  if (type === 'storage') {
-    return (
-      <svg {...common}>
-        <ellipse cx="12" cy="6" rx="7" ry="3" />
-        <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
-        <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
-      </svg>
-    )
+  if (type === 'Python') {
+    return <svg {...common}><path d="M12 4c-3.2 0-4 .9-4 3v2h4v2H6c-2 0-3 1.1-3 3s1 3 3 3h2v-3h6c2 0 3-1 3-3V7c0-2-1.1-3-5-3Z" /><path d="M12 20c3.2 0 4-.9 4-3v-2h-4v-2h6c2 0 3-1.1 3-3s-1-3-3-3h-2v3H10c-2 0-3 1-3 3v3c0 2 1.1 3 5 3Z" /></svg>
   }
 
-  return (
-    <svg {...common}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 8v4l2.8 1.8" />
-    </svg>
-  )
+  return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M8 12h8M12 8v8" /></svg>
 }
 
 export default function Dashboard({ session }) {
   const [data, setData] = useState(null)
+  const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState('')
+  const [activeSection, setActiveSection] = useState('projects')
+
+  async function loadDashboard() {
+    setLoading(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/dashboard?limit=50', {
+        credentials: 'include'
+      })
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Dashboard request failed')
+      }
+
+      setData(result)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Dashboard request failed')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false
-
-    async function load() {
-      try {
-        const response = await fetch('/api/dashboard', {
-          credentials: 'include'
-        })
-
-        const result = await response.json()
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Dashboard request failed')
-        }
-
-        if (!cancelled) {
-          setData(result)
-        }
-      } catch (reason) {
-        if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : 'Dashboard request failed')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void load()
-
-    return () => {
-      cancelled = true
-    }
+    void loadDashboard()
   }, [])
+
+  const projects = useMemo(() => {
+    const source = data?.projects || []
+    const normalized = query.trim().toLowerCase()
+
+    if (!normalized) return source
+
+    return source.filter(project =>
+      project.name.toLowerCase().includes(normalized)
+    )
+  }, [data, query])
 
   async function signOut() {
     await authClient.signOut()
@@ -135,178 +158,246 @@ export default function Dashboard({ session }) {
     navigate('/')
   }
 
+  async function createTemplate(template) {
+    if (creating) return
+
+    setCreating(template.id)
+
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: template.title,
+          files: template.files
+        })
+      })
+
+      const project = await response.json()
+
+      if (!response.ok) {
+        throw new Error(project.error || 'Project creation failed')
+      }
+
+      localStorage.setItem('poligo-current-project', project.id)
+      navigate('/')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Project creation failed')
+      setCreating('')
+    }
+  }
+
   if (loading) {
     return (
-      <div className="dashboard-loading">
+      <div className="stack-dashboard-loading">
         <img src="/poligo-mark.svg" alt="Poligo" />
         <span>Loading dashboard...</span>
       </div>
     )
   }
 
-  if (error) {
+  if (error && !data) {
     return (
-      <div className="dashboard-page">
-        <div className="dashboard-error-card">
+      <div className="stack-dashboard-loading">
+        <div className="stack-dashboard-error">
           <img src="/poligo-mark.svg" alt="Poligo" />
           <h1>Unable to load dashboard</h1>
           <p>{error}</p>
-          <button className="dashboard-primary-button" onClick={() => window.location.reload()}>
-            Retry
-          </button>
+          <button onClick={() => void loadDashboard()}>Retry</button>
         </div>
       </div>
     )
   }
 
   const stats = data.stats
-  const projects = data.projects
 
   return (
-    <div className="dashboard-page">
-      <header className="dashboard-header">
-        <button className="dashboard-brand" onClick={() => navigate('/')}>
+    <div className="stack-dashboard">
+      <aside className="stack-sidebar">
+        <button className="stack-sidebar-brand" onClick={() => setActiveSection('projects')}>
           <img src="/poligo-mark.svg" alt="" />
           <span>Poligo</span>
         </button>
 
-        <div className="dashboard-header-actions">
-          <button className="dashboard-secondary-button" onClick={() => navigate('/')}>
-            Open IDE
+        <button
+          className="stack-new-button"
+          onClick={() => document.getElementById('new-projects')?.scrollIntoView({ behavior: 'smooth' })}
+        >
+          <span>+</span>
+          New Project
+        </button>
+
+        <nav className="stack-sidebar-nav">
+          <button
+            className={activeSection === 'projects' ? 'active' : ''}
+            onClick={() => {
+              setActiveSection('projects')
+              document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })
+            }}
+          >
+            <span className="stack-nav-icon">▦</span>
+            Projects
           </button>
-          <button className="dashboard-secondary-button" onClick={signOut}>
+
+          <button
+            className={activeSection === 'account' ? 'active' : ''}
+            onClick={() => {
+              setActiveSection('account')
+              document.getElementById('account')?.scrollIntoView({ behavior: 'smooth' })
+            }}
+          >
+            <span className="stack-nav-icon">◯</span>
+            Account
+          </button>
+        </nav>
+
+        <div className="stack-sidebar-bottom">
+          <div className="stack-sidebar-user">
+            <div className="stack-user-avatar">
+              {(data.user.name || 'P').slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <strong>{data.user.name}</strong>
+              <span>{data.user.email}</span>
+            </div>
+          </div>
+
+          <button className="stack-signout-button" onClick={signOut}>
             Sign out
           </button>
         </div>
-      </header>
+      </aside>
 
-      <main className="dashboard-main">
-        <section className="dashboard-hero">
-          <div>
-            <div className="dashboard-eyebrow">POLIGO CLOUD</div>
-            <h1>Welcome back, {session?.user?.name || data.user.name}</h1>
-            <p>Your projects are stored and managed through Poligo Cloud.</p>
+      <main className="stack-dashboard-main">
+        <header className="stack-dashboard-topbar">
+          <div className="stack-breadcrumb">
+            <span>Cloud</span>
+            <span>/</span>
+            <strong>Dashboard</strong>
           </div>
-          <div className="dashboard-cloud-status">
-            <span className="dashboard-status-dot" />
-            Turso database connected
+
+          <div className="stack-top-actions">
+            <div className="stack-search">
+              <span>⌕</span>
+              <input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Search projects"
+              />
+              <kbd>⌘ K</kbd>
+            </div>
+            <button className="stack-open-ide" onClick={() => navigate('/')}>
+              Open IDE
+            </button>
           </div>
-        </section>
+        </header>
 
-        <section className="dashboard-stat-grid">
-          <article className="dashboard-stat-card">
-            <div className="dashboard-stat-icon">
-              <DashboardIcon type="projects" />
-            </div>
+        <div className="stack-dashboard-content">
+          <section className="stack-welcome">
             <div>
-              <span className="dashboard-stat-label">Projects</span>
-              <strong>{stats.projectCount}</strong>
+              <span className="stack-eyebrow">POLIGO CLOUD</span>
+              <h1>Build something.</h1>
+              <p>Choose a starter or continue working on one of your projects.</p>
             </div>
-          </article>
+            <div className="stack-cloud-pill">
+              <span />
+              Turso connected
+            </div>
+          </section>
 
-          <article className="dashboard-stat-card">
-            <div className="dashboard-stat-icon">
-              <DashboardIcon type="files" />
-            </div>
-            <div>
-              <span className="dashboard-stat-label">Files</span>
-              <strong>{stats.fileCount}</strong>
-            </div>
-          </article>
-
-          <article className="dashboard-stat-card">
-            <div className="dashboard-stat-icon">
-              <DashboardIcon type="storage" />
-            </div>
-            <div>
-              <span className="dashboard-stat-label">Stored data</span>
-              <strong>{formatBytes(stats.storageBytes)}</strong>
-            </div>
-          </article>
-
-          <article className="dashboard-stat-card">
-            <div className="dashboard-stat-icon">
-              <DashboardIcon type="activity" />
-            </div>
-            <div>
-              <span className="dashboard-stat-label">Last activity</span>
-              <strong>{stats.lastUpdated ? formatDate(stats.lastUpdated) : 'None'}</strong>
-            </div>
-          </article>
-        </section>
-
-        <section className="dashboard-content-grid">
-          <div className="dashboard-panel">
-            <div className="dashboard-panel-header">
+          <section id="new-projects" className="stack-section">
+            <div className="stack-section-heading">
               <div>
-                <span className="dashboard-panel-eyebrow">YOUR WORKSPACE</span>
-                <h2>Recent projects</h2>
+                <span>START HERE</span>
+                <h2>Create a new project</h2>
               </div>
-              <button className="dashboard-link-button" onClick={() => navigate('/')}>
-                Open IDE
-              </button>
+              <p>Start with the tools you already use.</p>
+            </div>
+
+            <div className="stack-template-grid">
+              {TEMPLATES.map(template => (
+                <button
+                  key={template.id}
+                  className="stack-template-card"
+                  onClick={() => void createTemplate(template)}
+                  disabled={Boolean(creating)}
+                >
+                  <div className="stack-template-icon">
+                    <TemplateIcon type={template.type} />
+                  </div>
+                  <div className="stack-template-copy">
+                    <strong>{template.title}</strong>
+                    <span>{creating === template.id ? 'Creating project...' : template.subtitle}</span>
+                  </div>
+                  <span className="stack-template-arrow">→</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section id="projects" className="stack-section">
+            <div className="stack-section-heading stack-project-heading">
+              <div>
+                <span>YOUR WORKSPACE</span>
+                <h2>Projects</h2>
+              </div>
+              <span className="stack-project-count">{projects.length} shown</span>
             </div>
 
             {projects.length ? (
-              <div className="dashboard-project-list">
+              <div className="stack-project-grid">
                 {projects.map(project => (
                   <button
-                    className="dashboard-project-row"
                     key={project.id}
+                    className="stack-project-card"
                     onClick={() => openProject(project.id)}
                   >
-                    <div className="dashboard-project-mark">
-                      <span />
-                      <span />
-                      <span />
+                    <div className="stack-project-preview">
+                      <div className="stack-project-preview-bar">
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      <div className="stack-project-preview-code">
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                      </div>
                     </div>
 
-                    <div className="dashboard-project-info">
-                      <strong>{project.name}</strong>
-                      <span>Updated {formatDate(project.updatedAt)}</span>
+                    <div className="stack-project-card-body">
+                      <div className="stack-project-card-icon">
+                        <img src="/poligo-mark.svg" alt="" />
+                      </div>
+                      <div className="stack-project-card-copy">
+                        <strong>{project.name}</strong>
+                        <span>{project.fileCount} files · {formatBytes(project.storageBytes)}</span>
+                        <small>Updated {formatDate(project.updatedAt)}</small>
+                      </div>
                     </div>
-
-                    <div className="dashboard-project-meta">
-                      <span>{project.fileCount} files</span>
-                      <span>{formatBytes(project.storageBytes)}</span>
-                    </div>
-
-                    <span className="dashboard-project-arrow">→</span>
                   </button>
                 ))}
               </div>
             ) : (
-              <div className="dashboard-empty">
-                <h3>No projects yet</h3>
-                <p>Create your first project from the Poligo IDE.</p>
-                <button className="dashboard-primary-button" onClick={() => navigate('/')}>
-                  Create project
-                </button>
+              <div className="stack-empty">
+                <h3>{query ? 'No matching projects' : 'No projects yet'}</h3>
+                <p>{query ? 'Try a different search term.' : 'Create a starter project above to get moving.'}</p>
               </div>
             )}
-          </div>
+          </section>
 
-          <aside className="dashboard-panel dashboard-account-panel">
-            <div className="dashboard-panel-header">
-              <div>
-                <span className="dashboard-panel-eyebrow">ACCOUNT</span>
-                <h2>Profile</h2>
-              </div>
+          <section id="account" className="stack-account-section">
+            <div>
+              <span className="stack-eyebrow">ACCOUNT</span>
+              <h2>{data.user.name}</h2>
+              <p>{data.user.email}</p>
             </div>
 
-            <div className="dashboard-profile">
-              <div className="dashboard-avatar">
-                {(data.user.name || 'P').slice(0, 1).toUpperCase()}
-              </div>
-              <div className="dashboard-profile-name">{data.user.name}</div>
-              <div className="dashboard-profile-email">{data.user.email}</div>
-            </div>
-
-            <div className="dashboard-account-details">
-              <div>
-                <span>Storage</span>
-                <strong>{formatBytes(stats.storageBytes)}</strong>
-              </div>
+            <div className="stack-account-stats">
               <div>
                 <span>Projects</span>
                 <strong>{stats.projectCount}</strong>
@@ -315,9 +406,13 @@ export default function Dashboard({ session }) {
                 <span>Files</span>
                 <strong>{stats.fileCount}</strong>
               </div>
+              <div>
+                <span>Stored data</span>
+                <strong>{formatBytes(stats.storageBytes)}</strong>
+              </div>
             </div>
-          </aside>
-        </section>
+          </section>
+        </div>
       </main>
     </div>
   )
