@@ -46,20 +46,17 @@ function FileIcon({ kind, size = 16 }) {
   const common = {
     width: size,
     height: size,
-    viewBox: '0 0 20 20',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.4,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
+    viewBox: '0 0 32 32',
     'aria-hidden': true
   }
 
   if (kind === 'html') {
     return (
       <svg {...common}>
-        <path d="M3.5 3.5 5 16.5l5 1.5 5-1.5 1.5-13z" />
-        <path d="m7 7.2 2 2.3-2 2.3m6-4.6-2 2.3 2 2.3" />
+        <path d="M4 3h24l-2.3 24L16 29 6.3 27Z" fill="#E44D26" />
+        <path d="m7 7 1.8 16.5 7.2 2.2V7Z" fill="#F16529" />
+        <path d="M16 10h8.8l-.8 8.8L16 21.2Z" fill="#FFFFFF" opacity=".95" />
+        <path d="M11 11h8v3h-4.8l.2 2h4.6l-.5 5-2.5.8V19l-1.9.6-.4-4.6H11Z" fill="#E44D26" />
       </svg>
     )
   }
@@ -67,8 +64,9 @@ function FileIcon({ kind, size = 16 }) {
   if (kind === 'css') {
     return (
       <svg {...common}>
-        <path d="M3.5 3.5h13L15 16l-5 2-5-2z" />
-        <path d="M6 7.2h8M6 10h6.5M6 12.8h4.5" />
+        <path d="M4 3h24l-2.3 24L16 29 6.3 27Z" fill="#1572B6" />
+        <path d="M16 7v19l7.1-2.2L25 7Z" fill="#33A9DC" opacity=".92" />
+        <path d="M10 10h12v3h-8.8l.2 2h8.2l-.5 6.4-5.1 1.6v-3l2.4-.7.1-1.3h-7.1Z" fill="#FFFFFF" />
       </svg>
     )
   }
@@ -76,8 +74,8 @@ function FileIcon({ kind, size = 16 }) {
   if (kind === 'js') {
     return (
       <svg {...common}>
-        <rect x="2.8" y="2.8" width="14.4" height="14.4" rx="1.5" />
-        <path d="M8 8v4.8c0 1-.5 1.5-1.4 1.5-.7 0-1.2-.3-1.5-.8m5.8 1.5c.5.5 1 .8 1.8.8 1.1 0 1.8-.6 1.8-1.4 0-1-.7-1.3-1.6-1.7l-.3-.1c-.7-.3-1-.6-1-1 0-.4.3-.7.8-.7.5 0 .9.2 1.2.5" />
+        <rect x="3" y="3" width="26" height="26" rx="3" fill="#F7DF1E" />
+        <path d="M10 11v7.3c0 1.6-.6 2.6-2.5 2.6-1.3 0-2.1-.5-2.6-1l1.6-1.8c.4.4.8.7 1.2.7.5 0 .7-.2.7-.9V11Zm7.1-.2c1.7 0 3 .6 4 1.7l-1.7 1.9c-.6-.6-1.3-1-2.1-1-.6 0-.9.2-.9.6 0 .5.4.7 1.7 1.2 2.1.8 3.1 1.8 3.1 3.8 0 2-1.6 3.4-4 3.4-2.1 0-3.6-.8-4.7-2.1l1.9-1.8c.7.8 1.5 1.3 2.6 1.3.7 0 1-.2 1-.7 0-.5-.4-.7-1.8-1.2-2-.8-2.8-1.8-2.8-3.6 0-2 1.5-3.5 3.7-3.5Z" fill="#111827" />
       </svg>
     )
   }
@@ -85,10 +83,8 @@ function FileIcon({ kind, size = 16 }) {
   if (kind === 'python') {
     return (
       <svg {...common}>
-        <path d="M10 2.7c-2.9 0-3.1 1.3-3.1 2.5v1.7h3.8v1H5.2c-1.6 0-2.8 1.8-2.8 4 0 2.3 1.1 3.7 2.8 3.7h1.7v-2.1c0-1.4.8-2.4 2.2-2.4h3.2c1.2 0 2.1-1 2.1-2.2V5.2c0-1.5-1.1-2.5-2.5-2.5z" />
-        <path d="M10 17.3c2.9 0 3.1-1.3 3.1-2.5v-1.7H9.3v-1h5.5c1.6 0 2.8-1.8 2.8-4 0-2.3-1.1-3.7-2.8-3.7h-1.7v2.1c0 1.4-.8 2.4-2.2 2.4H7.7c-1.2 0-2.1 1-2.1 2.2v1.7c0 1.5 1.1 2.5 2.5 2.5z" />
-        <circle cx="8" cy="4.8" r=".7" fill="currentColor" stroke="none" />
-        <circle cx="12" cy="15.2" r=".7" fill="currentColor" stroke="none" />
+        <path d="M15.6 3.1c-4.8 0-4.9 2.2-4.9 4.2v2.1h7v1.5H9.8C6 10.9 4 13.5 4 17c0 3.3 1.8 5.2 5.2 5.2h2.3v-3.1c0-1.8 1.2-3 3-3h4.7c2.8 0 4.8-2 4.8-4.9V7.5c0-2.9-2-4.4-4.4-4.4Zm-1.3 2.1a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z" fill="#3776AB" />
+        <path d="M16.4 28.9c4.8 0 4.9-2.2 4.9-4.2v-2.1h-7v-1.5h7.9c3.8 0 5.8-2.6 5.8-6.1 0-3.3-1.8-5.2-5.2-5.2h-2.3v3.1c0 1.8-1.2 3-3 3h-4.7c-2.8 0-4.8 2-4.8 4.9v3.7c0 2.9 2 4.4 4.4 4.4Zm1.3-2.1a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" fill="#FFD43B" transform="translate(-1 -1)" />
       </svg>
     )
   }
@@ -96,16 +92,17 @@ function FileIcon({ kind, size = 16 }) {
   if (kind === 'cpp') {
     return (
       <svg {...common}>
-        <circle cx="10" cy="10" r="7" />
-        <path d="M5.2 10h4m-2-2v4m4.2-2h4m-2-2v4" />
+        <circle cx="16" cy="16" r="13" fill="#00599C" />
+        <path d="M9 17.6c1.2 2.1 2.9 3.1 5.1 3.1 1.6 0 3-.5 4.2-1.5l-1.8-2.1c-.7.6-1.5.9-2.4.9-1.6 0-2.6-1-2.6-3s1-3 2.6-3c.9 0 1.7.3 2.4.9l1.8-2.1C17.1 9.8 15.7 9.3 14.1 9.3c-2.2 0-3.9 1-5.1 3.1Z" fill="#FFFFFF" />
+        <path d="M19 11.5h2v2h2v1.7h-2v2h-2v-2h-2v-1.7h2Zm3.4 0h2v2h1.6v1.7h-1.6v2h-2v-2h-1.5v-1.7h1.5Z" fill="#FFFFFF" />
       </svg>
     )
   }
 
   return (
     <svg {...common}>
-      <path d="M4 2.8h7l4 4v10.4H4z" />
-      <path d="M11 2.8v4h4" />
+      <path d="M7 3h12l6 6v20H7Z" fill="#64748B" />
+      <path d="M19 3v6h6" fill="#94A3B8" />
     </svg>
   )
 }
