@@ -13,7 +13,11 @@ import {
   initializeWorkspace,
   listProjects,
   saveProject,
-  claimWorkspace
+  claimWorkspace,
+  listCommits,
+  getCommitDiff,
+  createCommit,
+  restoreCommit
 } from './projectStore'
 import { authClient } from './auth-client'
 import AuthPage from './AuthPage'
@@ -242,6 +246,12 @@ function IDE() {
     result: null,
     error: ''
   })
+  const [sourceCommits, setSourceCommits] = useState([])
+  const [sourceDiff, setSourceDiff] = useState([])
+  const [sourceCommitMessage, setSourceCommitMessage] = useState('')
+  const [sourceSelectedCommit, setSourceSelectedCommit] = useState('')
+  const [sourceLoading, setSourceLoading] = useState(false)
+  const [sourceError, setSourceError] = useState('')
   const terminalRef = useRef(null)
   const terminal = useRef(null)
   const filesRef = useRef(files)
@@ -443,6 +453,58 @@ function IDE() {
   }, [])
 
   useEffect(() => {
+    if (activeView !== 'source' || !currentProjectId) {
+      return
+    }
+
+    let cancelled = false
+
+    async function loadSourceControl() {
+      setSourceLoading(true)
+      setSourceError('')
+
+      try {
+        const result = await listCommits(currentProjectId)
+        const commits = Array.isArray(result.commits) ? result.commits : []
+
+        if (cancelled) return
+
+        setSourceCommits(commits)
+
+        const selectedId = commits.some(commit => commit.id === sourceSelectedCommit)
+          ? sourceSelectedCommit
+          : commits[0]?.id || ''
+
+        setSourceSelectedCommit(selectedId)
+
+        if (selectedId) {
+          const diff = await getCommitDiff(currentProjectId, selectedId)
+
+          if (!cancelled) {
+            setSourceDiff(diff.files || [])
+          }
+        } else {
+          setSourceDiff([])
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSourceError(error instanceof Error ? error.message : 'Source control failed')
+        }
+      } finally {
+        if (!cancelled) {
+          setSourceLoading(false)
+        }
+      }
+    }
+
+    void loadSourceControl()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, currentProjectId])
+
+  useEffect(() => {
     if (!terminalRef.current || terminal.current) return
 
     const instance = new Terminal({
@@ -543,6 +605,88 @@ function IDE() {
   async function handleSignOut() {
     await authClient.signOut()
     window.location.assign('/signin')
+  }
+
+  async function refreshSourceControl(selectedCommitId = '') {
+    if (!currentProjectId) return
+
+    setSourceLoading(true)
+    setSourceError('')
+
+    try {
+      const result = await listCommits(currentProjectId)
+      const commits = Array.isArray(result.commits) ? result.commits : []
+      const selectedId =
+        commits.find(commit => commit.id === selectedCommitId)?.id ||
+        commits.find(commit => commit.id === sourceSelectedCommit)?.id ||
+        commits[0]?.id ||
+        ''
+
+      setSourceCommits(commits)
+      setSourceSelectedCommit(selectedId)
+
+      if (selectedId) {
+        const diff = await getCommitDiff(currentProjectId, selectedId)
+        setSourceDiff(diff.files || [])
+      } else {
+        setSourceDiff([])
+      }
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'Source control failed')
+    } finally {
+      setSourceLoading(false)
+    }
+  }
+
+  async function commitChanges() {
+    const message = sourceCommitMessage.trim()
+
+    if (!message || !currentProjectId) return
+
+    setSourceLoading(true)
+    setSourceError('')
+
+    try {
+      await saveCurrentProject()
+      const commit = await createCommit(currentProjectId, message)
+
+      setSourceCommitMessage('')
+      await refreshSourceControl(commit.id)
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'Commit failed')
+      setSourceLoading(false)
+    }
+  }
+
+  async function restoreSelectedCommit(commitId) {
+    const commit = sourceCommits.find(item => item.id === commitId)
+
+    if (!commit) return
+
+    const confirmed = window.confirm(
+      'Restore "' + commit.message + '"? Current changes will be replaced.'
+    )
+
+    if (!confirmed) return
+
+    setSourceLoading(true)
+    setSourceError('')
+
+    try {
+      const restored = await restoreCommit(currentProjectId, commitId)
+      const nextFiles = restored.files
+
+      setFiles(nextFiles)
+      setActiveFile(firstFile(nextFiles))
+      setOpenFiles([firstFile(nextFiles)])
+      setPreview('')
+      setPreviewKey(value => value + 1)
+      setSaveStatus('saved')
+      await refreshSourceControl(commitId)
+    } catch (error) {
+      setSourceError(error instanceof Error ? error.message : 'Restore failed')
+      setSourceLoading(false)
+    }
   }
 
   function updateFile(value) {
@@ -1172,9 +1316,111 @@ function IDE() {
           )}
 
           {activeView === 'source' && (
-            <div className="empty-view">
-              <div className="empty-title">Source Control</div>
-              <div className="empty-text">Git integration is the next workspace layer.</div>
+            <div className="source-control-view">
+              <div className="source-control-commit">
+                <input
+                  value={sourceCommitMessage}
+                  onChange={event => setSourceCommitMessage(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' && sourceCommitMessage.trim()) {
+                      void commitChanges()
+                    }
+                  }}
+                  placeholder="Commit message"
+                  disabled={sourceLoading}
+                />
+                <button
+                  className="source-commit-button"
+                  onClick={() => void commitChanges()}
+                  disabled={sourceLoading || !sourceCommitMessage.trim()}
+                >
+                  Commit
+                </button>
+              </div>
+
+              {sourceError && (
+                <div className="source-control-error">{sourceError}</div>
+              )}
+
+              <div className="source-control-section">
+                <div className="source-control-section-title">
+                  <span>CHANGES</span>
+                  <span>{sourceDiff.length}</span>
+                </div>
+
+                {sourceLoading && (
+                  <div className="source-control-empty">Loading...</div>
+                )}
+
+                {!sourceLoading && !sourceDiff.length && (
+                  <div className="source-control-empty">No changes.</div>
+                )}
+
+                {!sourceLoading && sourceDiff.map(file => (
+                  <button
+                    key={file.path}
+                    className="source-file-row"
+                    onClick={() => openFile(file.path)}
+                  >
+                    <span className={'source-file-status source-file-status-' + file.status}>
+                      {file.status === 'added' ? 'A' : file.status === 'deleted' ? 'D' : 'M'}
+                    </span>
+                    <span>{file.path}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="source-control-section">
+                <div className="source-control-section-title">
+                  <span>HISTORY</span>
+                  <span>{sourceCommits.length}</span>
+                </div>
+
+                {!sourceCommits.length && !sourceLoading && (
+                  <div className="source-control-empty">No commits.</div>
+                )}
+
+                {sourceCommits.map(commit => (
+                  <div
+                    key={commit.id}
+                    className={'source-commit-row ' + (
+                      sourceSelectedCommit === commit.id ? 'active' : ''
+                    )}
+                  >
+                    <button
+                      className="source-commit-select"
+                      onClick={async () => {
+                        setSourceSelectedCommit(commit.id)
+                        try {
+                          const diff = await getCommitDiff(currentProjectId, commit.id)
+                          setSourceDiff(diff.files || [])
+                        } catch (error) {
+                          setSourceError(
+                            error instanceof Error ? error.message : 'Diff failed'
+                          )
+                        }
+                      }}
+                    >
+                      <strong>{commit.message}</strong>
+                      <small>
+                        {new Intl.DateTimeFormat('ja-JP', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }).format(new Date(commit.createdAt))}
+                      </small>
+                    </button>
+                    <button
+                      className="source-restore-button"
+                      title="Restore this commit"
+                      onClick={() => void restoreSelectedCommit(commit.id)}
+                    >
+                      ↶
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
