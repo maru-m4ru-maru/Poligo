@@ -1516,3 +1516,9 @@ body {
   border-radius: 8px;
   background: #fff;
 }
+
+.file-icon-image {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
