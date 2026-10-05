@@ -249,6 +249,22 @@ export default function Dashboard({ session }) {
     void loadDashboard()
   }, [])
 
+  useEffect(() => {
+    if (!newProjectOpen) return
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setNewProjectOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [newProjectOpen])
+
   const projects = useMemo(() => {
     const source = data?.projects || []
     const normalized = query.trim().toLowerCase()
@@ -337,7 +353,10 @@ export default function Dashboard({ session }) {
 
         <button
           className="stack-new-button"
-          onClick={() => setNewProjectOpen(current => !current)}
+          onClick={() => {
+            setTemplateCategory('Popular')
+            setNewProjectOpen(current => !current)
+          }}
         >
           <span>+</span>
           New Project
