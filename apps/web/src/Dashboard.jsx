@@ -39,6 +39,15 @@ const TEMPLATES = [
     files: {
       'main.cpp': '#include <iostream>\n\nint main() {\n    std::cout << "Hello from Poligo\\n";\n    return 0;\n}'
     }
+  },
+  {
+    id: 'c',
+    title: 'C',
+    subtitle: 'Run C in Poligo',
+    type: 'C',
+    files: {
+      'main.c': '#include <stdio.h>\n\nint main(void) {\n    printf("Hello from Poligo\\n");\n    return 0;\n}'
+    }
   }
 ]
 
@@ -73,6 +82,20 @@ function formatDate(timestamp) {
 function navigate(path) {
   window.history.pushState({}, '', path)
   window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
+function getWorkspaceId() {
+  let workspaceId = localStorage.getItem('poligo-workspace-id')
+
+  if (!workspaceId) {
+    workspaceId =
+      globalThis.crypto?.randomUUID?.() ||
+      'workspace-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+
+    localStorage.setItem('poligo-workspace-id', workspaceId)
+  }
+
+  return workspaceId
 }
 
 function TemplateIcon({ type }) {
@@ -110,6 +133,7 @@ export default function Dashboard({ session }) {
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState('')
   const [activeSection, setActiveSection] = useState('projects')
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
 
   async function loadDashboard() {
     setLoading(true)
@@ -117,7 +141,10 @@ export default function Dashboard({ session }) {
 
     try {
       const response = await fetch('/api/dashboard', {
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'X-Poligo-Workspace': getWorkspaceId()
+        }
       })
       const result = await response.json()
 
@@ -224,7 +251,7 @@ export default function Dashboard({ session }) {
 
         <button
           className="stack-new-button"
-          onClick={() => document.getElementById('new-projects')?.scrollIntoView({ behavior: 'smooth' })}
+          onClick={() => setNewProjectOpen(current => !current)}
         >
           <span>+</span>
           New Project
@@ -270,6 +297,55 @@ export default function Dashboard({ session }) {
           </button>
         </div>
       </aside>
+
+      {newProjectOpen && (
+        <div
+          className="stack-new-project-overlay"
+          onClick={() => setNewProjectOpen(false)}
+        >
+          <div
+            className="stack-new-project-menu"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="stack-new-project-header">
+              <div>
+                <span>NEW PROJECT</span>
+                <h2>Choose a starter</h2>
+              </div>
+              <button
+                className="stack-new-project-close"
+                onClick={() => setNewProjectOpen(false)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="stack-new-project-grid">
+              {TEMPLATES.map(template => (
+                <button
+                  key={template.id}
+                  className="stack-template-card"
+                  onClick={() => {
+                    setNewProjectOpen(false)
+                    void createTemplate(template)
+                  }}
+                  disabled={Boolean(creating)}
+                >
+                  <div className="stack-template-icon">
+                    <TemplateIcon type={template.type} />
+                  </div>
+                  <div className="stack-template-copy">
+                    <strong>{template.title}</strong>
+                    <span>{creating === template.id ? 'Creating project...' : template.subtitle}</span>
+                  </div>
+                  <span className="stack-template-arrow">→</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="stack-dashboard-main">
         <header className="stack-dashboard-topbar">
