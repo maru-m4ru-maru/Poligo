@@ -3,21 +3,20 @@ import { authClient } from './auth-client'
 
 export default function AuthPage({ mode }) {
   const isSignUp = mode === 'signup'
-  const { data: session, isPending } = authClient.useSession()
+  const { isPending } = authClient.useSession()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    if (!isPending && session?.user) {
-      window.location.replace('/')
-    }
-  }, [isPending, session])
+  function navigate(path) {
+    window.history.pushState({}, '', path)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
 
   function switchMode(nextMode) {
-    window.location.assign(nextMode === 'signup' ? '/Createaccount' : '/signin')
+    navigate(nextMode === 'signup' ? '/createaccount' : '/signin')
   }
 
   async function submit(event) {
@@ -41,7 +40,13 @@ export default function AuthPage({ mode }) {
         throw new Error(result.error.message || 'Authentication failed')
       }
 
-      window.location.assign('/')
+      const sessionResult = await authClient.getSession()
+
+      if (!sessionResult.data?.user) {
+        throw new Error('Sign-in succeeded, but the session could not be confirmed.')
+      }
+
+      navigate('/')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Authentication failed')
       setBusy(false)
