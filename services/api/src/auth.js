@@ -2,7 +2,7 @@ import { betterAuth } from 'better-auth'
 import { kyselyAdapter } from '@better-auth/kysely-adapter'
 import { LibsqlDialect } from '@libsql/kysely-libsql'
 import { Kysely } from 'kysely'
-import { getMigrations } from 'better-auth/db/migration'
+import { getDatabase } from './turso.js'
 
 const databaseUrl = process.env.TURSO_DATABASE_URL || ''
 const databaseToken = process.env.TURSO_AUTH_TOKEN || ''
@@ -44,6 +44,52 @@ export const auth = betterAuth({
 })
 
 export async function initializeAuthDatabase() {
-  const { runMigrations } = await getMigrations(auth.options)
-  await runMigrations()
+  const database = getDatabase()
+
+  await database.batch([
+    `CREATE TABLE IF NOT EXISTS "user" (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      emailVerified BOOLEAN NOT NULL,
+      image TEXT,
+      createdAt TIMESTAMP NOT NULL,
+      updatedAt TIMESTAMP NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS "session" (
+      id TEXT PRIMARY KEY NOT NULL,
+      userId TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expiresAt TIMESTAMP NOT NULL,
+      ipAddress TEXT,
+      userAgent TEXT,
+      createdAt TIMESTAMP NOT NULL,
+      updatedAt TIMESTAMP NOT NULL,
+      FOREIGN KEY (userId) REFERENCES "user"(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS "account" (
+      id TEXT PRIMARY KEY NOT NULL,
+      userId TEXT NOT NULL,
+      accountId TEXT NOT NULL,
+      providerId TEXT NOT NULL,
+      accessToken TEXT,
+      refreshToken TEXT,
+      idToken TEXT,
+      accessTokenExpiresAt TIMESTAMP,
+      refreshTokenExpiresAt TIMESTAMP,
+      scope TEXT,
+      password TEXT,
+      createdAt TIMESTAMP NOT NULL,
+      updatedAt TIMESTAMP NOT NULL,
+      FOREIGN KEY (userId) REFERENCES "user"(id) ON DELETE CASCADE
+    )`,
+    `CREATE TABLE IF NOT EXISTS "verification" (
+      id TEXT PRIMARY KEY NOT NULL,
+      identifier TEXT NOT NULL,
+      value TEXT NOT NULL,
+      expiresAt TIMESTAMP NOT NULL,
+      createdAt TIMESTAMP,
+      updatedAt TIMESTAMP
+    )`
+  ], 'immediate')
 }
