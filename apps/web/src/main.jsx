@@ -1001,12 +1001,12 @@ function IDE() {
       onConfirm: async () => {
         try {
           await saveProject({
-        id: currentProjectId,
-        name: projectName,
-        files,
-        createdAt: currentProject.createdAt,
-        updatedAt: Date.now()
-      })
+            id: currentProjectId,
+            name: projectName,
+            files,
+            createdAt: currentProject.createdAt,
+            updatedAt: Date.now()
+          })
 
           await deleteProject(currentProjectId)
 
