@@ -768,25 +768,6 @@ function IDE() {
   }
 
   function updateFile(value) {
-
-    try {
-      const restored = await restoreCommit(currentProjectId, commitId)
-      const nextFiles = restored.files
-
-      setFiles(nextFiles)
-      setActiveFile(firstFile(nextFiles))
-      setOpenFiles([firstFile(nextFiles)])
-      setPreview('')
-      setPreviewKey(value => value + 1)
-      setSaveStatus('saved')
-      await refreshSourceControl(commitId)
-    } catch (error) {
-      setSourceError(error instanceof Error ? error.message : 'Restore failed')
-      setSourceLoading(false)
-    }
-  }
-
-  function updateFile(value) {
     setFiles(previous => ({
       ...previous,
       [activeFile]: value ?? ''
