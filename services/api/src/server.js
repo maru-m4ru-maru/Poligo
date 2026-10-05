@@ -81,9 +81,10 @@ async function claimWorkspace(request, response) {
 
   const workspaceId = getWorkspaceId(request)
   const database = getDatabase()
-  const existing = await database.prepare(
+  const existingStatement = await database.prepare(
     'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
-  ).all([workspaceId])
+  )
+  const existing = await existingStatement.all([workspaceId])
 
   const count = Number(existing[0]?.count || 0)
 
@@ -165,9 +166,10 @@ function serializeProject(row, files) {
 
 async function getProjectById(projectId, ownerId) {
   const database = getDatabase()
-  const projectResult = await database.prepare(
+  const projectStatement = await database.prepare(
     'SELECT id, name, created_at, updated_at FROM projects WHERE id = ? AND owner_id = ?'
-  ).all([projectId, ownerId])
+  )
+  const projectResult = await projectStatement.all([projectId, ownerId])
 
   const row = projectResult[0]
 
@@ -175,9 +177,10 @@ async function getProjectById(projectId, ownerId) {
     return null
   }
 
-  const fileRows = await database.prepare(
+  const fileStatement = await database.prepare(
     'SELECT path, content FROM project_files WHERE project_id = ? ORDER BY path'
-  ).all([projectId])
+  )
+  const fileRows = await fileStatement.all([projectId])
 
   const files = {}
 
@@ -190,9 +193,10 @@ async function getProjectById(projectId, ownerId) {
 
 async function listProjects(ownerId) {
   const database = getDatabase()
-  const result = await database.prepare(
+  const projectListStatement = await database.prepare(
     'SELECT id, name, created_at, updated_at FROM projects WHERE owner_id = ? ORDER BY updated_at DESC'
-  ).all([ownerId])
+  )
+  const result = await projectListStatement.all([ownerId])
 
   return result.map(row => ({
     id: row.id,
