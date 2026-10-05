@@ -116,7 +116,7 @@ export default function Dashboard({ session }) {
     setError('')
 
     try {
-      const response = await fetch('/api/dashboard?limit=50', {
+      const response = await fetch('/api/dashboard', {
         credentials: 'include'
       })
       const result = await response.json()
