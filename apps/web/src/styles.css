@@ -3348,3 +3348,23 @@ body {
   font-weight: 800;
   letter-spacing: -.04em;
 }
+
+
+.output-raw {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  background: #0d1118;
+  color: #d7e0eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.output-error-raw {
+  color: #f0b9bf;
+}
