@@ -161,3 +161,56 @@ export async function initializeWorkspace(defaultFiles) {
     currentProject: fullCurrentProject
   }
 }
+
+
+export async function listCommits(projectId) {
+  return request(
+    '/api/projects/' + encodeURIComponent(projectId) + '/commits'
+  )
+}
+
+export async function getCommitDiff(projectId, commitId) {
+  return request(
+    '/api/projects/' +
+      encodeURIComponent(projectId) +
+      '/commits/' +
+      encodeURIComponent(commitId) +
+      '/diff'
+  )
+}
+
+export async function getCommit(projectId, commitId) {
+  return request(
+    '/api/projects/' +
+      encodeURIComponent(projectId) +
+      '/commits/' +
+      encodeURIComponent(commitId)
+  )
+}
+
+export async function createCommit(projectId, message) {
+  return request(
+    '/api/projects/' +
+      encodeURIComponent(projectId) +
+      '/commits',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        message
+      })
+    }
+  )
+}
+
+export async function restoreCommit(projectId, commitId) {
+  return request(
+    '/api/projects/' +
+      encodeURIComponent(projectId) +
+      '/commits/' +
+      encodeURIComponent(commitId) +
+      '/restore',
+    {
+      method: 'POST'
+    }
+  )
+}
