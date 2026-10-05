@@ -252,6 +252,8 @@ function IDE() {
   const [sourceSelectedCommit, setSourceSelectedCommit] = useState('')
   const [sourceLoading, setSourceLoading] = useState(false)
   const [sourceError, setSourceError] = useState('')
+  const [dialog, setDialog] = useState(null)
+  const [dialogBusy, setDialogBusy] = useState(false)
   const terminalRef = useRef(null)
   const terminal = useRef(null)
   const filesRef = useRef(files)
@@ -658,19 +660,102 @@ function IDE() {
     }
   }
 
+  function openConfirmDialog({
+    title,
+    message,
+    confirmLabel = 'Confirm',
+    danger = false,
+    onConfirm
+  }) {
+    setDialog({
+      type: 'confirm',
+      title,
+      message,
+      confirmLabel,
+      danger,
+      onConfirm
+    })
+  }
+
+  function openInputDialog({
+    title,
+    message,
+    value = '',
+    placeholder = '',
+    confirmLabel = 'Save',
+    onConfirm
+  }) {
+    setDialog({
+      type: 'input',
+      title,
+      message,
+      value,
+      placeholder,
+      confirmLabel,
+      onConfirm
+    })
+  }
+
+  async function handleDialogConfirm() {
+    if (!dialog || dialogBusy) return
+
+    setDialogBusy(true)
+
+    try {
+      if (dialog.type === 'input') {
+        const value = dialog.value.trim()
+
+        if (!value) {
+          setDialogBusy(false)
+          return
+        }
+
+        await dialog.onConfirm(value)
+      } else {
+        await dialog.onConfirm()
+      }
+
+      setDialog(null)
+    } finally {
+      setDialogBusy(false)
+    }
+  }
+
   async function restoreSelectedCommit(commitId) {
     const commit = sourceCommits.find(item => item.id === commitId)
 
     if (!commit) return
 
-    const confirmed = window.confirm(
-      'Restore "' + commit.message + '"? Current changes will be replaced.'
-    )
+    openConfirmDialog({
+      title: 'Restore commit',
+      message: '"' + commit.message + '" will replace the current project files.',
+      confirmLabel: 'Restore',
+      danger: true,
+      onConfirm: async () => {
+        setSourceLoading(true)
+        setSourceError('')
 
-    if (!confirmed) return
+        try {
+          const restored = await restoreCommit(currentProjectId, commitId)
+          const nextFiles = restored.files
 
-    setSourceLoading(true)
-    setSourceError('')
+          setFiles(nextFiles)
+          setActiveFile(firstFile(nextFiles))
+          setOpenFiles([firstFile(nextFiles)])
+          setPreview('')
+          setPreviewKey(value => value + 1)
+          setSaveStatus('saved')
+          await refreshSourceControl(commitId)
+        } catch (error) {
+          setSourceError(error instanceof Error ? error.message : 'Restore failed')
+          setSourceLoading(false)
+          throw error
+        }
+      }
+    })
+  }
+
+  function updateFile(value) {
 
     try {
       const restored = await restoreCommit(currentProjectId, commitId)
@@ -750,49 +835,57 @@ function IDE() {
   }
 
   async function createFile() {
-    const name = window.prompt('New file name')
+    openInputDialog({
+      title: 'Create file',
+      message: 'Choose a file name for the new file.',
+      placeholder: 'example.py',
+      confirmLabel: 'Create',
+      onConfirm: async value => {
+        const normalized = value.trim()
 
-    if (!name) return
+        if (!normalized || normalized.includes('/') || normalized.includes('\\')) {
+          return
+        }
 
-    const normalized = name.trim()
+        if (Object.prototype.hasOwnProperty.call(files, normalized)) {
+          setActiveFile(normalized)
+          setOpenFiles(current => current.includes(normalized) ? current : [...current, normalized])
+          return
+        }
 
-    if (!normalized || normalized.includes('/') || normalized.includes('\\')) {
-      return
-    }
-
-    if (Object.prototype.hasOwnProperty.call(files, normalized)) {
-      setActiveFile(normalized)
-      setOpenFiles(current => current.includes(normalized) ? current : [...current, normalized])
-      return
-    }
-
-    setFiles(current => ({
-      ...current,
-      [normalized]: ''
-    }))
-    setActiveFile(normalized)
-    setOpenFiles(current => [...current, normalized])
-    setSaveStatus('saving')
+        setFiles(current => ({
+          ...current,
+          [normalized]: ''
+        }))
+        setActiveFile(normalized)
+        setOpenFiles(current => [...current, normalized])
+        setSaveStatus('saving')
+      }
+    })
   }
 
   async function deleteFile(name = activeFile) {
     if (Object.keys(files).length <= 1) return
 
-    const confirmed = window.confirm('Delete "' + name + '"?')
+    openConfirmDialog({
+      title: 'Delete file',
+      message: '"' + name + '" will be removed from this project.',
+      confirmLabel: 'Delete',
+      danger: true,
+      onConfirm: async () => {
+        const remainingNames = Object.keys(files).filter(file => file !== name)
+        const nextFile = remainingNames[0]
 
-    if (!confirmed) return
+        setFiles(current => {
+          const next = { ...current }
+          delete next[name]
+          return next
+        })
 
-    const remainingNames = Object.keys(files).filter(file => file !== name)
-    const nextFile = remainingNames[0]
-
-    setFiles(current => {
-      const next = { ...current }
-      delete next[name]
-      return next
+        setOpenFiles(current => current.filter(file => file !== name))
+        setActiveFile(current => current === name ? nextFile : current)
+      }
     })
-
-    setOpenFiles(current => current.filter(file => file !== name))
-    setActiveFile(current => current === name ? nextFile : current)
   }
 
   async function switchProject(id) {
@@ -857,12 +950,19 @@ function IDE() {
   }
 
   async function renameProject() {
-    const name = window.prompt('Project name', projectName)?.trim()
+    openInputDialog({
+      title: 'Rename project',
+      message: 'Choose a new name for this project.',
+      value: projectName,
+      placeholder: 'Project name',
+      confirmLabel: 'Rename',
+      onConfirm: async name => {
+        if (name === projectName) return
 
-    if (!name || name === projectName) return
-
-    setProjectName(name)
-    setProjectMenuOpen(false)
+        setProjectName(name)
+        setProjectMenuOpen(false)
+      }
+    })
   }
 
   async function duplicateCurrentProject() {
@@ -893,12 +993,14 @@ function IDE() {
   async function removeCurrentProject() {
     if (!currentProject) return
 
-    const confirmed = window.confirm('Delete "' + projectName + '"?')
-
-    if (!confirmed) return
-
-    try {
-      await saveProject({
+    openConfirmDialog({
+      title: 'Delete project',
+      message: '"' + projectName + '" and all of its files will be permanently removed.',
+      confirmLabel: 'Delete project',
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await saveProject({
         id: currentProjectId,
         name: projectName,
         files,
@@ -906,35 +1008,37 @@ function IDE() {
         updatedAt: Date.now()
       })
 
-      await deleteProject(currentProjectId)
+          await deleteProject(currentProjectId)
 
-      const remaining = await listProjects()
+          const remaining = await listProjects()
 
-      if (!remaining.length) {
-        await newProject()
-        return
+          if (!remaining.length) {
+            await newProject()
+            return
+          }
+
+          const nextProject = await getProject(remaining[0].id)
+
+          if (!nextProject) {
+            throw new Error('next project could not be loaded')
+          }
+
+          setProjects(remaining)
+          setCurrentProjectId(nextProject.id)
+          setProjectName(nextProject.name)
+          setFiles(nextProject.files)
+          setActiveFile(firstFile(nextProject.files))
+          setOpenFiles([firstFile(nextProject.files)])
+          setPreview('')
+          setPreviewKey(value => value + 1)
+          localStorage.setItem('poligo-current-project', nextProject.id)
+          setProjectMenuOpen(false)
+          setSaveStatus('saved')
+        } catch {
+          setSaveStatus('storage error')
+        }
       }
-
-      const nextProject = await getProject(remaining[0].id)
-
-      if (!nextProject) {
-        throw new Error('next project could not be loaded')
-      }
-
-      setProjects(remaining)
-      setCurrentProjectId(nextProject.id)
-      setProjectName(nextProject.name)
-      setFiles(nextProject.files)
-      setActiveFile(firstFile(nextProject.files))
-      setOpenFiles([firstFile(nextProject.files)])
-      setPreview('')
-      setPreviewKey(value => value + 1)
-      localStorage.setItem('poligo-current-project', nextProject.id)
-      setProjectMenuOpen(false)
-      setSaveStatus('saved')
-    } catch {
-      setSaveStatus('storage error')
-    }
+    })
   }
 
   useEffect(() => {
@@ -967,6 +1071,10 @@ function IDE() {
       if (event.key === 'Escape') {
         setQuickOpenOpen(false)
         setCommandPaletteOpen(false)
+
+        if (dialog && !dialogBusy) {
+          setDialog(null)
+        }
       }
     }
 
@@ -975,7 +1083,7 @@ function IDE() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [currentProjectId, projectName, files])
+  }, [currentProjectId, projectName, files, dialog, dialogBusy])
 
   async function runProject() {
     refreshPreview()
@@ -1084,6 +1192,75 @@ function IDE() {
 
   return (
     <>
+      {dialog && (
+        <div className="poligo-dialog-overlay" onMouseDown={() => {
+          if (!dialogBusy) setDialog(null)
+        }}>
+          <div
+            className="poligo-dialog"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="poligo-dialog-header">
+              <div>
+                <span className="poligo-dialog-eyebrow">POLIGO</span>
+                <h2>{dialog.title}</h2>
+              </div>
+              <button
+                className="poligo-dialog-close"
+                type="button"
+                onClick={() => setDialog(null)}
+                disabled={dialogBusy}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="poligo-dialog-message">{dialog.message}</p>
+
+            {dialog.type === 'input' && (
+              <input
+                autoFocus
+                className="poligo-dialog-input"
+                value={dialog.value}
+                onChange={event => setDialog(current => (
+                  current ? { ...current, value: event.target.value } : current
+                ))}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void handleDialogConfirm()
+                  }
+                }}
+                placeholder={dialog.placeholder}
+                disabled={dialogBusy}
+              />
+            )}
+
+            <div className="poligo-dialog-actions">
+              <button
+                className="poligo-dialog-cancel"
+                type="button"
+                onClick={() => setDialog(null)}
+                disabled={dialogBusy}
+              >
+                Cancel
+              </button>
+              <button
+                className={'poligo-dialog-confirm' + (dialog.danger ? ' danger' : '')}
+                type="button"
+                onClick={() => void handleDialogConfirm()}
+                disabled={dialogBusy}
+              >
+                {dialogBusy ? 'Working...' : dialog.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {quickOpenOpen && (
       <div className="ide-overlay" onClick={() => setQuickOpenOpen(false)}>
         <div className="quick-open" onClick={event => event.stopPropagation()}>
