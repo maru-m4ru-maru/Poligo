@@ -2915,3 +2915,29 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+
+.stack-template-brand-icon {
+  width: 26px;
+  height: 26px;
+  display: block;
+  color: #75aaff;
+  filter: brightness(0) saturate(100%) invert(62%) sepia(42%) saturate(1474%) hue-rotate(185deg) brightness(103%) contrast(101%);
+}
+
+.stack-web-template-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stack-web-template-icons img {
+  width: 19px;
+  height: 19px;
+  display: block;
+  filter: brightness(0) saturate(100%) invert(62%) sepia(42%) saturate(1474%) hue-rotate(185deg) brightness(103%) contrast(101%);
+}
+
+.stack-web-template-icons img + img {
+  margin-left: -5px;
+}
