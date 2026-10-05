@@ -640,7 +640,12 @@ function IDE() {
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
-          <button className="product-button" aria-label="Poligo menu">
+          <button
+            className="product-button"
+            aria-label="Open dashboard"
+            title="Dashboard"
+            onClick={() => navigate('/dashboard')}
+          >
             <img src="/poligo-mark.svg" alt="" />
           </button>
           <button className="menu-button">File</button>
