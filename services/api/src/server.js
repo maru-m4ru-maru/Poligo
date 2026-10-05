@@ -1,5 +1,7 @@
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
+import { auth, initializeAuthDatabase } from './auth.js'
 import { getDatabase, getDatabaseStatus, initializeDatabase } from './turso.js'
 
 const port = Number(process.env.PORT || 10000)
@@ -9,13 +11,20 @@ const allowedOrigin = process.env.CORS_ORIGIN || '*'
 const MAX_FILES = 200
 const MAX_PROJECT_BYTES = 5_000_000
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
+const authHandler = toNodeHandler(auth)
+
+function setCorsHeaders(response) {
+  response.setHeader('Access-Control-Allow-Origin', allowedOrigin)
+  response.setHeader('Access-Control-Allow-Credentials', 'true')
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Poligo-Workspace')
+  response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  response.setHeader('Vary', 'Origin')
+}
 
 function send(response, status, body) {
+  setCorsHeaders(response)
   response.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'Content-Type, X-Poligo-Workspace',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+    'Content-Type': 'application/json; charset=utf-8'
   })
   response.end(JSON.stringify(body))
 }
@@ -42,6 +51,55 @@ function getWorkspaceId(request) {
   }
 
   return workspaceId
+}
+
+async function getSession(request) {
+  return auth.api.getSession({
+    headers: fromNodeHeaders(request.headers)
+  })
+}
+
+async function getOwnerId(request) {
+  const session = await getSession(request)
+
+  if (session?.user?.id) {
+    return session.user.id
+  }
+
+  return getWorkspaceId(request)
+}
+
+async function claimWorkspace(request, response) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  const workspaceId = getWorkspaceId(request)
+  const database = getDatabase()
+  const existing = await database.prepare(
+    'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
+  ).all([workspaceId])
+
+  const count = Number(existing[0]?.count || 0)
+
+  if (count > 0 && workspaceId !== session.user.id) {
+    await database.batch([
+      {
+        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
+        args: [session.user.id, workspaceId]
+      }
+    ], 'immediate')
+  }
+
+  send(response, 200, {
+    ok: true,
+    claimed: count
+  })
 }
 
 function normalizeProjectPayload(payload) {
@@ -237,7 +295,7 @@ async function deleteProject(projectId, ownerId) {
 async function handleProjectRequest(request, response) {
   const url = new URL(request.url, 'http://localhost')
   const parts = url.pathname.split('/').filter(Boolean)
-  const ownerId = getWorkspaceId(request)
+  const ownerId = await getOwnerId(request)
 
   if (parts[1] !== 'projects') {
     send(response, 404, {
@@ -398,6 +456,25 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (request.url.startsWith('/api/auth/')) {
+    setCorsHeaders(response)
+    await authHandler(request, response)
+    return
+  }
+
+  if (request.method === 'POST' && request.url === '/api/workspace/claim') {
+    try {
+      await claimWorkspace(request, response)
+    } catch (error) {
+      const status = error.message === 'invalid workspace id' ? 400 : 500
+
+      send(response, status, {
+        error: error instanceof Error ? error.message : 'workspace claim failed'
+      })
+    }
+    return
+  }
+
   if (request.method === 'GET' && request.url === '/api/health') {
     send(response, 200, {
       status: 'ok',
@@ -513,8 +590,13 @@ server.listen(port, '0.0.0.0', () => {
   console.log('Poligo API listening on ' + port)
 
   initializeDatabase()
-    .then(initialized => {
+    .then(async initialized => {
       console.log('Poligo database ' + (initialized ? 'ready' : 'not configured'))
+
+      if (initialized) {
+        await initializeAuthDatabase()
+        console.log('Poligo authentication database ready')
+      }
     })
     .catch(error => {
       console.error(
