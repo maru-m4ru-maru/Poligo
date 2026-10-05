@@ -230,6 +230,11 @@ function IDE() {
   const [apiStatus, setApiStatus] = useState('checking')
   const [saveStatus, setSaveStatus] = useState('saved')
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [quickOpenOpen, setQuickOpenOpen] = useState(false)
+  const [quickOpenQuery, setQuickOpenQuery] = useState('')
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
   const [previewKey, setPreviewKey] = useState(0)
   const [execution, setExecution] = useState({
     id: '',
@@ -245,6 +250,110 @@ function IDE() {
   const currentLanguage = getFileMeta(activeFile).language
   const currentValue = files[activeFile] ?? ''
   const currentProject = projects.find(project => project.id === currentProjectId)
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+
+    if (!query) return []
+
+    const results = []
+
+    for (const [name, value] of Object.entries(files)) {
+      const lowerName = name.toLowerCase()
+      const lowerValue = value.toLowerCase()
+
+      if (lowerName.includes(query)) {
+        results.push({
+          name,
+          type: 'file',
+          preview: 'Filename match'
+        })
+        continue
+      }
+
+      const line = value
+        .split('\\n')
+        .findIndex(item => item.toLowerCase().includes(query))
+
+      if (line >= 0) {
+        const text = value.split('\\n')[line].trim()
+
+        results.push({
+          name,
+          type: 'content',
+          line: line + 1,
+          preview: text.slice(0, 100)
+        })
+      }
+    }
+
+    return results
+  }, [files, searchQuery])
+
+  const quickOpenResults = useMemo(() => {
+    const query = quickOpenQuery.trim().toLowerCase()
+
+    return Object.keys(files).filter(name =>
+      !query || name.toLowerCase().includes(query)
+    )
+  }, [files, quickOpenQuery])
+
+  const commands = useMemo(() => [
+    {
+      id: 'new-file',
+      title: 'New File',
+      hint: 'Create a file',
+      run: () => void createFile()
+    },
+    {
+      id: 'save',
+      title: 'Save Project',
+      hint: 'Ctrl+S',
+      run: () => void saveCurrentProject()
+    },
+    {
+      id: 'run',
+      title: 'Run',
+      hint: 'Execute current file',
+      run: () => void runProject()
+    },
+    {
+      id: 'terminal',
+      title: 'Toggle Terminal',
+      hint: 'Open terminal',
+      run: () => {
+        setBottomTab('terminal')
+        setBottomOpen(true)
+      }
+    },
+    {
+      id: 'output',
+      title: 'Open Output',
+      hint: 'Show execution result',
+      run: () => {
+        setBottomTab('output')
+        setBottomOpen(true)
+      }
+    },
+    {
+      id: 'problems',
+      title: 'Open Problems',
+      hint: 'Show execution errors',
+      run: () => {
+        setBottomTab('problems')
+        setBottomOpen(true)
+      }
+    },
+    {
+      id: 'dashboard',
+      title: 'Open Dashboard',
+      hint: 'Poligo Cloud',
+      run: () => navigate('/dashboard')
+    }
+  ].filter(command =>
+    !commandQuery.trim() ||
+    command.title.toLowerCase().includes(commandQuery.trim().toLowerCase())
+  ), [commandQuery])
 
   useEffect(() => {
     let cancelled = false
@@ -365,9 +474,27 @@ function IDE() {
         if (buffer === 'clear') {
           instance.clear()
         } else if (buffer === 'help') {
-          instance.writeln('commands: help, clear, run, files, health')
-        } else if (buffer === 'files') {
+          instance.writeln('commands: help, clear, run, files, ls, pwd, cat <file>, open <file>, health')
+        } else if (buffer === 'files' || buffer === 'ls') {
           Object.keys(filesRef.current).forEach(name => instance.writeln(name))
+        } else if (buffer === 'pwd') {
+          instance.writeln('/workspace')
+        } else if (buffer.startsWith('cat ')) {
+          const target = buffer.slice(4).trim()
+
+          if (Object.prototype.hasOwnProperty.call(filesRef.current, target)) {
+            instance.writeln(filesRef.current[target])
+          } else {
+            instance.writeln('cat: ' + target + ': No such file')
+          }
+        } else if (buffer.startsWith('open ')) {
+          const target = buffer.slice(5).trim()
+
+          if (Object.prototype.hasOwnProperty.call(filesRef.current, target)) {
+            openFile(target)
+          } else {
+            instance.writeln('open: ' + target + ': No such file')
+          }
         } else if (buffer === 'health') {
           request('/api/health')
             .then(result => instance.writeln(JSON.stringify(result)))
@@ -668,12 +795,35 @@ function IDE() {
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') {
+      const modifier = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+
+      if (modifier && key === 's') {
+        event.preventDefault()
+        void saveCurrentProject()
         return
       }
 
-      event.preventDefault()
-      void saveCurrentProject()
+      if (modifier && key === 'p' && !event.shiftKey) {
+        event.preventDefault()
+        setQuickOpenQuery('')
+        setQuickOpenOpen(true)
+        setCommandPaletteOpen(false)
+        return
+      }
+
+      if (modifier && event.shiftKey && key === 'p') {
+        event.preventDefault()
+        setCommandQuery('')
+        setCommandPaletteOpen(true)
+        setQuickOpenOpen(false)
+        return
+      }
+
+      if (event.key === 'Escape') {
+        setQuickOpenOpen(false)
+        setCommandPaletteOpen(false)
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -789,6 +939,68 @@ function IDE() {
   }
 
   return (
+    {quickOpenOpen && (
+      <div className="ide-overlay" onClick={() => setQuickOpenOpen(false)}>
+        <div className="quick-open" onClick={event => event.stopPropagation()}>
+          <input
+            autoFocus
+            value={quickOpenQuery}
+            onChange={event => setQuickOpenQuery(event.target.value)}
+            placeholder="Open file..."
+          />
+          <div className="quick-open-list">
+            {quickOpenResults.map(name => (
+              <button
+                key={name}
+                className="quick-open-item"
+                onClick={() => {
+                  openFile(name)
+                  setQuickOpenOpen(false)
+                }}
+              >
+                <FileIcon kind={getFileMeta(name).kind} size={15} />
+                <span>{name}</span>
+              </button>
+            ))}
+            {!quickOpenResults.length && (
+              <div className="quick-open-empty">No matching files.</div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {commandPaletteOpen && (
+      <div className="ide-overlay" onClick={() => setCommandPaletteOpen(false)}>
+        <div className="command-palette" onClick={event => event.stopPropagation()}>
+          <input
+            autoFocus
+            value={commandQuery}
+            onChange={event => setCommandQuery(event.target.value)}
+            placeholder="Type a command..."
+          />
+          <div className="command-list">
+            {commands.map(command => (
+              <button
+                key={command.id}
+                className="command-item"
+                onClick={() => {
+                  setCommandPaletteOpen(false)
+                  command.run()
+                }}
+              >
+                <strong>{command.title}</strong>
+                <span>{command.hint}</span>
+              </button>
+            ))}
+            {!commands.length && (
+              <div className="quick-open-empty">No matching commands.</div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+
     <div className="app-shell">
       <header className="topbar">
         <div className="topbar-left">
@@ -916,10 +1128,59 @@ function IDE() {
             </>
           )}
 
-          {activeView !== 'files' && (
+          {activeView === 'search' && (
+            <div className="search-view">
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="Search in files"
+              />
+              {!searchQuery && (
+                <div className="search-hint">
+                  Search file names and contents.
+                </div>
+              )}
+              {searchQuery && !searchResults.length && (
+                <div className="search-hint">
+                  No matches.
+                </div>
+              )}
+              {searchResults.map(result => (
+                <button
+                  key={result.name + ':' + (result.line || 0)}
+                  className="search-result"
+                  onClick={() => {
+                    openFile(result.name)
+                    if (result.line) {
+                      setActiveView('files')
+                    }
+                  }}
+                >
+                  <FileIcon kind={getFileMeta(result.name).kind} size={14} />
+                  <div className="search-result-copy">
+                    <strong>{result.name}</strong>
+                    <span>
+                      {result.line ? 'Line ' + result.line + ' · ' : ''}
+                      {result.preview}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {activeView === 'source' && (
             <div className="empty-view">
-              <div className="empty-title">{activeView === 'search' ? 'Search' : activeView === 'source' ? 'Source Control' : 'Settings'}</div>
-              <div className="empty-text">This view is part of the Poligo workspace.</div>
+              <div className="empty-title">Source Control</div>
+              <div className="empty-text">Git integration is the next workspace layer.</div>
+            </div>
+          )}
+
+          {activeView === 'settings' && (
+            <div className="empty-view">
+              <div className="empty-title">Settings</div>
+              <div className="empty-text">Workspace settings will appear here.</div>
             </div>
           )}
         </aside>
@@ -1011,7 +1272,39 @@ function IDE() {
                       )}
                     </div>
                   )}
-                  {bottomTab === 'problems' && <div className="panel-empty">No problems reported.</div>}
+                  {bottomTab === 'problems' && (
+                    <div className="problems-panel">
+                      {execution.error && (
+                        <button
+                          className="problem-item problem-item-error"
+                          onClick={() => setBottomTab('output')}
+                        >
+                          <span>×</span>
+                          <div>
+                            <strong>{execution.error}</strong>
+                            <small>Execution error</small>
+                          </div>
+                        </button>
+                      )}
+
+                      {!execution.error && execution.result?.stderr && (
+                        <button
+                          className="problem-item problem-item-error"
+                          onClick={() => setBottomTab('output')}
+                        >
+                          <span>!</span>
+                          <div>
+                            <strong>{execution.result.stderr.split('\\n')[0]}</strong>
+                            <small>Execution output</small>
+                          </div>
+                        </button>
+                      )}
+
+                      {!execution.error && !execution.result?.stderr && (
+                        <div className="panel-empty">No problems.</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
