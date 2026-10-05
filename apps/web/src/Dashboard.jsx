@@ -130,8 +130,15 @@ function TemplateIcon({ type }) {
     HTML: '/icons/html5.svg',
     Python: '/icons/python.svg',
     'C++': '/icons/cplusplus.svg',
-    C: '/icons/c.svg',
-    'C#': null
+    C: '/icons/c.svg'
+  }
+
+  if (type === 'C#') {
+    return (
+      <span className="stack-template-text-icon" aria-hidden="true">
+        C#
+      </span>
+    )
   }
 
   if (type === 'Web') {
