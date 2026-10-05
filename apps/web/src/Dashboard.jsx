@@ -36,6 +36,66 @@ const TEMPLATES = [
     }
   },
   {
+    id: 'java',
+    title: 'Java',
+    subtitle: 'Java',
+    type: 'Java',
+    categories: ['Popular', 'Backend', 'Native Languages'],
+    files: {
+      'Main.java': 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Poligo");\n    }\n}'
+    }
+  },
+  {
+    id: 'go',
+    title: 'Go',
+    subtitle: 'Go',
+    type: 'Go',
+    categories: ['Backend', 'Native Languages'],
+    files: {
+      'main.go': 'package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello from Poligo")\n}'
+    }
+  },
+  {
+    id: 'rust',
+    title: 'Rust',
+    subtitle: 'Rust',
+    type: 'Rust',
+    categories: ['Backend', 'Native Languages'],
+    files: {
+      'main.rs': 'fn main() {\n    println!("Hello from Poligo");\n}'
+    }
+  },
+  {
+    id: 'php',
+    title: 'PHP',
+    subtitle: 'PHP',
+    type: 'PHP',
+    categories: ['Backend', 'Native Languages'],
+    files: {
+      'index.php': '<?php\necho "Hello from Poligo";\n'
+    }
+  },
+  {
+    id: 'ruby',
+    title: 'Ruby',
+    subtitle: 'Ruby',
+    type: 'Ruby',
+    categories: ['Backend', 'Native Languages'],
+    files: {
+      'main.rb': 'puts "Hello from Poligo"'
+    }
+  },
+  {
+    id: 'kotlin',
+    title: 'Kotlin',
+    subtitle: 'Kotlin/JVM',
+    type: 'Kotlin',
+    categories: ['Backend', 'Native Languages'],
+    files: {
+      'Main.kt': 'fun main() {\n    println("Hello from Poligo")\n}'
+    }
+  },
+  {
     id: 'cpp',
     title: 'C++',
     subtitle: 'C++',
@@ -148,10 +208,10 @@ function TemplateIcon({ type }) {
     C: '/icons/c.svg'
   }
 
-  if (type === 'C#') {
+  if (type === 'C#' || type === 'Java' || type === 'Go' || type === 'Rust' || type === 'PHP' || type === 'Ruby' || type === 'Kotlin') {
     return (
       <span className="stack-template-text-icon" aria-hidden="true">
-        C#
+        {type}
       </span>
     )
   }
