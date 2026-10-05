@@ -320,6 +320,12 @@ async function handleDashboardRequest(request, response) {
     ], 'immediate')
   }
 
+  const ownerIds = workspaceId === ownerId
+    ? [ownerId]
+    : [ownerId, workspaceId]
+
+  const ownerPlaceholders = ownerIds.map(() => '?').join(', ')
+
   const statsStatement = await database.prepare(
     `SELECT
       COUNT(DISTINCT p.id) AS project_count,
@@ -328,9 +334,9 @@ async function handleDashboardRequest(request, response) {
       MAX(p.updated_at) AS last_updated
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
-    WHERE p.owner_id = ?`
+    WHERE p.owner_id IN (?, ?)`
   )
-  const statsRows = await statsStatement.all([ownerId])
+  const statsRows = await statsStatement.all(ownerIds)
   const stats = statsRows[0] || {}
 
   const url = new URL(request.url, 'http://localhost')
@@ -354,7 +360,7 @@ async function handleDashboardRequest(request, response) {
     ORDER BY p.updated_at DESC
     LIMIT ?`
   )
-  const projects = await projectStatement.all([ownerId, limit])
+  const projects = await projectStatement.all([...ownerIds, limit])
 
   send(response, 200, {
     user: {
