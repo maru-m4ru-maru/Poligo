@@ -229,6 +229,13 @@ function IDE() {
   const [saveStatus, setSaveStatus] = useState('saved')
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [previewKey, setPreviewKey] = useState(0)
+  const [execution, setExecution] = useState({
+    id: '',
+    status: 'idle',
+    result: null,
+    error: ''
+  })
+  const [stdin, setStdin] = useState('')
   const terminalRef = useRef(null)
   const terminal = useRef(null)
   const filesRef = useRef(files)
@@ -678,12 +685,21 @@ function IDE() {
   async function runProject() {
     refreshPreview()
     setBottomOpen(true)
-    setBottomTab('terminal')
+    setBottomTab('output')
+    setExecution({
+      id: '',
+      status: SERVER_LANGUAGES.has(currentLanguage) ? 'queued' : 'succeeded',
+      result: SERVER_LANGUAGES.has(currentLanguage)
+        ? null
+        : {
+            stdout: 'Browser preview updated.',
+            stderr: '',
+            exitCode: 0
+          },
+      error: ''
+    })
 
     if (!SERVER_LANGUAGES.has(currentLanguage)) {
-      terminal.current?.writeln('')
-      terminal.current?.writeln('Browser preview updated.')
-      terminal.current?.write('$ ')
       return
     }
 
@@ -693,22 +709,30 @@ function IDE() {
         body: JSON.stringify({
           language: currentLanguage,
           entrypoint: activeFile,
-          files
+          files,
+          stdin
         })
       })
 
-      terminal.current?.writeln('')
-      terminal.current?.writeln('Execution queued: ' + result.id)
+      setExecution({
+        id: result.id,
+        status: result.status || 'queued',
+        result: null,
+        error: ''
+      })
 
-      let completed = false
-
-      for (let attempt = 0; attempt < 60; attempt += 1) {
+      for (let attempt = 0; attempt < 120; attempt += 1) {
         await new Promise(resolve => setTimeout(resolve, 500))
 
-        const status = await request('/api/executions/' + encodeURIComponent(result.id))
+        const status = await request(
+          '/api/executions/' + encodeURIComponent(result.id)
+        )
 
-        if (status.status === 'running') {
-          terminal.current?.writeln('Running...')
+        if (status.status === 'running' || status.status === 'queued') {
+          setExecution(current => ({
+            ...current,
+            status: status.status
+          }))
           continue
         }
 
@@ -717,26 +741,34 @@ function IDE() {
           status.status === 'failed' ||
           status.status === 'timeout'
         ) {
-          const executionResult = status.result || {}
-          terminal.current?.writeln('')
-          terminal.current?.writeln('Status: ' + status.status)
-          terminal.current?.writeln('Exit code: ' + executionResult.exitCode)
-          terminal.current?.writeln(executionResult.stdout || executionResult.stderr || '')
-          completed = true
-          break
+          setExecution({
+            id: result.id,
+            status: status.status,
+            result: status.result || null,
+            error: ''
+          })
+          return
         }
       }
 
-      if (!completed) {
-        terminal.current?.writeln('')
-        terminal.current?.writeln('Execution polling timed out.')
-      }
+      setExecution(current => ({
+        ...current,
+        status: 'timeout',
+        result: {
+          stdout: '',
+          stderr: 'Execution polling timed out.',
+          exitCode: null,
+          timedOut: true
+        }
+      }))
     } catch (error) {
-      terminal.current?.writeln('')
-      terminal.current?.writeln('Execution error: ' + error.message)
+      setExecution({
+        id: '',
+        status: 'failed',
+        result: null,
+        error: error instanceof Error ? error.message : 'Execution failed'
+      })
     }
-
-    terminal.current?.write('$ ')
   }
 
   function resetProject() {
@@ -963,7 +995,91 @@ function IDE() {
               {bottomOpen && (
                 <div className="bottom-content">
                   {bottomTab === 'terminal' && <div className="terminal" ref={terminalRef} />}
-                  {bottomTab === 'output' && <div className="panel-empty">Execution output will appear here.</div>}
+                  {bottomTab === 'output' && (
+                    <div className="output-panel">
+                      <div className="output-toolbar">
+                        <div className="output-toolbar-left">
+                          <span className="output-status-dot" data-status={execution.status} />
+                          <strong>
+                            {execution.status === 'idle' && 'Ready'}
+                            {execution.status === 'queued' && 'Queued'}
+                            {execution.status === 'running' && 'Running'}
+                            {execution.status === 'succeeded' && 'Succeeded'}
+                            {execution.status === 'failed' && 'Failed'}
+                            {execution.status === 'timeout' && 'Timed out'}
+                          </strong>
+                          {execution.id && <span className="output-execution-id">{execution.id}</span>}
+                        </div>
+                        <button
+                          className="output-clear"
+                          onClick={() => setExecution({
+                            id: '',
+                            status: 'idle',
+                            result: null,
+                            error: ''
+                          })}
+                        >
+                          Clear
+                        </button>
+                      </div>
+
+                      {SERVER_LANGUAGES.has(currentLanguage) && (
+                        <div className="output-stdin">
+                          <div className="output-section-label">STANDARD INPUT</div>
+                          <textarea
+                            value={stdin}
+                            onChange={event => setStdin(event.target.value)}
+                            placeholder="Input passed to the program..."
+                            spellCheck={false}
+                          />
+                        </div>
+                      )}
+
+                      {execution.error && (
+                        <div className="output-error">
+                          {execution.error}
+                        </div>
+                      )}
+
+                      {execution.result && (
+                        <div className="output-result">
+                          <div className="output-meta">
+                            <span>Exit code: {execution.result.exitCode ?? '—'}</span>
+                            {execution.result.time && <span>{execution.result.time}s</span>}
+                            {execution.result.memory && <span>{execution.result.memory} KB</span>}
+                          </div>
+
+                          {execution.result.stdout && (
+                            <div className="output-block">
+                              <div className="output-section-label">STDOUT</div>
+                              <pre>{execution.result.stdout}</pre>
+                            </div>
+                          )}
+
+                          {execution.result.stderr && (
+                            <div className="output-block output-block-error">
+                              <div className="output-section-label">STDERR</div>
+                              <pre>{execution.result.stderr}</pre>
+                            </div>
+                          )}
+
+                          {!execution.result.stdout && !execution.result.stderr && (
+                            <div className="output-empty">Program finished without output.</div>
+                          )}
+                        </div>
+                      )}
+
+                      {!execution.error && !execution.result && execution.status !== 'idle' && (
+                        <div className="output-running">
+                          Waiting for execution result...
+                        </div>
+                      )}
+
+                      {execution.status === 'idle' && (
+                        <div className="output-empty">Run the current file to see execution output here.</div>
+                      )}
+                    </div>
+                  )}
                   {bottomTab === 'problems' && <div className="panel-empty">No problems reported.</div>}
                 </div>
               )}
