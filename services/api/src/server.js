@@ -7,6 +7,7 @@ import { getDatabase, getDatabaseStatus, initializeDatabase } from './turso.js'
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
 const runnerToken = process.env.RUNNER_TOKEN || ''
+const judge0Url = (process.env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/$/, '')
 const allowedOrigin = process.env.CORS_ORIGIN || '*'
 const MAX_FILES = 200
 const MAX_PROJECT_BYTES = 5_000_000
@@ -461,6 +462,187 @@ async function handleProjectRequest(request, response) {
   }
 }
 
+let judge0LanguagesPromise = null
+
+async function getJudge0Languages() {
+  if (!judge0LanguagesPromise) {
+    judge0LanguagesPromise = fetch(judge0Url + '/languages/')
+      .then(async response => {
+        if (!response.ok) {
+          throw new Error('Judge0 language list request failed')
+        }
+
+        const languages = await response.json()
+
+        if (!Array.isArray(languages)) {
+          throw new Error('Judge0 returned an invalid language list')
+        }
+
+        return languages
+      })
+      .catch(error => {
+        judge0LanguagesPromise = null
+        throw error
+      })
+  }
+
+  return judge0LanguagesPromise
+}
+
+function findJudge0LanguageId(languages, language) {
+  const names = languages
+    .filter(item => Number.isInteger(item?.id) && typeof item?.name === 'string')
+    .map(item => ({
+      id: item.id,
+      name: item.name,
+      lower: item.name.toLowerCase()
+    }))
+
+  if (language === 'python') {
+    const candidates = names.filter(item => item.lower.startsWith('python (3.'))
+    if (!candidates.length) return null
+
+    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
+    return candidates[0].id
+  }
+
+  if (language === 'cpp') {
+    const candidates = names.filter(item => item.lower.startsWith('c++ (gcc '))
+    if (!candidates.length) return null
+
+    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
+    return candidates[0].id
+  }
+
+  if (language === 'c') {
+    const candidates = names.filter(item => item.lower.startsWith('c (gcc '))
+    if (!candidates.length) return null
+
+    candidates.sort((a, b) => b.lower.localeCompare(a.lower, undefined, { numeric: true }))
+    return candidates[0].id
+  }
+
+  return null
+}
+
+async function handleJudge0Execution(request, response) {
+  const payload = await readJson(request)
+  const files = payload.files && typeof payload.files === 'object'
+    ? payload.files
+    : {}
+  const entrypoint = typeof payload.entrypoint === 'string'
+    ? payload.entrypoint
+    : ''
+
+  const source = files[entrypoint]
+
+  if (typeof source !== 'string') {
+    send(response, 400, {
+      error: 'entrypoint file not found'
+    })
+    return
+  }
+
+  const languages = await getJudge0Languages()
+  const languageId = findJudge0LanguageId(languages, payload.language)
+
+  if (!languageId) {
+    send(response, 400, {
+      error: 'unsupported execution language'
+    })
+    return
+  }
+
+  const judge0Response = await fetch(
+    judge0Url + '/submissions/?base64_encoded=false&wait=false',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        source_code: source,
+        language_id: languageId,
+        stdin: typeof payload.stdin === 'string'
+          ? payload.stdin.slice(0, 32_000)
+          : ''
+      })
+    }
+  )
+
+  let result
+
+  try {
+    result = await judge0Response.json()
+  } catch {
+    result = {}
+  }
+
+  if (!judge0Response.ok || !result.token) {
+    send(response, 502, {
+      error: result.error || result.message || 'Judge0 submission failed'
+    })
+    return
+  }
+
+  send(response, 202, {
+    id: result.token,
+    status: 'queued'
+  })
+}
+
+async function handleJudge0ExecutionStatus(response, id) {
+  const judge0Response = await fetch(
+    judge0Url + '/submissions/' + encodeURIComponent(id) +
+      '?base64_encoded=false&fields=stdout,stderr,compile_output,status_id,status,message,time,memory',
+    {
+      method: 'GET'
+    }
+  )
+
+  let result
+
+  try {
+    result = await judge0Response.json()
+  } catch {
+    result = {}
+  }
+
+  if (!judge0Response.ok) {
+    send(response, judge0Response.status === 404 ? 404 : 502, {
+      error: result.error || result.message || 'Judge0 execution lookup failed'
+    })
+    return
+  }
+
+  const statusId = Number(result.status_id)
+
+  if (statusId === 1 || statusId === 2) {
+    send(response, 200, {
+      id,
+      status: 'running',
+      result: null
+    })
+    return
+  }
+
+  const successful = statusId === 3
+  const output = result.stdout || ''
+  const errorOutput = result.compile_output || result.stderr || result.message || ''
+
+  send(response, 200, {
+    id,
+    status: successful ? 'succeeded' : 'failed',
+    result: {
+      stdout: output,
+      stderr: errorOutput,
+      exitCode: successful ? 0 : null,
+      time: result.time || null,
+      memory: result.memory || null
+    }
+  })
+}
+
 function runnerHeaders() {
   const headers = {
     'Content-Type': 'application/json'
@@ -474,15 +656,12 @@ function runnerHeaders() {
 }
 
 async function handleExecution(request, response) {
-  const payload = await readJson(request)
-
   if (!runnerUrl) {
-    send(response, 503, {
-      error: 'runner is not configured'
-    })
+    await handleJudge0Execution(request, response)
     return
   }
 
+  const payload = await readJson(request)
   const id = randomUUID()
 
   const runnerResponse = await fetch(
@@ -517,9 +696,7 @@ async function handleExecution(request, response) {
 
 async function handleExecutionStatus(response, id) {
   if (!runnerUrl) {
-    send(response, 503, {
-      error: 'runner is not configured'
-    })
+    await handleJudge0ExecutionStatus(response, id)
     return
   }
 
@@ -574,6 +751,7 @@ const server = http.createServer(async (request, response) => {
       status: 'ok',
       service: 'api',
       runner: Boolean(runnerUrl),
+      executor: runnerUrl ? 'runner' : 'judge0',
       database: getDatabaseStatus()
     })
     return
