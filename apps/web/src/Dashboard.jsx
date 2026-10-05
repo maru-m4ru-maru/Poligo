@@ -5,8 +5,9 @@ const TEMPLATES = [
   {
     id: 'web',
     title: 'Web',
-    subtitle: 'HTML, CSS and JavaScript',
+    subtitle: 'HTML/CSS/JavaScript',
     type: 'Web',
+    categories: ['Popular', 'Frontend', 'Fullstack', 'Creative', 'Vanilla'],
     files: {
       'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo Web</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build something great.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
       'style.css': 'body {\n  margin: 0;\n  min-height: 100vh;\n  font-family: system-ui, sans-serif;\n  background: #ffffff;\n  color: #111827;\n}\n\n.app {\n  max-width: 760px;\n  margin: 0 auto;\n  padding: 64px 24px;\n}',
@@ -15,18 +16,20 @@ const TEMPLATES = [
   },
   {
     id: 'html',
-    title: 'Static HTML',
-    subtitle: 'A minimal HTML project',
+    title: 'Static',
+    subtitle: 'HTML/CSS/JS',
     type: 'HTML',
+    categories: ['Popular', 'Frontend', 'Docs, Blogs & Slides', 'Vanilla'],
     files: {
-      'index.html': '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <h1>Hello, Poligo.</h1>\n  </body>\n</html>'
+      'index.html': '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main style="max-width: 720px; margin: 0 auto; padding: 64px 24px; font-family: system-ui, sans-serif;">\n      <h1>Hello, Poligo.</h1>\n      <p>A static HTML project.</p>\n    </main>\n  </body>\n</html>'
     }
   },
   {
     id: 'python',
     title: 'Python',
-    subtitle: 'Run Python in Poligo',
+    subtitle: 'Python 3',
     type: 'Python',
+    categories: ['Popular', 'Backend', 'Native Languages'],
     files: {
       'main.py': 'print("Hello from Poligo")'
     }
@@ -34,8 +37,9 @@ const TEMPLATES = [
   {
     id: 'cpp',
     title: 'C++',
-    subtitle: 'Run C++ in Poligo',
+    subtitle: 'C++',
     type: 'C++',
+    categories: ['Popular', 'Backend', 'Native Languages'],
     files: {
       'main.cpp': '#include <iostream>\n\nint main() {\n    std::cout << "Hello from Poligo\\n";\n    return 0;\n}'
     }
@@ -43,12 +47,25 @@ const TEMPLATES = [
   {
     id: 'c',
     title: 'C',
-    subtitle: 'Run C in Poligo',
+    subtitle: 'C',
     type: 'C',
+    categories: ['Backend', 'Native Languages'],
     files: {
       'main.c': '#include <stdio.h>\n\nint main(void) {\n    printf("Hello from Poligo\\n");\n    return 0;\n}'
     }
   }
+]
+
+const CATEGORIES = [
+  'Popular',
+  'Frontend',
+  'Backend',
+  'Fullstack',
+  'Docs, Blogs & Slides',
+  'Creative',
+  'Mobile & VR',
+  'Vanilla',
+  'Native Languages'
 ]
 
 function formatBytes(bytes) {
@@ -109,8 +126,8 @@ function TemplateIcon({ type }) {
   if (type === 'Web') {
     return (
       <svg
-        width="27"
-        height="27"
+        width="28"
+        height="28"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -121,7 +138,7 @@ function TemplateIcon({ type }) {
       >
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18" />
-        <path d="M12 3c2.5 2.5 3.7 5.5 3.7 9S14.5 16.5 12 21" />
+        <path d="M12 3c2.5 2.5 3.7 5.5 3.7 9S14.5 18.5 12 21" />
         <path d="M12 3c-2.5 2.5-3.7 5.5-3.7 9S9.5 18.5 12 21" />
       </svg>
     )
@@ -144,6 +161,7 @@ export default function Dashboard({ session }) {
   const [creating, setCreating] = useState('')
   const [activeSection, setActiveSection] = useState('projects')
   const [newProjectOpen, setNewProjectOpen] = useState(false)
+  const [templateCategory, setTemplateCategory] = useState('Popular')
 
   async function loadDashboard() {
     setLoading(true)
@@ -165,17 +183,61 @@ export default function Dashboard({ session }) {
         throw new Error(claimResult.error || 'Workspace claim failed')
       }
 
-      const response = await fetch('/api/dashboard', {
-        credentials: 'include',
-        headers: workspaceHeaders
-      })
-      const result = await response.json()
+      const [dashboardResponse, projectResponse] = await Promise.all([
+        fetch('/api/dashboard', {
+          credentials: 'include',
+          headers: workspaceHeaders
+        }),
+        fetch('/api/projects', {
+          credentials: 'include',
+          headers: workspaceHeaders
+        })
+      ])
 
-      if (!response.ok) {
+      const result = await dashboardResponse.json()
+      const projectList = await projectResponse.json()
+
+      if (!dashboardResponse.ok) {
         throw new Error(result.error || 'Dashboard request failed')
       }
 
-      setData(result)
+      if (!projectResponse.ok) {
+        throw new Error(projectList.error || 'Project list request failed')
+      }
+
+      const dashboardProjects = Array.isArray(result.projects) ? result.projects : []
+      const apiProjects = Array.isArray(projectList) ? projectList : []
+      const merged = new Map(
+        dashboardProjects.map(project => [project.id, project])
+      )
+
+      for (const project of apiProjects) {
+        if (!merged.has(project.id)) {
+          merged.set(project.id, {
+            id: project.id,
+            name: project.name,
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt,
+            fileCount: 0,
+            storageBytes: 0
+          })
+        }
+      }
+
+      const mergedProjects = [...merged.values()]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+
+      setData({
+        ...result,
+        projects: mergedProjects,
+        stats: {
+          ...result.stats,
+          projectCount: Math.max(
+            Number(result.stats?.projectCount || 0),
+            mergedProjects.length
+          )
+        }
+      })
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Dashboard request failed')
     } finally {
@@ -218,7 +280,8 @@ export default function Dashboard({ session }) {
         method: 'POST',
         credentials: 'include',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Poligo-Workspace': getWorkspaceId()
         },
         body: JSON.stringify({
           name: template.title,
@@ -331,9 +394,10 @@ export default function Dashboard({ session }) {
             onClick={event => event.stopPropagation()}
           >
             <div className="stack-new-project-header">
-              <div>
-                <span>NEW PROJECT</span>
-                <h2>Choose a starter</h2>
+              <div className="stack-new-project-account">
+                <span>Add to</span>
+                <strong>{data.user.name}</strong>
+                <span>⌄</span>
               </div>
               <button
                 className="stack-new-project-close"
@@ -344,8 +408,22 @@ export default function Dashboard({ session }) {
               </button>
             </div>
 
+            <div className="stack-template-categories">
+              {CATEGORIES.map(category => (
+                <button
+                  key={category}
+                  className={templateCategory === category ? 'active' : ''}
+                  onClick={() => setTemplateCategory(category)}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+
             <div className="stack-new-project-grid">
-              {TEMPLATES.map(template => (
+              {TEMPLATES.filter(template =>
+                template.categories.includes(templateCategory)
+              ).map(template => (
                 <button
                   key={template.id}
                   className="stack-template-card"
@@ -362,9 +440,17 @@ export default function Dashboard({ session }) {
                     <strong>{template.title}</strong>
                     <span>{creating === template.id ? 'Creating project...' : template.subtitle}</span>
                   </div>
-                  <span className="stack-template-arrow">→</span>
                 </button>
               ))}
+
+              {!TEMPLATES.some(template =>
+                template.categories.includes(templateCategory)
+              ) && (
+                <div className="stack-template-empty">
+                  <strong>No starters yet</strong>
+                  <span>More runtimes are coming to Poligo.</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
