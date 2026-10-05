@@ -540,37 +540,28 @@ export default function Dashboard({ session }) {
             </div>
 
             {projects.length ? (
-              <div className="stack-project-grid">
+              <div className="stack-project-list">
                 {projects.map(project => (
                   <button
                     key={project.id}
-                    className="stack-project-card"
+                    className="stack-project-list-row"
                     onClick={() => openProject(project.id)}
                   >
-                    <div className="stack-project-preview">
-                      <div className="stack-project-preview-bar">
-                        <span />
-                        <span />
-                        <span />
-                      </div>
-                      <div className="stack-project-preview-code">
-                        <i />
-                        <i />
-                        <i />
-                        <i />
-                      </div>
+                    <div className="stack-project-list-icon">
+                      <img src="/poligo-mark.svg" alt="" />
                     </div>
 
-                    <div className="stack-project-card-body">
-                      <div className="stack-project-card-icon">
-                        <img src="/poligo-mark.svg" alt="" />
-                      </div>
-                      <div className="stack-project-card-copy">
-                        <strong>{project.name}</strong>
-                        <span>{project.fileCount} files · {formatBytes(project.storageBytes)}</span>
-                        <small>Updated {formatDate(project.updatedAt)}</small>
-                      </div>
+                    <div className="stack-project-list-name">
+                      <strong>{project.name}</strong>
+                      <span>{project.fileCount} files</span>
                     </div>
+
+                    <div className="stack-project-list-meta">
+                      <span>{formatBytes(project.storageBytes)}</span>
+                      <span>{formatDate(project.updatedAt)}</span>
+                    </div>
+
+                    <span className="stack-project-list-arrow">→</span>
                   </button>
                 ))}
               </div>
