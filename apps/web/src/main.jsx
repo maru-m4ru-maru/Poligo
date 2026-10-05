@@ -17,6 +17,7 @@ import {
 } from './projectStore'
 import { authClient } from './auth-client'
 import AuthPage from './AuthPage'
+import Dashboard from './Dashboard'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build without an IDE vendor lock-in.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -687,6 +688,9 @@ function IDE() {
           <span className="account-name">
             {session?.user?.name}
           </span>
+          <button className="dashboard-button" onClick={() => navigate('/dashboard')}>
+            Dashboard
+          </button>
           <button className="signout-button" onClick={handleSignOut}>
             Sign out
           </button>
@@ -912,6 +916,10 @@ function AppRouter() {
 
   if (pathname === '/createaccount') {
     return <AuthPage mode="signup" />
+  }
+
+  if (pathname === '/dashboard') {
+    return <Dashboard session={session} />
   }
 
   return <IDE />
