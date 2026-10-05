@@ -245,42 +245,11 @@ function App() {
   const currentProject = projects.find(project => project.id === currentProjectId)
 
   useEffect(() => {
-    let cancelled = false
-
-    initializeWorkspace(DEFAULT_FILES)
-      .then(({ projects: initialProjects, currentProject: initialProject }) => {
-        if (cancelled) return
-
-        setProjects(initialProjects)
-        setCurrentProjectId(initialProject.id)
-        setProjectName(initialProject.name)
-        setFiles(initialProject.files)
-        setActiveFile(firstFile(initialProject.files))
-        setOpenFiles([firstFile(initialProject.files)])
-        setWorkspaceReady(true)
-      })
-      .catch(error => {
-        if (!cancelled) {
-          setSaveStatus('storage error')
-          console.error(error)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    filesRef.current = files
-  }, [files])
-
-  useEffect(() => {
-    if (!workspaceReady || authPending) return
+    if (authPending) return
 
     let cancelled = false
 
-    async function refreshAuthenticatedWorkspace() {
+    async function loadWorkspace() {
       if (session?.user?.id) {
         try {
           await claimWorkspace()
@@ -298,9 +267,7 @@ function App() {
         setFiles(result.currentProject.files)
         setActiveFile(firstFile(result.currentProject.files))
         setOpenFiles([firstFile(result.currentProject.files)])
-        setPreview('')
-        setPreviewKey(value => value + 1)
-        setSaveStatus('saved')
+        setWorkspaceReady(true)
       } catch (error) {
         if (!cancelled) {
           setSaveStatus('storage error')
@@ -309,12 +276,16 @@ function App() {
       }
     }
 
-    void refreshAuthenticatedWorkspace()
+    void loadWorkspace()
 
     return () => {
       cancelled = true
     }
-  }, [workspaceReady, authPending, session?.user?.id])
+  }, [authPending, session?.user?.id])
+
+  useEffect(() => {
+    filesRef.current = files
+  }, [files])
 
   useEffect(() => {
     if (!workspaceReady || !currentProjectId) return
