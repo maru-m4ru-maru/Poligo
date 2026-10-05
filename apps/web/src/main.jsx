@@ -649,7 +649,7 @@ function IDE() {
   if (!workspaceReady) {
     return (
       <div className="app-loading">
-        <img className="app-loading-logo" src="/poligo-logo.svg" alt="Poligo" />
+        <img className="app-loading-logo" src="/poligo-mark.svg" alt="Poligo" />
         <div className="app-loading-text">Loading workspace...</div>
       </div>
     )
