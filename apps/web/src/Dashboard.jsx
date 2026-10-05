@@ -99,33 +99,32 @@ function getWorkspaceId() {
 }
 
 function TemplateIcon({ type }) {
-  const common = {
-    width: 26,
-    height: 26,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.7,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    'aria-hidden': true
+  const icons = {
+    HTML: '/icons/html5.svg',
+    Python: '/icons/python.svg',
+    'C++': '/icons/cplusplus.svg',
+    C: '/icons/c.svg'
   }
 
   if (type === 'Web') {
-    return <svg {...common}><path d="m8 8-3 4 3 4M16 8l3 4-3 4M14 5l-4 14" /></svg>
+    return (
+      <div className="stack-web-template-icons" aria-hidden="true">
+        <img src="/icons/html5.svg" alt="" />
+        <img src="/icons/css.svg" alt="" />
+        <img src="/icons/javascript.svg" alt="" />
+      </div>
+    )
   }
 
-  if (type === 'HTML') {
-    return <svg {...common}><path d="m7 4-4 16 9 2 9-2-4-16Z" /><path d="M8 8h8M7 12h8M6 16h8" /></svg>
-  }
-
-  if (type === 'Python') {
-    return <svg {...common}><path d="M12 4c-3.2 0-4 .9-4 3v2h4v2H6c-2 0-3 1.1-3 3s1 3 3 3h2v-3h6c2 0 3-1 3-3V7c0-2-1.1-3-5-3Z" /><path d="M12 20c3.2 0 4-.9 4-3v-2h-4v-2h6c2 0 3-1.1 3-3s-1-3-3-3h-2v3H10c-2 0-3 1-3 3v3c0 2 1.1 3 5 3Z" /></svg>
-  }
-
-  return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M8 12h8M12 8v8" /></svg>
+  return (
+    <img
+      src={icons[type] || '/icons/html5.svg'}
+      alt=""
+      className="stack-template-brand-icon"
+      aria-hidden="true"
+    />
+  )
 }
-
 export default function Dashboard({ session }) {
   const [data, setData] = useState(null)
   const [query, setQuery] = useState('')
