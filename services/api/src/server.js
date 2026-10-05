@@ -323,6 +323,12 @@ async function handleDashboardRequest(request, response) {
   const statsRows = await statsStatement.all([ownerId])
   const stats = statsRows[0] || {}
 
+  const url = new URL(request.url, 'http://localhost')
+  const requestedLimit = Number(url.searchParams.get('limit'))
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(Math.floor(requestedLimit), 1), 100)
+    : 50
+
   const projectStatement = await database.prepare(
     `SELECT
       p.id,
@@ -336,9 +342,9 @@ async function handleDashboardRequest(request, response) {
     WHERE p.owner_id = ?
     GROUP BY p.id, p.name, p.created_at, p.updated_at
     ORDER BY p.updated_at DESC
-    LIMIT 8`
+    LIMIT ?`
   )
-  const projects = await projectStatement.all([ownerId])
+  const projects = await projectStatement.all([ownerId, limit])
 
   send(response, 200, {
     user: {
