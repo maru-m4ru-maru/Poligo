@@ -197,6 +197,8 @@ export default function Dashboard({ session }) {
   const [templateCategory, setTemplateCategory] = useState('Popular')
   const [projectContextMenu, setProjectContextMenu] = useState(null)
   const [deletingProjectId, setDeletingProjectId] = useState('')
+  const [deleteDialogProject, setDeleteDialogProject] = useState(null)
+  const [deleteDialogBusy, setDeleteDialogBusy] = useState(false)
 
   async function loadDashboard() {
     setLoading(true)
@@ -291,6 +293,7 @@ export default function Dashboard({ session }) {
       if (event.key === 'Escape') {
         setNewProjectOpen(false)
         setProjectContextMenu(null)
+        setDeleteDialogProject(null)
       }
     }
 
@@ -352,30 +355,30 @@ export default function Dashboard({ session }) {
     })
   }
 
-  async function handleDeleteProject(project) {
+  function requestDeleteProject(project) {
     if (deletingProjectId) return
 
-    const confirmed = window.confirm(
-      'Delete "' + project.name + '"? This cannot be undone.'
-    )
-
-    if (!confirmed) {
-      setProjectContextMenu(null)
-      return
-    }
-
-    setDeletingProjectId(project.id)
-    setError('')
     setProjectContextMenu(null)
+    setDeleteDialogProject(project)
+  }
+
+  async function confirmDeleteProject() {
+    if (!deleteDialogProject || deleteDialogBusy) return
+
+    setDeleteDialogBusy(true)
+    setDeletingProjectId(deleteDialogProject.id)
+    setError('')
 
     try {
-      await deleteProject(project.id)
+      await deleteProject(deleteDialogProject.id)
+      setDeleteDialogProject(null)
       await loadDashboard()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Project deletion failed')
       setLoading(false)
     } finally {
       setDeletingProjectId('')
+      setDeleteDialogBusy(false)
     }
   }
 
@@ -568,6 +571,49 @@ export default function Dashboard({ session }) {
         </div>
       )}
 
+      {deleteDialogProject && (
+        <div
+          className="stack-delete-dialog-overlay"
+          onMouseDown={() => {
+            if (!deleteDialogBusy) setDeleteDialogProject(null)
+          }}
+        >
+          <div
+            className="stack-delete-dialog"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={event => event.stopPropagation()}
+          >
+            <div className="stack-delete-dialog-icon">!</div>
+            <div className="stack-delete-dialog-copy">
+              <span>PROJECT</span>
+              <h2>Delete project?</h2>
+              <p>
+                "{deleteDialogProject.name}" and its files will be permanently removed.
+              </p>
+            </div>
+            <div className="stack-delete-dialog-actions">
+              <button
+                type="button"
+                className="stack-delete-dialog-cancel"
+                onClick={() => setDeleteDialogProject(null)}
+                disabled={deleteDialogBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="stack-delete-dialog-confirm"
+                onClick={() => void confirmDeleteProject()}
+                disabled={deleteDialogBusy}
+              >
+                {deleteDialogBusy ? 'Deleting...' : 'Delete project'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {projectContextMenu && (
         <div
           className="stack-project-context-menu"
@@ -591,7 +637,7 @@ export default function Dashboard({ session }) {
           <button
             className="danger"
             type="button"
-            onClick={() => void handleDeleteProject(projectContextMenu.project)}
+            onClick={() => requestDeleteProject(projectContextMenu.project)}
           >
             Delete project
           </button>
