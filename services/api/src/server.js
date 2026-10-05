@@ -563,7 +563,10 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
-  if (request.method === 'GET' && request.url === '/api/dashboard') {
+  if (
+    request.method === 'GET' &&
+    new URL(request.url, 'http://localhost').pathname === '/api/dashboard'
+  ) {
     try {
       await handleDashboardRequest(request, response)
     } catch (error) {
