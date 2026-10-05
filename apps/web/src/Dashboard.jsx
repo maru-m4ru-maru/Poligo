@@ -301,6 +301,20 @@ export default function Dashboard({ session }) {
     }
   }, [newProjectOpen])
 
+  useEffect(() => {
+    if (!projectContextMenu) return
+
+    function handleDocumentClick() {
+      setProjectContextMenu(null)
+    }
+
+    document.addEventListener('click', handleDocumentClick)
+
+    return () => {
+      document.removeEventListener('click', handleDocumentClick)
+    }
+  }, [projectContextMenu])
+
   const projects = useMemo(() => {
     const source = data?.projects || []
     const normalized = query.trim().toLowerCase()
@@ -551,6 +565,36 @@ export default function Dashboard({ session }) {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {projectContextMenu && (
+        <div
+          className="stack-project-context-menu"
+          style={{
+            left: projectContextMenu.x,
+            top: projectContextMenu.y
+          }}
+          role="menu"
+          onClick={event => event.stopPropagation()}
+          onContextMenu={event => event.preventDefault()}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              openProject(projectContextMenu.project.id)
+              setProjectContextMenu(null)
+            }}
+          >
+            Open project
+          </button>
+          <button
+            className="danger"
+            type="button"
+            onClick={() => void handleDeleteProject(projectContextMenu.project)}
+          >
+            Delete project
+          </button>
         </div>
       )}
 
