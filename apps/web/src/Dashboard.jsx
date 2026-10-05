@@ -347,13 +347,13 @@ export default function Dashboard({ session }) {
   }, [])
 
   useEffect(() => {
-    if (!newProjectOpen) return
+    if (!newProjectOpen && !deleteDialogProject) return
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
-        setNewProjectOpen(false)
+        if (newProjectOpen) setNewProjectOpen(false)
         setProjectContextMenu(null)
-        setDeleteDialogProject(null)
+        if (!deleteDialogBusy) setDeleteDialogProject(null)
       }
     }
 
@@ -362,7 +362,7 @@ export default function Dashboard({ session }) {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [newProjectOpen])
+  }, [newProjectOpen, deleteDialogProject, deleteDialogBusy])
 
   useEffect(() => {
     if (!projectContextMenu) return
