@@ -140,11 +140,24 @@ export default function Dashboard({ session }) {
     setError('')
 
     try {
+      const workspaceHeaders = {
+        'X-Poligo-Workspace': getWorkspaceId()
+      }
+
+      const claimResponse = await fetch('/api/workspace/claim', {
+        method: 'POST',
+        credentials: 'include',
+        headers: workspaceHeaders
+      })
+
+      if (!claimResponse.ok && claimResponse.status !== 401) {
+        const claimResult = await claimResponse.json().catch(() => ({}))
+        throw new Error(claimResult.error || 'Workspace claim failed')
+      }
+
       const response = await fetch('/api/dashboard', {
         credentials: 'include',
-        headers: {
-          'X-Poligo-Workspace': getWorkspaceId()
-        }
+        headers: workspaceHeaders
       })
       const result = await response.json()
 
