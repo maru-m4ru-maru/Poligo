@@ -35,6 +35,7 @@ const FILE_META = {
   ts: { language: 'typescript', kind: 'js' },
   tsx: { language: 'typescript', kind: 'js' },
   py: { language: 'python', kind: 'python' },
+  cs: { language: 'csharp', kind: 'text' },
   c: { language: 'c', kind: 'c' },
   h: { language: 'c', kind: 'c' },
   cpp: { language: 'cpp', kind: 'cpp' },
@@ -51,7 +52,8 @@ const API_URL = import.meta.env.VITE_API_URL || ''
 const SERVER_LANGUAGES = new Set([
   'python',
   'c',
-  'cpp'
+  'cpp',
+  'csharp'
 ])
 
 const FILE_ICONS = {
