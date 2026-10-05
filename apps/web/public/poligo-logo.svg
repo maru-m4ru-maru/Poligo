@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-labelledby="title desc">
+  <title id="title">Poligo</title>
+  <desc id="desc">Poligo blue geometric mark and wordmark</desc>
+  <defs>
+    <linearGradient id="top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#22A4F5"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2E6FEF"/>
+      <stop offset="1" stop-color="#173FAE"/>
+    </linearGradient>
+    <linearGradient id="right" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#198AF0"/>
+      <stop offset="1" stop-color="#2B61E5"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(18 18)">
+    <path d="M22 48 122 0l100 48-42 24-58-28-58 28Z" fill="url(#top)"/>
+    <path d="M22 48v96l58 32v-55l-58-34Z" fill="url(#left)"/>
+    <path d="m222 48-58 33v55l58-32Z" fill="url(#right)"/>
+    <path d="m22 144 58 32 42-24-42-24-58-34Z" fill="#274BD0"/>
+    <path d="m122 152 42 24 58-32-58-31-42 24Z" fill="#2B61E5"/>
+    <path d="M80 120 122 96l42 24-42 24Z" fill="#1F4CC6"/>
+  </g>
+  <text x="276" y="116" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="92" font-weight="600" letter-spacing="-3">Poligo</text>
+</svg>
