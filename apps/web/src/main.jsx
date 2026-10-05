@@ -220,11 +220,16 @@ async function request(path, options = {}) {
     }
   })
 
+  const body = await response.json().catch(() => null)
+
   if (!response.ok) {
-    throw new Error(response.status + ' ' + response.statusText)
+    throw new Error(
+      body?.error ||
+      response.status + ' ' + response.statusText
+    )
   }
 
-  return response.json()
+  return body
 }
 
 function firstFile(files) {
