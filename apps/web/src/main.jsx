@@ -939,7 +939,8 @@ function IDE() {
   }
 
   return (
-    {quickOpenOpen && (
+    <>
+      {quickOpenOpen && (
       <div className="ide-overlay" onClick={() => setQuickOpenOpen(false)}>
         <div className="quick-open" onClick={event => event.stopPropagation()}>
           <input
@@ -1332,6 +1333,7 @@ function IDE() {
       </div>
 
     </div>
+    </>
   )
 }
 
