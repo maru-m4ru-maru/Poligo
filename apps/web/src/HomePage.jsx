@@ -150,6 +150,7 @@ if name:
               </div>
             </div>
           </div>
+            </div>
         </section>
 
         <section className="home-feature-strip">
