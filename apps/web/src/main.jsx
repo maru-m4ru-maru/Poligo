@@ -1864,13 +1864,18 @@ function IDE({ projectId }) {
   }
 
   async function runProject() {
-    refreshPreview()
+    const serverExecution = SERVER_LANGUAGES.has(currentLanguage)
+
+    if (!serverExecution) {
+      refreshPreview()
+    }
+
     setBottomOpen(true)
     setBottomTab('output')
     setExecution({
       id: '',
-      status: SERVER_LANGUAGES.has(currentLanguage) ? 'queued' : 'succeeded',
-      result: SERVER_LANGUAGES.has(currentLanguage)
+      status: serverExecution ? 'queued' : 'succeeded',
+      result: serverExecution
         ? null
         : {
             stdout: 'ブラウザプレビューを更新しました。',
@@ -1880,7 +1885,7 @@ function IDE({ projectId }) {
       error: ''
     })
 
-    if (!SERVER_LANGUAGES.has(currentLanguage)) {
+    if (!serverExecution) {
       return
     }
 
@@ -2645,6 +2650,13 @@ function IDE({ projectId }) {
                   {bottomTab === 'output' && (
                     <div className="output-panel">
                       {SERVER_LANGUAGES.has(currentLanguage) && (
+                        <div className="output-execution-target">
+                          <span>実行対象</span>
+                          <strong>{activeFile}</strong>
+                          <small>{currentLanguage}</small>
+                        </div>
+                      )}
+                      {SERVER_LANGUAGES.has(currentLanguage) && (
                         <div className="output-stdin">
                           <div className="output-section-label">標準入力</div>
                           <textarea
@@ -2667,6 +2679,14 @@ function IDE({ projectId }) {
 
                       {execution.error && (
                         <pre className="output-raw output-error-raw">{execution.error}</pre>
+                      )}
+
+                      {!runtimeProblems.length && !execution.error && execution.status === 'queued' && !execution.result && (
+                        <div className="output-running">実行を待機しています...</div>
+                      )}
+
+                      {!runtimeProblems.length && !execution.error && execution.status === 'running' && !execution.result && (
+                        <div className="output-running">実行中...</div>
                       )}
 
                       {!runtimeProblems.length && !execution.error && execution.result && (
