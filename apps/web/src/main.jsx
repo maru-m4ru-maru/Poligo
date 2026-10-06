@@ -1308,7 +1308,7 @@ function IDE({ projectId }) {
     event.target.value = ''
 
     for (const file of uploaded) {
-      const path = file.name.replace(/\\/g, '/').replace(/^\\/+/, '')
+      const path = file.name.replace(/\\/g, '/').replace(/^\/+/, '')
 
       if (
         !path ||
