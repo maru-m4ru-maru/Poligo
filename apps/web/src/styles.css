@@ -7050,3 +7050,59 @@ body {
     width: 104px;
   }
 }
+
+
+.home-brand {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.home-brand img {
+  display: block;
+  width: 112px;
+  height: auto;
+}
+
+.home-hero-brand {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  border: 0;
+  background: transparent;
+}
+
+.home-hero-brand-inner {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 0;
+  background: transparent;
+}
+
+.home-hero-brand-inner img {
+  display: block;
+  width: min(340px, 88%);
+  height: auto;
+}
+
+.home-hero-brand-inner span {
+  color: #6f819c;
+}
+
+.account-brand-logo {
+  display: block;
+  width: 122px;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.account-brand-logo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
