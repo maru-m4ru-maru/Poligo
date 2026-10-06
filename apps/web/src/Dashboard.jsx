@@ -182,7 +182,11 @@ function formatDate(timestamp) {
 }
 
 function navigate(path) {
-  if (path === '/dashboard' || path === '/ide') {
+  if (
+    path === '/dashboard' ||
+    path === '/ide' ||
+    path.startsWith('/ide/')
+  ) {
     window.history.pushState({}, '', '/')
     window.location.hash = path
     return
@@ -402,7 +406,7 @@ export default function Dashboard({ session }) {
 
   function openProject(id) {
     localStorage.setItem('poligo-current-project', id)
-    navigate('/ide')
+    navigate('/ide/' + encodeURIComponent(id))
   }
 
   function openProjectContextMenu(event, project) {
@@ -474,7 +478,7 @@ export default function Dashboard({ session }) {
       }
 
       localStorage.setItem('poligo-current-project', project.id)
-      navigate('/ide')
+      navigate('/ide/' + encodeURIComponent(project.id))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Project creation failed')
       setCreating('')
