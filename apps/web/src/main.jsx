@@ -657,6 +657,7 @@ function IDE({ projectId }) {
     result: null,
     error: ''
   })
+  const [executionStdin, setExecutionStdin] = useState('')
   const [runtimeProblems, setRuntimeProblems] = useState([])
   const [sourceCommits, setSourceCommits] = useState([])
   const [sourceDiff, setSourceDiff] = useState([])
@@ -1890,6 +1891,7 @@ function IDE({ projectId }) {
           projectId: currentProjectId,
           language: currentLanguage,
           entrypoint: activeFile,
+          stdin: executionStdin,
           files
         })
       })
@@ -2642,6 +2644,18 @@ function IDE({ projectId }) {
                   {bottomTab === 'terminal' && <div className="terminal" ref={terminalRef} />}
                   {bottomTab === 'output' && (
                     <div className="output-panel">
+                      {SERVER_LANGUAGES.has(currentLanguage) && (
+                        <div className="output-stdin">
+                          <div className="output-section-label">標準入力</div>
+                          <textarea
+                            value={executionStdin}
+                            onChange={event => setExecutionStdin(event.target.value)}
+                            placeholder="input() などへの入力"
+                            spellCheck={false}
+                            rows={3}
+                          />
+                        </div>
+                      )}
                       {runtimeProblems.map((problem, index) => (
                         <pre
                           key={'runtime-output-' + index}
