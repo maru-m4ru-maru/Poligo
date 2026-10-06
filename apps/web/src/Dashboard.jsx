@@ -182,6 +182,12 @@ function formatDate(timestamp) {
 }
 
 function navigate(path) {
+  if (path === '/dashboard') {
+    window.history.pushState({}, '', '/')
+    window.location.hash = '/dashboard'
+    return
+  }
+
   window.history.pushState({}, '', path)
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
