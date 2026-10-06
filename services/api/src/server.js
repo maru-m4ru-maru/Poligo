@@ -34,6 +34,30 @@ const authHandler = toNodeHandler(auth)
 const executionRateState = new Map()
 const executionOwners = new Map()
 
+const executionCleanupTimer = setInterval(() => {
+  const now = Date.now()
+
+  for (const [userId, timestamps] of executionRateState) {
+    const recent = timestamps.filter(timestamp =>
+      now - timestamp < EXECUTION_WINDOW_MS
+    )
+
+    if (recent.length) {
+      executionRateState.set(userId, recent)
+    } else {
+      executionRateState.delete(userId)
+    }
+  }
+
+  for (const [id, record] of executionOwners) {
+    if (record.expiresAt <= now) {
+      executionOwners.delete(id)
+    }
+  }
+}, 60_000)
+
+executionCleanupTimer.unref?.()
+
 function parseEnvFile(content) {
   const env = {}
 
