@@ -2385,12 +2385,6 @@ function IDE({ projectId }) {
           <span className="account-name">
             {session?.user?.name}
           </span>
-          <button
-            className="dashboard-button"
-            onClick={() => setRightPaneView('ai')}
-          >
-            AI
-          </button>
           <button className="dashboard-button" onClick={() => navigate('/dashboard')}>
             ダッシュボード
           </button>
