@@ -16,15 +16,18 @@ function buildPreview(files) {
   const css = files['style.css'] || ''
   const js = files['app.js'] || ''
 
-  const documentHtml = html.replace(
-    '<head>',
-    '<head><style>' + css + '</style>'
-  )
-
-  return documentHtml.replace(
-    '</body>',
-    '<script>' + js + '</script></body>'
-  )
+  return '<!doctype html>\n' +
+    '<html lang="ja">\n' +
+    '<head>\n' +
+    '<meta charset="UTF-8">\n' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+    '<style>' + css + '</style>\n' +
+    '</head>\n' +
+    '<body>' +
+    html +
+    '<script>' + js + '</script>\n' +
+    '</body>\n' +
+    '</html>'
 }
 
 export default function DemoPage() {
