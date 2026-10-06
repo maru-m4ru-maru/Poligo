@@ -18,13 +18,13 @@ const LANGUAGES = [
   { name: 'Python', icon: '/icons/python.svg' },
   { name: 'C', icon: '/icons/c.svg' },
   { name: 'C++', icon: '/icons/cplusplus.svg' },
-  { name: 'Java', icon: 'https://cdn.simpleicons.org/java/ED8B00' },
-  { name: 'Go', icon: 'https://cdn.simpleicons.org/go/00ADD8' },
-  { name: 'Rust', icon: 'https://cdn.simpleicons.org/rust/FFFFFF' },
-  { name: 'PHP', icon: 'https://cdn.simpleicons.org/php/777BB4' },
-  { name: 'Ruby', icon: 'https://cdn.simpleicons.org/ruby/CC342D' },
-  { name: 'Kotlin', icon: 'https://cdn.simpleicons.org/kotlin/7F52FF' },
-  { name: 'C#', icon: 'https://cdn.simpleicons.org/csharp/239120' }
+  { name: 'Java', icon: '/icons/java.svg' },
+  { name: 'Go', icon: '/icons/go.svg' },
+  { name: 'Rust', icon: '/icons/rust.svg' },
+  { name: 'PHP', icon: '/icons/php.svg' },
+  { name: 'Ruby', icon: '/icons/ruby.svg' },
+  { name: 'Kotlin', icon: '/icons/kotlin.svg' },
+  { name: 'C#', icon: '/icons/csharp.svg' }
 ]
 
 export default function HomePage({ session }) {
