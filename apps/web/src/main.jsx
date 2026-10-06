@@ -22,6 +22,7 @@ import {
 import { authClient } from './auth-client'
 import AuthPage from './AuthPage'
 import Dashboard from './Dashboard'
+import HomePage from './HomePage'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build without an IDE vendor lock-in.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1762,17 +1763,17 @@ function IDE() {
 function getRoutePath() {
   const hashPath = window.location.hash.replace(/^#/, '')
 
-  if (hashPath === '/dashboard') {
-    return '/dashboard'
+  if (hashPath === '/dashboard' || hashPath === '/ide') {
+    return hashPath
   }
 
   return window.location.pathname
 }
 
 function navigate(path) {
-  if (path === '/dashboard') {
+  if (path === '/dashboard' || path === '/ide') {
     window.history.pushState({}, '', '/')
-    window.location.hash = '/dashboard'
+    window.location.hash = path
     return
   }
 
@@ -1803,7 +1804,7 @@ function AppRouter() {
     if (isPending) return
 
     if (session?.user && authPath) {
-      navigate('/')
+      window.location.replace('/#/ide')
       return
     }
 
@@ -1833,7 +1834,11 @@ function AppRouter() {
     return <Dashboard session={session} />
   }
 
-  return <IDE />
+  if (pathname === '/ide') {
+    return <IDE />
+  }
+
+  return <HomePage session={session} />
 }
 
 createRoot(document.getElementById('root')).render(<AppRouter />)
