@@ -1776,6 +1776,7 @@ function getRoutePath() {
 
   if (
     hashPath === '/dashboard' ||
+    hashPath === '/demo' ||
     hashPath === '/ide' ||
     /^\/ide\/[^/]+$/.test(hashPath)
   ) {
