@@ -5898,35 +5898,6 @@ body {
   perspective: none;
 }
 
-.home-demo-frame-wrap {
-  border-radius: 8px;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, .34);
-}
-
-.home-demo-frame-wrap::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border: 1px solid rgba(61, 114, 192, .18);
-  border-radius: 8px;
-}
-
-.home-demo-label {
-  top: 10px;
-  right: 10px;
-  left: 10px;
-}
-
-.home-demo-label strong {
-  background: #07101c;
-}
-
-.home-demo-open {
-  border-radius: 5px;
-  box-shadow: none;
-}
-
 .home-feature-strip {
   margin-top: 0;
   background: #070b12;
@@ -5958,14 +5929,6 @@ body {
   .home-hero {
     grid-template-columns: 1fr;
     gap: 28px;
-  }
-
-  .home-demo-frame {
-    display: none;
-  }
-
-  .home-demo-frame-wrap {
-    max-width: 760px;
   }
 }
 
