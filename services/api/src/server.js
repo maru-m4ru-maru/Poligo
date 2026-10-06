@@ -211,6 +211,7 @@ function normalizeExecutionFiles(files) {
       path.length === 0 ||
       path.length > 240 ||
       path.includes('\\') ||
+      path.includes('\0') ||
       path.startsWith('/') ||
       path.split('/').includes('..')
     ) {
@@ -359,7 +360,7 @@ async function readJson(request) {
   for await (const chunk of request) {
     body += chunk
 
-    if (body.length > MAX_REQUEST_BYTES) {
+    if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BYTES) {
       throw new Error('request too large')
     }
   }
@@ -1586,33 +1587,6 @@ async function handleExecutionStatus(request, response, id) {
 
   retainExecution(id)
   send(response, 200, result)
-}
-
-(response, id) {
-  if (!runnerUrl) {
-    await handleJudge0ExecutionStatus(response, id)
-    return
-  }
-
-  const runnerResponse = await fetch(
-    runnerUrl.replace(/\/$/, '') + '/v1/runs/' + encodeURIComponent(id),
-    {
-      method: 'GET',
-      headers: runnerHeaders()
-    }
-  )
-
-  let result
-
-  try {
-    result = await runnerResponse.json()
-  } catch {
-    result = {
-      error: 'runner returned invalid JSON'
-    }
-  }
-
-  send(response, runnerResponse.ok ? 200 : 502, result)
 }
 
 
