@@ -8,7 +8,7 @@ const TEMPLATES = [
     title: 'Web',
     subtitle: 'HTML/CSS/JavaScript',
     type: 'Web',
-    categories: ['Popular', 'Frontend', 'Fullstack', 'Creative', 'Vanilla'],
+    categories: ['人気', 'フロントエンド', 'フルスタック', 'クリエイティブ', 'バニラ'],
     files: {
       'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo Web</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build something great.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
       'style.css': 'body {\n  margin: 0;\n  min-height: 100vh;\n  font-family: system-ui, sans-serif;\n  background: #ffffff;\n  color: #111827;\n}\n\n.app {\n  max-width: 760px;\n  margin: 0 auto;\n  padding: 64px 24px;\n}',
@@ -20,7 +20,7 @@ const TEMPLATES = [
     title: 'Static',
     subtitle: 'HTML/CSS/JS',
     type: 'HTML',
-    categories: ['Popular', 'Frontend', 'Docs, Blogs & Slides', 'Vanilla'],
+    categories: ['人気', 'フロントエンド', 'ドキュメント・ブログ・スライド', 'バニラ'],
     files: {
       'index.html': '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main style="max-width: 720px; margin: 0 auto; padding: 64px 24px; font-family: system-ui, sans-serif;">\n      <h1>Hello, Poligo.</h1>\n      <p>A static HTML project.</p>\n    </main>\n  </body>\n</html>'
     }
@@ -30,7 +30,7 @@ const TEMPLATES = [
     title: 'Python',
     subtitle: 'Python 3',
     type: 'Python',
-    categories: ['Popular', 'Backend', 'Native Languages'],
+    categories: ['人気', 'バックエンド', 'ネイティブ言語'],
     files: {
       'main.py': 'print("Hello from Poligo")'
     }
@@ -40,7 +40,7 @@ const TEMPLATES = [
     title: 'Java',
     subtitle: 'Java',
     type: 'Java',
-    categories: ['Popular', 'Backend', 'Native Languages'],
+    categories: ['人気', 'バックエンド', 'ネイティブ言語'],
     files: {
       'Main.java': 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello from Poligo");\n    }\n}'
     }
@@ -50,7 +50,7 @@ const TEMPLATES = [
     title: 'Go',
     subtitle: 'Go',
     type: 'Go',
-    categories: ['Backend', 'Native Languages'],
+    categories: ['バックエンド', 'ネイティブ言語'],
     files: {
       'main.go': 'package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello from Poligo")\n}'
     }
@@ -60,7 +60,7 @@ const TEMPLATES = [
     title: 'Rust',
     subtitle: 'Rust',
     type: 'Rust',
-    categories: ['Backend', 'Native Languages'],
+    categories: ['バックエンド', 'ネイティブ言語'],
     files: {
       'main.rs': 'fn main() {\n    println!("Hello from Poligo");\n}'
     }
@@ -70,7 +70,7 @@ const TEMPLATES = [
     title: 'PHP',
     subtitle: 'PHP',
     type: 'PHP',
-    categories: ['Backend', 'Native Languages'],
+    categories: ['バックエンド', 'ネイティブ言語'],
     files: {
       'index.php': '<?php\necho "Hello from Poligo";\n'
     }
@@ -80,7 +80,7 @@ const TEMPLATES = [
     title: 'Ruby',
     subtitle: 'Ruby',
     type: 'Ruby',
-    categories: ['Backend', 'Native Languages'],
+    categories: ['バックエンド', 'ネイティブ言語'],
     files: {
       'main.rb': 'puts "Hello from Poligo"'
     }
@@ -90,7 +90,7 @@ const TEMPLATES = [
     title: 'Kotlin',
     subtitle: 'Kotlin/JVM',
     type: 'Kotlin',
-    categories: ['Backend', 'Native Languages'],
+    categories: ['バックエンド', 'ネイティブ言語'],
     files: {
       'Main.kt': 'fun main() {\n    println("Hello from Poligo")\n}'
     }
@@ -100,7 +100,7 @@ const TEMPLATES = [
     title: 'C++',
     subtitle: 'C++',
     type: 'C++',
-    categories: ['Popular', 'Backend', 'Native Languages'],
+    categories: ['人気', 'バックエンド', 'ネイティブ言語'],
     files: {
       'main.cpp': '#include <iostream>\n\nint main() {\n    std::cout << "Hello from Poligo\\n";\n    return 0;\n}'
     }
@@ -110,7 +110,7 @@ const TEMPLATES = [
     title: 'C',
     subtitle: 'C',
     type: 'C',
-    categories: ['Backend', 'Native Languages'],
+    categories: ['バックエンド', 'ネイティブ言語'],
     files: {
       'main.c': '#include <stdio.h>\n\nint main(void) {\n    printf("Hello from Poligo\\n");\n    return 0;\n}'
     }
@@ -120,7 +120,7 @@ const TEMPLATES = [
     title: 'C#',
     subtitle: '.NET',
     type: 'C#',
-    categories: ['Popular', 'Backend', 'Native Languages'],
+    categories: ['人気', 'バックエンド', 'ネイティブ言語'],
     files: {
       'main.cs': 'using System;\n\nConsole.WriteLine("Hello from Poligo");'
     }
@@ -128,15 +128,15 @@ const TEMPLATES = [
 ]
 
 const CATEGORIES = [
-  'Popular',
-  'Frontend',
-  'Backend',
-  'Fullstack',
-  'Docs, Blogs & Slides',
-  'Creative',
-  'Mobile & VR',
-  'Vanilla',
-  'Native Languages'
+  '人気',
+  'フロントエンド',
+  'バックエンド',
+  'フルスタック',
+  'ドキュメント・ブログ・スライド',
+  'クリエイティブ',
+  'モバイル・VR',
+  'バニラ',
+  'ネイティブ言語'
 ]
 
 function formatBytes(bytes) {
@@ -156,7 +156,7 @@ function formatBytes(bytes) {
     : value.toFixed(1) + ' ' + units[unit]
 }
 
-function getProjectDescription(project) {
+function getProject説明(project) {
   const name = project.name.toLowerCase()
 
   if (name.includes('python')) return 'Python 3 project'
@@ -264,7 +264,7 @@ export default function Dashboard({ session }) {
   const [creating, setCreating] = useState('')
   const [activeSection, setActiveSection] = useState('projects')
   const [newProjectOpen, setNewProjectOpen] = useState(false)
-  const [templateCategory, setTemplateCategory] = useState('Popular')
+  const [templateCategory, setTemplateCategory] = useState('人気')
   const [projectContextMenu, setProjectContextMenu] = useState(null)
   const [deletingProjectId, setDeletingProjectId] = useState('')
   const [deleteDialogProject, setDeleteDialogProject] = useState(null)
@@ -312,13 +312,13 @@ export default function Dashboard({ session }) {
         throw new Error(projectList.error || 'Project list request failed')
       }
 
-      const dashboardProjects = Array.isArray(result.projects) ? result.projects : []
-      const apiProjects = Array.isArray(projectList) ? projectList : []
+      const dashboardプロジェクト = Array.isArray(result.projects) ? result.projects : []
+      const apiプロジェクト = Array.isArray(projectList) ? projectList : []
       const merged = new Map(
-        dashboardProjects.map(project => [project.id, project])
+        dashboardプロジェクト.map(project => [project.id, project])
       )
 
-      for (const project of apiProjects) {
+      for (const project of apiプロジェクト) {
         if (!merged.has(project.id)) {
           merged.set(project.id, {
             id: project.id,
@@ -331,17 +331,17 @@ export default function Dashboard({ session }) {
         }
       }
 
-      const mergedProjects = [...merged.values()]
+      const mergedプロジェクト = [...merged.values()]
         .sort((a, b) => b.updatedAt - a.updatedAt)
 
       setData({
         ...result,
-        projects: mergedProjects,
+        projects: mergedプロジェクト,
         stats: {
           ...result.stats,
           projectCount: Math.max(
             Number(result.stats?.projectCount || 0),
-            mergedProjects.length
+            mergedプロジェクト.length
           )
         }
       })
@@ -489,7 +489,7 @@ export default function Dashboard({ session }) {
     return (
       <div className="stack-dashboard-loading">
         <img src="/poligo-mark.svg" alt="Poligo" />
-        <span>Loading dashboard...</span>
+        <span>ダッシュボードを読み込み中...</span>
       </div>
     )
   }
@@ -499,9 +499,9 @@ export default function Dashboard({ session }) {
       <div className="stack-dashboard-loading">
         <div className="stack-dashboard-error">
           <img src="/poligo-mark.svg" alt="Poligo" />
-          <h1>Unable to load dashboard</h1>
+          <h1>ダッシュボードを読み込めません</h1>
           <p>{error}</p>
-          <button onClick={() => void loadDashboard()}>Retry</button>
+          <button onClick={() => void loadDashboard()}>再試行</button>
         </div>
       </div>
     )
@@ -520,12 +520,12 @@ export default function Dashboard({ session }) {
         <button
           className="stack-new-button"
           onClick={() => {
-            setTemplateCategory('Popular')
+            setTemplateCategory('人気')
             setNewProjectOpen(current => !current)
           }}
         >
           <span>+</span>
-          New Project
+          新規プロジェクト
         </button>
 
         <nav className="stack-sidebar-nav">
@@ -537,7 +537,7 @@ export default function Dashboard({ session }) {
             }}
           >
             <span className="stack-nav-icon">▦</span>
-            Projects
+            プロジェクト
           </button>
 
           <button
@@ -548,7 +548,7 @@ export default function Dashboard({ session }) {
             }}
           >
             <span className="stack-nav-icon">◯</span>
-            Account
+            アカウント
           </button>
         </nav>
 
@@ -564,7 +564,7 @@ export default function Dashboard({ session }) {
           </div>
 
           <button className="stack-signout-button" onClick={signOut}>
-            Sign out
+            サインアウト
           </button>
         </div>
       </aside>
@@ -580,7 +580,7 @@ export default function Dashboard({ session }) {
           >
             <div className="stack-new-project-header">
               <div className="stack-new-project-account">
-                <span>Add to</span>
+                <span>追加先</span>
                 <strong>{data.user.name}</strong>
                 <span>⌄</span>
               </div>
@@ -623,7 +623,7 @@ export default function Dashboard({ session }) {
                   </div>
                   <div className="stack-template-copy">
                     <strong>{template.title}</strong>
-                    <span>{creating === template.id ? 'Creating project...' : template.subtitle}</span>
+                    <span>{creating === template.id ? 'プロジェクトを作成中...' : template.subtitle}</span>
                   </div>
                 </button>
               ))}
@@ -632,8 +632,8 @@ export default function Dashboard({ session }) {
                 template.categories.includes(templateCategory)
               ) && (
                 <div className="stack-template-empty">
-                  <strong>No starters yet</strong>
-                  <span>More runtimes are coming to Poligo.</span>
+                  <strong>テンプレートはありません</strong>
+                  <span>対応ランタイムを順次追加します。</span>
                 </div>
               )}
             </div>
@@ -656,10 +656,10 @@ export default function Dashboard({ session }) {
           >
             <div className="stack-delete-dialog-icon">!</div>
             <div className="stack-delete-dialog-copy">
-              <span>PROJECT</span>
-              <h2>Delete project?</h2>
+              <span>プロジェクト</span>
+              <h2>プロジェクトを削除?</h2>
               <p>
-                "{deleteDialogProject.name}" and its files will be permanently removed.
+                "{deleteDialogProject.name}" とそのファイルは完全に削除されます。
               </p>
             </div>
             <div className="stack-delete-dialog-actions">
@@ -669,7 +669,7 @@ export default function Dashboard({ session }) {
                 onClick={() => setDeleteDialogProject(null)}
                 disabled={deleteDialogBusy}
               >
-                Cancel
+                キャンセル
               </button>
               <button
                 type="button"
@@ -677,7 +677,7 @@ export default function Dashboard({ session }) {
                 onClick={() => void confirmDeleteProject()}
                 disabled={deleteDialogBusy}
               >
-                {deleteDialogBusy ? 'Deleting...' : 'Delete project'}
+                {deleteDialogBusy ? '削除中...' : 'プロジェクトを削除'}
               </button>
             </div>
           </div>
@@ -702,14 +702,14 @@ export default function Dashboard({ session }) {
               setProjectContextMenu(null)
             }}
           >
-            Open project
+            プロジェクトを開く
           </button>
           <button
             className="danger"
             type="button"
             onClick={() => requestDeleteProject(projectContextMenu.project)}
           >
-            Delete project
+            プロジェクトを削除
           </button>
         </div>
       )}
@@ -728,12 +728,12 @@ export default function Dashboard({ session }) {
               <input
                 value={query}
                 onChange={event => setQuery(event.target.value)}
-                placeholder="Search projects"
+                placeholder="プロジェクトを検索"
               />
               <kbd>⌘ K</kbd>
             </div>
             <button className="stack-open-ide" onClick={() => navigate('/ide')}>
-              Open IDE
+              IDEを開く
             </button>
           </div>
         </header>
@@ -742,26 +742,26 @@ export default function Dashboard({ session }) {
           <section className="stack-welcome">
             <div>
               <span className="stack-eyebrow">POLIGO CLOUD</span>
-              <h1>Build something.</h1>
-              <p>Choose a starter or continue working on one of your projects.</p>
+              <h1>何かを作ろう。</h1>
+              <p>テンプレートから始めるか、既存のプロジェクトを続けて編集できます。</p>
             </div>
             <div className="stack-cloud-pill">
               <span />
-              Turso connected
+              Turso 接続済み
             </div>
           </section>
 
           <section id="projects" className="stack-section">
             <div className="stack-section-heading stack-project-heading">
               <div>
-                <h2>Recent projects</h2>
+                <h2>最近のプロジェクト</h2>
               </div>
               <button
                 className="stack-show-all"
                 type="button"
                 onClick={() => setQuery('')}
               >
-                Show all
+                すべて表示
                 <span>›</span>
               </button>
             </div>
@@ -770,10 +770,10 @@ export default function Dashboard({ session }) {
               <div className="stack-project-table">
                 <div className="stack-project-table-head">
                   <span aria-hidden="true" />
-                  <span>Title</span>
-                  <span>Description</span>
-                  <span>Files</span>
-                  <span>Updated</span>
+                  <span>タイトル</span>
+                  <span>説明</span>
+                  <span>ファイル</span>
+                  <span>更新日時</span>
                   <span aria-hidden="true" />
                 </div>
 
@@ -817,7 +817,7 @@ export default function Dashboard({ session }) {
                       </div>
 
                       <span className="stack-project-description">
-                        {getProjectDescription(project)}
+                        {getProject説明(project)}
                       </span>
 
                       <span className="stack-project-files">
@@ -852,8 +852,8 @@ export default function Dashboard({ session }) {
               </div>
             ) : (
               <div className="stack-empty">
-                <h3>{query ? 'No matching projects' : 'No projects yet'}</h3>
-                <p>{query ? 'Try a different search term.' : 'Create a starter project above to get moving.'}</p>
+                <h3>{query ? '一致するプロジェクトがありません' : 'プロジェクトはまだありません'}</h3>
+                <p>{query ? '別の検索語を試してください。' : '上の新規プロジェクトから開発を始められます。'}</p>
               </div>
             )}
           </section>
@@ -867,15 +867,15 @@ export default function Dashboard({ session }) {
 
             <div className="stack-account-stats">
               <div>
-                <span>Projects</span>
+                <span>プロジェクト</span>
                 <strong>{stats.projectCount}</strong>
               </div>
               <div>
-                <span>Files</span>
+                <span>ファイル</span>
                 <strong>{stats.fileCount}</strong>
               </div>
               <div>
-                <span>Stored data</span>
+                <span>保存容量</span>
                 <strong>{formatBytes(stats.storageBytes)}</strong>
               </div>
             </div>
