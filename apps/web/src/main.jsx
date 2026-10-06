@@ -286,8 +286,8 @@ function inlineCssReferences(source, filePath, files, seen = new Set()) {
   nextSeen.add(filePath)
 
   let css = source.replace(
-    /@import\\s+(?:url\\(\\s*)?["']?([^"'\\)\\s]+)["']?\\s*\\)?\\s*;?/gi,
-    (match, reference) => {
+    /@import\\s+(?:url\\(\\s*)?["']?([^"'\\)\\s]+)["']?\\s*\\)?\\s*([^;]*);/gi,
+    (match, reference, media) => {
       const resolved = resolveVirtualPath(filePath, reference)
       const imported = resolved ? files[resolved] : null
 
@@ -295,7 +295,20 @@ function inlineCssReferences(source, filePath, files, seen = new Set()) {
         return match
       }
 
-      return inlineCssReferences(imported, resolved, files, nextSeen)
+      const expanded = inlineCssReferences(
+        imported,
+        resolved,
+        files,
+        nextSeen
+      )
+
+      const condition = media.trim()
+
+      if (!condition) {
+        return expanded
+      }
+
+      return '@media ' + condition + '{' + expanded + '}'
     }
   )
 
