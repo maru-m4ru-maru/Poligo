@@ -2810,15 +2810,19 @@ function IDE({ projectId }) {
                   {bottomOpen ? '⌄' : '⌃'}
                 </button>
               </div>
-              {bottomOpen && (
-                <div className="bottom-content">
-                  {bottomTab === 'terminal' && (
-                    <div className="terminal-panel">
-                      <div className="terminal" ref={terminalRef} />
-                    </div>
-                  )}
-                  {bottomTab === 'problems' && (
-                    <div className="problems-panel">
+              <div className="bottom-content">
+                  <div
+                    className={'terminal-panel ' + (
+                      bottomTab === 'terminal' ? '' : 'panel-hidden'
+                    )}
+                  >
+                    <div className="terminal" ref={terminalRef} />
+                  </div>
+                  <div
+                    className={'problems-panel ' + (
+                      bottomTab === 'problems' ? '' : 'panel-hidden'
+                    )}
+                  >
                       {editorMarkers.map((marker, index) => (
                         <button
                           key={'editor-' + index}
@@ -2892,7 +2896,7 @@ function IDE({ projectId }) {
                     </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
           </section>
 
