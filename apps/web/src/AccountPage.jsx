@@ -86,7 +86,9 @@ export default function AccountPage({ session }) {
         const result = await response.json()
 
         if (!response.ok) {
-          throw new Error(result.error || '利用状況を読み込めませんでした')
+          throw new Error(
+            result.error || '利用状況を読み込めませんでした'
+          )
         }
 
         setUsageBytes(Number(result.stats?.storageBytes || 0))
@@ -103,6 +105,11 @@ export default function AccountPage({ session }) {
 
     void loadUsage()
   }, [])
+
+  async function signOut() {
+    await authClient.signOut()
+    window.location.assign('/signin')
+  }
 
   async function changePassword(event) {
     event.preventDefault()
@@ -132,7 +139,10 @@ export default function AccountPage({ session }) {
       })
 
       if (result.error) {
-        throw new Error(result.error.message || 'パスワードを変更できませんでした')
+        throw new Error(
+          result.error.message ||
+          'パスワードを変更できませんでした'
+        )
       }
 
       setCurrentPassword('')
@@ -153,154 +163,215 @@ export default function AccountPage({ session }) {
   }
 
   return (
-    <div className="account-page">
-      <header className="account-topbar">
-        <button className="account-brand" onClick={() => navigate('/')}>
-          <img src="/poligo-logo.svg" alt="Poligo" />
+    <div className="stack-dashboard account-dashboard">
+      <aside className="stack-sidebar">
+        <button
+          className="stack-sidebar-brand"
+          onClick={() => navigate('/dashboard')}
+        >
+          <span className="account-brand-logo">
+            <img src="/poligo-logo.svg" alt="Poligo" />
+          </span>
+          <span>Poligo</span>
         </button>
 
-        <div className="account-top-actions">
-          <button onClick={() => navigate('/dashboard')}>
-            ダッシュボード
+        <button
+          className="stack-new-button"
+          onClick={() => navigate('/dashboard')}
+        >
+          <span>+</span>
+          新規プロジェクト
+        </button>
+
+        <nav className="stack-sidebar-nav">
+          <button
+            onClick={() => navigate('/dashboard')}
+          >
+            <span className="stack-nav-icon">▦</span>
+            プロジェクト
           </button>
-          <button onClick={() => navigate('/')}>
-            ホーム
+
+          <button className="active">
+            <span className="stack-nav-icon">◯</span>
+            アカウント
+          </button>
+        </nav>
+
+        <div className="stack-sidebar-bottom">
+          <div className="stack-sidebar-user">
+            <div className="stack-user-avatar">
+              {(session?.user?.name || 'P').slice(0, 1).toUpperCase()}
+            </div>
+            <div>
+              <strong>{session?.user?.name || 'Poligo User'}</strong>
+              <span>{session?.user?.email || ''}</span>
+            </div>
+          </div>
+
+          <button className="stack-signout-button" onClick={signOut}>
+            サインアウト
           </button>
         </div>
-      </header>
+      </aside>
 
-      <main className="account-main">
-        <div className="account-heading">
-          <span>ACCOUNT</span>
-          <h1>アカウント</h1>
-          <p>アカウント情報と保存容量を管理します。</p>
-        </div>
-
-        <section className="account-card account-storage-card">
-          <div className="account-card-heading">
-            <div>
-              <span>STORAGE</span>
-              <h2>利用状況</h2>
-            </div>
-            <strong>
-              {formatBytes(usageBytes)}
-              <small> / 15 MB</small>
-            </strong>
+      <main className="stack-dashboard-main account-dashboard-main">
+        <header className="stack-dashboard-topbar">
+          <div className="stack-breadcrumb">
+            <span>Poligo</span>
+            <span>/</span>
+            <strong>アカウント</strong>
           </div>
 
-          <div className="account-storage-track">
-            <div
-              className="account-storage-fill"
-              style={{ width: usagePercent + '%' }}
-            />
-          </div>
-
-          <div className="account-storage-meta">
-            <span>
-              {usagePercent < 0.01
-                ? '0%'
-                : usagePercent.toFixed(2) + '%'} 使用中
-            </span>
-            <span>上限 15 MB</span>
-          </div>
-
-          {error && (
-            <p className="account-inline-error">{error}</p>
-          )}
-
-          {!loading && !error && usageBytes > STORAGE_LIMIT && (
-            <p className="account-inline-warning">
-              保存容量の上限を超えています。追加容量については運営者へご相談ください。
-            </p>
-          )}
-        </section>
-
-        <section className="account-card">
-          <div className="account-card-heading">
-            <div>
-              <span>PROFILE</span>
-              <h2>アカウント情報</h2>
-            </div>
-          </div>
-
-          <div className="account-profile-grid">
-            <div>
-              <span>表示名</span>
-              <strong>{session?.user?.name || '未設定'}</strong>
-            </div>
-            <div>
-              <span>メールアドレス</span>
-              <strong>{session?.user?.email || '未設定'}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="account-card">
-          <div className="account-card-heading">
-            <div>
-              <span>SECURITY</span>
-              <h2>パスワードを変更</h2>
-            </div>
-          </div>
-
-          <form className="account-password-form" onSubmit={changePassword}>
-            <label>
-              <span>現在のパスワード</span>
-              <input
-                type="password"
-                value={currentPassword}
-                onChange={event => setCurrentPassword(event.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </label>
-
-            <label>
-              <span>新しいパスワード</span>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={event => setNewPassword(event.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
-            </label>
-
-            <label>
-              <span>新しいパスワード（確認）</span>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={event => setConfirmPassword(event.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
-            </label>
-
-            {passwordError && (
-              <p className="account-inline-error">{passwordError}</p>
-            )}
-
-            {passwordSuccess && (
-              <p className="account-inline-success">{passwordSuccess}</p>
-            )}
-
+          <div className="stack-top-actions">
             <button
-              className="account-password-submit"
-              type="submit"
-              disabled={passwordBusy}
+              className="stack-open-ide"
+              onClick={() => navigate('/dashboard')}
             >
-              {passwordBusy ? '変更中...' : 'パスワードを変更'}
+              ダッシュボードへ戻る
             </button>
-          </form>
-        </section>
+          </div>
+        </header>
 
-        <p className="account-security-note">
-          パスワード変更時は、現在のパスワードを確認します。
-          セキュリティのため、変更後は他のログインセッションを終了します。
-        </p>
+        <div className="account-settings-content">
+          <div className="account-settings-heading">
+            <span>ACCOUNT</span>
+            <h1>アカウント設定</h1>
+            <p>アカウント情報、保存容量、セキュリティを管理します。</p>
+          </div>
+
+          <section className="account-settings-section">
+            <div className="account-settings-section-head">
+              <div>
+                <span>STORAGE</span>
+                <h2>利用状況</h2>
+              </div>
+
+              <strong>
+                {formatBytes(usageBytes)}
+                <small> / 15 MB</small>
+              </strong>
+            </div>
+
+            <div className="account-settings-storage-track">
+              <div
+                className="account-settings-storage-fill"
+                style={{ width: usagePercent + '%' }}
+              />
+            </div>
+
+            <div className="account-settings-storage-meta">
+              <span>
+                {loading
+                  ? '読み込み中...'
+                  : usagePercent < 0.01
+                    ? '0% 使用中'
+                    : usagePercent.toFixed(2) + '% 使用中'}
+              </span>
+              <span>上限 15 MB</span>
+            </div>
+
+            {error && (
+              <p className="account-settings-error">{error}</p>
+            )}
+
+            {!loading && !error && usageBytes > STORAGE_LIMIT && (
+              <p className="account-settings-warning">
+                保存容量の上限を超えています。追加容量については運営者へご相談ください。
+              </p>
+            )}
+          </section>
+
+          <section className="account-settings-section">
+            <div className="account-settings-section-head">
+              <div>
+                <span>PROFILE</span>
+                <h2>アカウント情報</h2>
+              </div>
+            </div>
+
+            <div className="account-settings-profile">
+              <div>
+                <span>表示名</span>
+                <strong>{session?.user?.name || '未設定'}</strong>
+              </div>
+              <div>
+                <span>メールアドレス</span>
+                <strong>{session?.user?.email || '未設定'}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section className="account-settings-section">
+            <div className="account-settings-section-head">
+              <div>
+                <span>SECURITY</span>
+                <h2>パスワードを変更</h2>
+              </div>
+            </div>
+
+            <form
+              className="account-settings-password"
+              onSubmit={changePassword}
+            >
+              <label>
+                <span>現在のパスワード</span>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={event => setCurrentPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+
+              <label>
+                <span>新しいパスワード</span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={event => setNewPassword(event.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+              </label>
+
+              <label>
+                <span>新しいパスワード（確認）</span>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={event => setConfirmPassword(event.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+              </label>
+
+              {passwordError && (
+                <p className="account-settings-error">{passwordError}</p>
+              )}
+
+              {passwordSuccess && (
+                <p className="account-settings-success">{passwordSuccess}</p>
+              )}
+
+              <button
+                className="account-settings-submit"
+                type="submit"
+                disabled={passwordBusy}
+              >
+                {passwordBusy
+                  ? '変更中...'
+                  : 'パスワードを変更'}
+              </button>
+            </form>
+
+            <p className="account-settings-note">
+              パスワード変更後は、他のログインセッションを終了します。
+            </p>
+          </section>
+        </div>
       </main>
     </div>
   )
