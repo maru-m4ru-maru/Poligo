@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import Editor from '@monaco-editor/react'
-import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
-import '@xterm/xterm/css/xterm.css'
 import './styles.css'
 import {
   createProject,
@@ -651,6 +648,7 @@ function IDE({ projectId }) {
   const [rightPaneView, setRightPaneView] = useState('preview')
   const [bottomTab, setBottomTab] = useState('terminal')
   const [bottomOpen, setBottomOpen] = useState(true)
+  const [terminalLines, setTerminalLines] = useState([])
   const [preview, setPreview] = useState('')
   const [apiStatus, setApiStatus] = useState('checking')
   const [saveStatus, setSaveStatus] = useState('saved')
@@ -957,175 +955,41 @@ function IDE({ projectId }) {
   }, [activeView, currentProjectId])
 
   useEffect(() => {
-    if (!terminalRef.current || terminal.current) return
+    const serverLanguage = isServerLanguage(getFileMeta(activeFileRef.current).language)
+    const prompt = serverLanguage ? 'stdin> ' : '$ '
 
-    const instance = new Terminal({
-      convertEol: true,
-      cursorBlink: true,
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-      fontSize: 12.5,
-      theme: {
-        background: '#10100E',
-        foreground: '#D9D9D2',
-        cursor: '#EEEEEA'
-      }
-    })
+    setTerminalLines([
+      'Poligo ターミナル',
+      '通常のシェル操作は「$」、標準入力は「stdin>」から入力できます。',
+      prompt
+    ])
 
-    const fit = new FitAddon()
-    instance.loadAddon(fit)
-    terminal.current = instance
-    instance.open(terminalRef.current)
-
-    function fitTerminal() {
-      if (!terminalRef.current || !terminal.current) return
-      fit.fit()
-      terminal.current.refresh(0, Math.max(0, terminal.current.rows - 1))
-    }
-
-    fitTerminal()
-    window.requestAnimationFrame(fitTerminal)
-    window.setTimeout(fitTerminal, 80)
-    window.setTimeout(fitTerminal, 250)
-
-    function flushPendingLines() {
-      const lines = terminalPendingLines.current
-
-      terminalPendingLines.current = []
-
-      for (const line of lines) {
-        instance.writeln(line)
-      }
-    }
-
-    const isServerLanguage = () => {
-      return SERVER_LANGUAGES.has(getFileMeta(activeFileRef.current).language)
-    }
-
-    const initialTerminalMode = isServerLanguage() ? 'stdin' : 'shell'
-
-    terminalModeRef.current = initialTerminalMode
-
-    instance.writeln('Poligo ターミナル')
-    instance.writeln('通常のシェル操作は「$」、標準入力は「stdin>」から入力できます。')
-    instance.write(initialTerminalMode === 'stdin' ? 'stdin> ' : '$ ')
-
-    let buffer = ''
-
-    instance.onData(data => {
-      if (data === '\r') {
-        instance.write('\r\n')
-
-        if (isServerLanguage()) {
-          const inputLine = buffer
-
-          terminalInputBuffer.current = ''
-          setExecutionStdin(current => (
-            current ? current + '\n' + inputLine : inputLine
-          ))
-
-          buffer = ''
-          instance.write('stdin> ')
-          return
-        }
-
-        if (buffer === 'clear') {
-          instance.clear()
-        } else if (buffer === 'help') {
-          instance.writeln('commands: help, clear, run, files, ls, pwd, cat <file>, open <file>, health')
-        } else if (buffer === 'files' || buffer === 'ls') {
-          Object.keys(filesRef.current).forEach(name => instance.writeln(name))
-        } else if (buffer === 'pwd') {
-          instance.writeln('/workspace')
-        } else if (buffer.startsWith('cat ')) {
-          const target = buffer.slice(4).trim()
-
-          if (Object.prototype.hasOwnProperty.call(filesRef.current, target)) {
-            instance.writeln(filesRef.current[target])
-          } else {
-            instance.writeln('cat: ' + target + ': No such file')
-          }
-        } else if (buffer.startsWith('open ')) {
-          const target = buffer.slice(5).trim()
-
-          if (Object.prototype.hasOwnProperty.call(filesRef.current, target)) {
-            openFile(target)
-          } else {
-            instance.writeln('open: ' + target + ': No such file')
-          }
-        } else if (buffer === 'health') {
-          request('/api/health')
-            .then(result => instance.writeln(JSON.stringify(result)))
-            .catch(error => instance.writeln(error.message))
-        } else if (buffer === 'run') {
-          void runProject()
-          return
-        } else if (buffer) {
-          instance.writeln(buffer + ': command not found')
-        }
-
-        buffer = ''
-        terminalInputBuffer.current = ''
-        instance.write('$ ')
-        return
-      }
-
-      if (data === '\u007f') {
-        if (buffer.length) {
-          buffer = buffer.slice(0, -1)
-          terminalInputBuffer.current = buffer
-          instance.write('\b \b')
-        }
-        return
-      }
-
-      if (data === '\u0003') {
-        buffer = ''
-        terminalInputBuffer.current = ''
-        instance.write('^C\r\n')
-        instance.write(isServerLanguage() ? 'stdin> ' : '$ ')
-        return
-      }
-
-      if (data >= ' ') {
-        buffer += data
-        terminalInputBuffer.current = buffer
-        instance.write(data)
-      }
-    })
-
-    flushPendingLines()
-
-    const resize = () => fitTerminal()
-    const observer = new ResizeObserver(() => fitTerminal())
-
-    window.addEventListener('resize', resize)
-    observer.observe(terminalRef.current)
-
-    return () => {
-      window.removeEventListener('resize', resize)
-      observer.disconnect()
-      instance.dispose()
-      terminal.current = null
-    }
+    terminalModeRef.current = serverLanguage ? 'stdin' : 'shell'
+    terminalInputBuffer.current = ''
   }, [])
+
   const previewDoc = useMemo(
     () => preview || buildPreview(files, activeFile),
     [files, preview, activeFile]
   )
 
   useEffect(() => {
-    if (!terminal.current) return
-
     const nextMode = isServerLanguage(currentLanguage)
       ? 'stdin'
       : 'shell'
 
-    if (terminalModeRef.current === nextMode) return
+    if (terminalModeRef.current === nextMode) {
+      return
+    }
 
     terminalModeRef.current = nextMode
     terminalInputBuffer.current = ''
-    terminal.current.write('\r\n')
-    terminal.current.write(nextMode === 'stdin' ? 'stdin> ' : '$ ')
+
+    setTerminalLines(current => [
+      ...current,
+      '',
+      nextMode === 'stdin' ? 'stdin> ' : '$ '
+    ])
   }, [currentLanguage])
 
   useEffect(() => {
@@ -1949,12 +1813,130 @@ function IDE({ projectId }) {
   function writeTerminalLines(text) {
     const lines = String(text || '').split('\n')
 
-    if (!terminal.current) {
-      terminalPendingLines.current.push(...lines)
+    setTerminalLines(current => [
+      ...current,
+      ...lines
+    ])
+  }
+
+  function replaceTerminalInput(prompt, input) {
+    setTerminalLines(current => {
+      const next = [...current]
+
+      if (!next.length) {
+        return [prompt + input]
+      }
+
+      next[next.length - 1] = prompt + input
+      return next
+    })
+  }
+
+  function appendTerminalPrompt(prompt) {
+    setTerminalLines(current => [
+      ...current,
+      prompt
+    ])
+  }
+
+  function clearTerminal() {
+    setTerminalLines([])
+  }
+
+  function handleTerminalKeyDown(event) {
+    const serverLanguage = isServerLanguage(currentLanguage)
+    const prompt = serverLanguage ? 'stdin> ' : '$ '
+
+    if (event.key === 'Enter') {
+      event.preventDefault()
+
+      const inputLine = terminalInputBuffer.current
+
+      replaceTerminalInput(prompt, inputLine)
+      terminalInputBuffer.current = ''
+
+      if (serverLanguage) {
+        setExecutionStdin(current => (
+          current ? current + '\n' + inputLine : inputLine
+        ))
+        appendTerminalPrompt(prompt)
+        return
+      }
+
+      if (inputLine === 'clear') {
+        clearTerminal()
+        appendTerminalPrompt('$ ')
+        return
+      }
+
+      if (inputLine === 'help') {
+        writeTerminalLines('commands: help, clear, run, files, ls, pwd, cat <file>, open <file>, health')
+      } else if (inputLine === 'files' || inputLine === 'ls') {
+        writeTerminalLines(Object.keys(filesRef.current).join('\n'))
+      } else if (inputLine === 'pwd') {
+        writeTerminalLines('/workspace')
+      } else if (inputLine.startsWith('cat ')) {
+        const target = inputLine.slice(4).trim()
+
+        if (Object.prototype.hasOwnProperty.call(filesRef.current, target)) {
+          writeTerminalLines(filesRef.current[target])
+        } else {
+          writeTerminalLines('cat: ' + target + ': No such file')
+        }
+      } else if (inputLine.startsWith('open ')) {
+        const target = inputLine.slice(5).trim()
+
+        if (Object.prototype.hasOwnProperty.call(filesRef.current, target)) {
+          openFile(target)
+        } else {
+          writeTerminalLines('open: ' + target + ': No such file')
+        }
+      } else if (inputLine === 'health') {
+        request('/api/health')
+          .then(result => writeTerminalLines(JSON.stringify(result)))
+          .catch(error => writeTerminalLines(error.message))
+      } else if (inputLine === 'run') {
+        void runProject()
+        return
+      } else if (inputLine) {
+        writeTerminalLines(inputLine + ': command not found')
+      }
+
+      appendTerminalPrompt('$ ')
       return
     }
 
-    lines.forEach(line => terminal.current.writeln(line))
+    if (event.key === 'Backspace') {
+      event.preventDefault()
+
+      if (!terminalInputBuffer.current) {
+        return
+      }
+
+      terminalInputBuffer.current =
+        terminalInputBuffer.current.slice(0, -1)
+
+      replaceTerminalInput(prompt, terminalInputBuffer.current)
+      return
+    }
+
+    if (event.ctrlKey && event.key.toLowerCase() === 'c') {
+      event.preventDefault()
+      terminalInputBuffer.current = ''
+      appendTerminalPrompt(serverLanguage ? 'stdin> ^C' : '$ ^C')
+      return
+    }
+
+    if (
+      event.key.length === 1 &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey
+    ) {
+      event.preventDefault()
+      terminalInputBuffer.current += event.key
+      replaceTerminalInput(prompt, terminalInputBuffer.current)
+    }
   }
 
   function writeExecutionToTerminal({
@@ -1965,48 +1947,16 @@ function IDE({ projectId }) {
     error,
     status
   }) {
-    if (!terminal.current) {
-      terminalPendingLines.current.push('')
-      terminalPendingLines.current.push('> run ' + activeFileName + ' [' + language + ']')
-
-      if (status === 'timeout') {
-        terminalPendingLines.current.push('Execution timed out.')
-        return
-      }
-
-      if (error) {
-        terminalPendingLines.current.push(error)
-        return
-      }
-
-      if (result?.stdout) {
-        terminalPendingLines.current.push(...String(result.stdout).split('\n'))
-      }
-
-      if (result?.stderr) {
-        terminalPendingLines.current.push(...String(result.stderr).split('\n'))
-      }
-
-      if (result?.exitCode !== null && result?.exitCode !== undefined) {
-        terminalPendingLines.current.push('')
-        terminalPendingLines.current.push(
-          'Process exited with code ' + result.exitCode + '.'
-        )
-      }
-
-      return
-    }
-
-    terminal.current.writeln('')
-    terminal.current.writeln('> run ' + activeFileName + ' [' + language + ']')
+    writeTerminalLines('')
+    writeTerminalLines('> run ' + activeFileName + ' [' + language + ']')
 
     if (status === 'timeout') {
-      terminal.current.writeln('Execution timed out.')
+      writeTerminalLines('Execution timed out.')
       return
     }
 
     if (error) {
-      terminal.current.writeln(error)
+      writeTerminalLines(error)
       return
     }
 
@@ -2019,154 +1969,9 @@ function IDE({ projectId }) {
     }
 
     if (result?.exitCode !== null && result?.exitCode !== undefined) {
-      terminal.current.writeln('')
-      terminal.current.writeln('Process exited with code ' + result.exitCode + '.')
+      writeTerminalLines('')
+      writeTerminalLines('Process exited with code ' + result.exitCode + '.')
     }
-  }
-
-  async function runProject() {
-    const serverExecution = SERVER_LANGUAGES.has(currentLanguage)
-
-    setBottomOpen(true)
-    setBottomTab('terminal')
-    setExecution({
-      id: '',
-      status: serverExecution ? 'queued' : 'succeeded',
-      result: serverExecution
-        ? null
-        : {
-            stdout: 'ブラウザプレビューを更新しました。',
-            stderr: '',
-            exitCode: 0
-          },
-      error: ''
-    })
-
-    if (!serverExecution) {
-      refreshPreview()
-      writeTerminalLines('ブラウザプレビューを更新しました。')
-      return
-    }
-
-    writeTerminalLines('')
-    writeTerminalLines('> run ' + activeFile + ' [' + currentLanguage + ']')
-
-    writeTerminalLines('Waiting for execution...')
-
-    try {
-      const result = await request('/api/executions', {
-        method: 'POST',
-        body: JSON.stringify({
-          projectId: currentProjectId,
-          language: currentLanguage,
-          entrypoint: activeFile,
-          stdin: executionStdin,
-          files
-        })
-      })
-
-      setExecution({
-        id: result.id,
-        status: result.status || 'queued',
-        result: null,
-        error: ''
-      })
-
-      writeTerminalLines('Execution ' + result.id + ' queued.')
-      setExecutionStdin('')
-      terminalInputBuffer.current = ''
-
-      for (let attempt = 0; attempt < 120; attempt += 1) {
-        const status = await request(
-          '/api/executions/' + encodeURIComponent(result.id)
-        )
-
-        if (
-          status.status === 'succeeded' ||
-          status.status === 'failed' ||
-          status.status === 'timeout'
-        ) {
-          setExecution({
-            id: result.id,
-            status: status.status,
-            result: status.result || null,
-            error: ''
-          })
-
-          writeExecutionToTerminal({
-            activeFileName: activeFile,
-            language: currentLanguage,
-            stdin: '',
-            result: status.result || null,
-            error: '',
-            status: status.status
-          })
-
-          writeTerminalLines(isServerLanguage(currentLanguage) ? 'stdin> ' : '$ ')
-
-          return
-        }
-
-        setExecution(current => ({
-          ...current,
-          status: status.status === 'running' ? 'running' : 'queued'
-        }))
-
-        await new Promise(resolve => {
-          window.setTimeout(resolve, attempt < 8 ? 150 : 300)
-        })
-      }
-
-      writeTerminalLines('Process exited with code 0.')
-
-      setExecution(current => ({
-        ...current,
-        status: 'timeout',
-        result: {
-          stdout: '',
-          stderr: 'Execution polling timed out.',
-          exitCode: null,
-          timedOut: true
-        }
-      }))
-
-      writeExecutionToTerminal({
-        activeFileName: activeFile,
-        language: currentLanguage,
-        stdin: '',
-        result: null,
-        error: 'Execution polling timed out.',
-        status: 'timeout'
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Execution failed'
-
-      setExecution({
-        id: '',
-        status: 'failed',
-        result: null,
-        error: message
-      })
-
-      writeExecutionToTerminal({
-        activeFileName: activeFile,
-        language: currentLanguage,
-        stdin: executionStdin,
-        result: null,
-        error: message,
-        status: 'failed'
-      })
-    }
-  }
-
-  function resetProject() {
-    setExecutionStdin('')
-    terminalInputBuffer.current = ''
-    setFiles(DEFAULT_FILES)
-    setOpenFiles(['index.html'])
-    setActiveFile('index.html')
-    setPreview('')
-    setPreviewKey(value => value + 1)
   }
 
   function renderAiPanel() {
@@ -2865,7 +2670,19 @@ function IDE({ projectId }) {
                     (bottomTab === 'terminal' ? '' : 'panel-hidden')
                   }
                 >
-                  <div className="terminal" ref={terminalRef} />
+                  <div
+                    className="terminal"
+                    ref={terminalRef}
+                    tabIndex={0}
+                    onClick={() => terminalRef.current?.focus()}
+                    onKeyDown={handleTerminalKeyDown}
+                  >
+                    {terminalLines.map((line, index) => (
+                      <div key={index} className="terminal-line">
+                        {line || '\u00a0'}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div
