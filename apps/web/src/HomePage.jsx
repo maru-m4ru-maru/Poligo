@@ -188,8 +188,8 @@ if name:
                 Poligo may suspend or delete the affected accounts without prior notice.
               </p>
               <p>
-                The operator may also prohibit the same person from accessing or using
-                Poligo and all other services operated by the operator, including related accounts.
+                When a violation is confirmed, the operator may permanently prohibit the same person
+                and related accounts from accessing or using Poligo and every other service operated by the operator.
               </p>
             </article>
 
@@ -216,8 +216,8 @@ if name:
               <span>05</span>
               <h3>Suspension and deletion</h3>
               <p>
-                Violations may result in suspension, permanent access restrictions, data deletion,
-                account deletion, or a ban from all services operated by the operator without prior notice.
+                A confirmed violation may result in immediate suspension, permanent access restrictions,
+                data deletion, account deletion, and a ban from all services operated by the operator without prior notice.
               </p>
             </article>
 
