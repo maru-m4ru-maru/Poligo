@@ -6221,10 +6221,30 @@ body {
 }
 
 .terminal {
+  display: block;
   flex: 1;
   min-height: 0;
   width: 100%;
-  padding: 8px 10px;
+  padding: 9px 12px;
+  overflow: auto;
+  outline: none;
+  background: #090c11;
+  color: #D9D9D2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.terminal:focus {
+  box-shadow: inset 0 0 0 1px #252c36;
+}
+
+.terminal-line {
+  min-height: 1.55em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 
