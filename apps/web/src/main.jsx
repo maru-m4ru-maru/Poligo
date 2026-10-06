@@ -649,6 +649,11 @@ function IDE({ projectId }) {
   const [sourceSelectedCommit, setSourceSelectedCommit] = useState('')
   const [sourceLoading, setSourceLoading] = useState(false)
   const [sourceError, setSourceError] = useState('')
+  const [aiMessages, setAiMessages] = useState([])
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiMode, setAiMode] = useState('auto')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiAutoApply, setAiAutoApply] = useState(() => localStorage.getItem('poligo-ai-auto-apply') === 'true')
   const [dialog, setDialog] = useState(null)
   const [dialogBusy, setDialogBusy] = useState(false)
   const terminalRef = useRef(null)
@@ -752,6 +757,15 @@ function IDE({ projectId }) {
       hint: '実行エラーを表示',
       run: () => {
         setBottomTab('problems')
+        setBottomOpen(true)
+      }
+    },
+    {
+      id: 'ai',
+      title: 'Poligo AIを開く',
+      hint: 'コード支援AI',
+      run: () => {
+        setBottomTab('ai')
         setBottomOpen(true)
       }
     },
@@ -1620,6 +1634,207 @@ function IDE({ projectId }) {
     }
   }, [currentProjectId, projectName, files, dialog, dialogBusy])
 
+  function applyAiEdits(edits) {
+    if (!Array.isArray(edits) || !edits.length) {
+      return {
+        ok: true,
+        changedFiles: []
+      }
+    }
+
+    const next = { ...filesRef.current }
+    const changedFiles = []
+
+    try {
+      for (const edit of edits) {
+        const path = typeof edit?.path === 'string' ? edit.path.trim() : ''
+        const oldText = typeof edit?.oldText === 'string' ? edit.oldText : null
+        const newText = typeof edit?.newText === 'string' ? edit.newText : null
+
+        if (!path || oldText === null || newText === null) {
+          throw new Error('AIが無効な変更情報を返しました。')
+        }
+
+        const exists = Object.prototype.hasOwnProperty.call(next, path)
+
+        if (!exists && oldText !== '') {
+          throw new Error(path + ' が見つからないため変更を適用できません。')
+        }
+
+        if (!exists && oldText === '') {
+          next[path] = newText
+          changedFiles.push(path)
+          continue
+        }
+
+        const current = next[path]
+        const firstIndex = current.indexOf(oldText)
+        const lastIndex = current.lastIndexOf(oldText)
+
+        if (firstIndex < 0) {
+          throw new Error(path + ' の対象コードが現在の内容と一致しません。')
+        }
+
+        if (firstIndex !== lastIndex) {
+          throw new Error(path + ' の対象コードが複数箇所にあるため、安全のため適用を停止しました。')
+        }
+
+        next[path] =
+          current.slice(0, firstIndex) +
+          newText +
+          current.slice(firstIndex + oldText.length)
+        changedFiles.push(path)
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'AIの変更を適用できませんでした。'
+      }
+    }
+
+    filesRef.current = next
+    setFiles(next)
+
+    const firstChangedFile = changedFiles[0]
+
+    if (firstChangedFile && !openFiles.includes(firstChangedFile)) {
+      setOpenFiles(current => current.includes(firstChangedFile)
+        ? current
+        : [...current, firstChangedFile]
+      )
+    }
+
+    if (firstChangedFile) {
+      setActiveFile(firstChangedFile)
+    }
+
+    setPreview('')
+    setPreviewKey(value => value + 1)
+
+    return {
+      ok: true,
+      changedFiles: [...new Set(changedFiles)]
+    }
+  }
+
+  function applyAiMessage(index, automatic = false) {
+    const message = aiMessages[index]
+
+    if (!message?.edits?.length || message.applied) {
+      return
+    }
+
+    if (automatic) {
+      localStorage.setItem('poligo-ai-auto-apply', 'true')
+      setAiAutoApply(true)
+    }
+
+    const result = applyAiEdits(message.edits)
+
+    setAiMessages(current => current.map((item, itemIndex) => (
+      itemIndex === index
+        ? {
+            ...item,
+            applied: result.ok,
+            applyError: result.ok ? '' : result.error
+          }
+        : item
+    )))
+  }
+
+  async function submitAiRequest() {
+    const prompt = aiPrompt.trim()
+
+    if (!prompt || aiBusy) {
+      return
+    }
+
+    const selection = editorRef.current?.getSelection()
+    const selectedText = selection
+      ? editorRef.current?.getModel()?.getValueInRange(selection) || ''
+      : ''
+    const contextFiles = {}
+    let contextBytes = 0
+
+    for (const [path, content] of Object.entries(filesRef.current)) {
+      if (path !== activeFile && contextBytes > 90_000) {
+        break
+      }
+
+      const limitedContent = content.slice(0, path === activeFile ? 60_000 : 12_000)
+      contextFiles[path] = limitedContent
+      contextBytes += limitedContent.length
+    }
+
+    setAiMessages(current => [
+      ...current,
+      {
+        role: 'user',
+        text: prompt
+      }
+    ])
+    setAiPrompt('')
+    setAiBusy(true)
+    setBottomOpen(true)
+    setBottomTab('ai')
+
+    try {
+      const result = await request('/api/ai/assist', {
+        method: 'POST',
+        body: JSON.stringify({
+          prompt,
+          mode: aiMode,
+          action: 'assist',
+          projectName,
+          currentFile: activeFile,
+          language: currentLanguage,
+          selectedText: selectedText.slice(0, 20_000),
+          files: contextFiles
+        })
+      })
+
+      const messageIndex = aiMessages.length + 1
+      const responseMessage = {
+        role: 'assistant',
+        text: result.reply || 'AIから応答がありませんでした。',
+        edits: Array.isArray(result.edits) ? result.edits : [],
+        model: result.model || '',
+        applied: false,
+        applyError: ''
+      }
+
+      setAiMessages(current => [...current, responseMessage])
+
+      if (aiAutoApply && responseMessage.edits.length) {
+        const applied = applyAiEdits(responseMessage.edits)
+
+        setAiMessages(current => current.map((item, index) => (
+          index === messageIndex
+            ? {
+                ...item,
+                applied: applied.ok,
+                applyError: applied.ok ? '' : applied.error
+              }
+            : item
+        )))
+      }
+    } catch (error) {
+      setAiMessages(current => [
+        ...current,
+        {
+          role: 'assistant',
+          text: error instanceof Error ? error.message : 'AIリクエストに失敗しました。',
+          edits: [],
+          model: '',
+          applied: false,
+          applyError: ''
+        }
+      ])
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   async function runProject() {
     refreshPreview()
     setBottomOpen(true)
@@ -1913,6 +2128,15 @@ function IDE({ projectId }) {
           <span className="account-name">
             {session?.user?.name}
           </span>
+          <button
+            className="dashboard-button"
+            onClick={() => {
+              setBottomTab('ai')
+              setBottomOpen(true)
+            }}
+          >
+            AI
+          </button>
           <button className="dashboard-button" onClick={() => navigate('/dashboard')}>
             ダッシュボード
           </button>
@@ -2233,6 +2457,7 @@ function IDE({ projectId }) {
             <div className={'bottom-panel ' + (bottomOpen ? 'open' : '')}>
               <div className="bottom-tabs">
                 {[
+                  ['ai', 'AI'],
                   ['terminal', 'ターミナル'],
                   ['output', '出力'],
                   ['problems', '問題']
@@ -2254,6 +2479,117 @@ function IDE({ projectId }) {
               </div>
               {bottomOpen && (
                 <div className="bottom-content">
+                  {bottomTab === 'ai' && (
+                    <div className="ai-panel">
+                      <div className="ai-panel-head">
+                        <div>
+                          <strong>Poligo AI</strong>
+                          <span>OpenRouter</span>
+                        </div>
+                        <div className="ai-model-picker" role="group" aria-label="AIモデル">
+                          {[
+                            ['auto', '自動'],
+                            ['fast', '高速'],
+                            ['code', 'Coder 32B'],
+                            ['reasoning', '推論 32B']
+                          ].map(([id, label]) => (
+                            <button
+                              key={id}
+                              type="button"
+                              className={aiMode === id ? 'active' : ''}
+                              onClick={() => setAiMode(id)}
+                              disabled={aiBusy}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="ai-message-list">
+                        {!aiMessages.length && (
+                          <div className="ai-empty">
+                            <strong>コードについて相談できます。</strong>
+                            <span>現在のファイル、選択範囲、プロジェクト内のファイルをAIに渡せます。</span>
+                          </div>
+                        )}
+
+                        {aiMessages.map((message, index) => (
+                          <div key={index} className={'ai-message ai-message-' + message.role}>
+                            <div className="ai-message-role">
+                              {message.role === 'user' ? 'あなた' : 'Poligo AI'}
+                              {message.model && <span>{message.model}</span>}
+                            </div>
+                            <div className="ai-message-text">{message.text}</div>
+
+                            {message.edits?.length > 0 && (
+                              <div className="ai-edit-card">
+                                <div className="ai-edit-title">コード変更 {message.edits.length}件</div>
+                                <div className="ai-edit-files">
+                                  {[...new Set(message.edits.map(edit => edit.path))].map(path => (
+                                    <span key={path}>{path}</span>
+                                  ))}
+                                </div>
+                                {message.applyError && (
+                                  <div className="ai-apply-error">{message.applyError}</div>
+                                )}
+                                {!message.applied ? (
+                                  <div className="ai-edit-actions">
+                                    <button
+                                      type="button"
+                                      onClick={() => applyAiMessage(index, false)}
+                                    >
+                                      1度だけ適用
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="primary"
+                                      onClick={() => applyAiMessage(index, true)}
+                                    >
+                                      毎回確認せず適用
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="ai-applied">適用済み</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {aiBusy && (
+                          <div className="ai-message ai-message-assistant">
+                            <div className="ai-message-role">Poligo AI</div>
+                            <div className="ai-thinking">考えています...</div>
+                          </div>
+                        )}
+                      </div>
+
+                      <form
+                        className="ai-input-area"
+                        onSubmit={event => {
+                          event.preventDefault()
+                          void submitAiRequest()
+                        }}
+                      >
+                        <textarea
+                          value={aiPrompt}
+                          onChange={event => setAiPrompt(event.target.value)}
+                          placeholder="コードの質問、バグ修正、リファクタリング、機能追加など..."
+                          rows={3}
+                          disabled={aiBusy}
+                        />
+                        <div className="ai-input-footer">
+                          <span>
+                            {aiAutoApply ? '自動適用: ON' : '変更は確認後に適用'}
+                          </span>
+                          <button type="submit" disabled={aiBusy || !aiPrompt.trim()}>
+                            {aiBusy ? '処理中...' : '送信'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
                   {bottomTab === 'terminal' && <div className="terminal" ref={terminalRef} />}
                   {bottomTab === 'output' && (
                     <div className="output-panel">
