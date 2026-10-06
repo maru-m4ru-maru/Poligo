@@ -7106,3 +7106,19 @@ body {
   height: auto;
   object-fit: contain;
 }
+
+
+.home-language-chip {
+  border-color: #d8e1ec;
+  background: #ffffff;
+  color: #111827;
+}
+
+.home-language-chip:hover {
+  border-color: #93b4e8;
+  background: #eff6ff;
+}
+
+.home-language-chip span {
+  color: #111827;
+}
