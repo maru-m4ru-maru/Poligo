@@ -6000,3 +6000,83 @@ body {
     white-space: normal;
   }
 }
+
+
+.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 72px;
+  align-items: center;
+  padding: 84px 0 76px;
+}
+
+.home-hero-copy {
+  max-width: 760px;
+  margin: 0;
+  text-align: left;
+}
+
+.home-hero h1 {
+  text-align: left;
+}
+
+.home-hero-copy p {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.home-hero-actions {
+  justify-content: flex-start;
+}
+
+.home-trust-line {
+  justify-content: flex-start;
+}
+
+.home-hero-brand {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+  border: 1px solid #162d4c;
+  background: #070b12;
+}
+
+.home-hero-brand-inner {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 40px;
+}
+
+.home-hero-brand-inner img {
+  display: block;
+  width: min(220px, 70%);
+  height: auto;
+}
+
+.home-hero-brand-inner span {
+  color: #6f86a5;
+  font-size: 11px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .home-hero {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .home-hero-brand {
+    min-height: 220px;
+  }
+
+  .home-hero-brand-inner img {
+    width: min(180px, 60%);
+  }
+}
+
+@media (max-width: 680px) {
+  .home-hero {
+    padding: 58px 0 54px;
+  }
+}
