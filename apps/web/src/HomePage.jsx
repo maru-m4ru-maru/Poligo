@@ -37,24 +37,26 @@ export default function HomePage({ session }) {
 
         <div className="home-nav-actions">
           <button onClick={() => navigate('/terms')}>
-            Terms
+            利用規約
           </button>
           <a href="https://poligo1.statuspage.io/" target="_blank" rel="noreferrer">
-            Status
+            ステータス
           </a>
           {session?.user ? (
             <>
-              <button onClick={() => navigate('/dashboard')}>Dashboard</button>
+              <button onClick={() => navigate('/dashboard')}>ダッシュボード</button>
               <button className="home-nav-primary" onClick={() => navigate('/ide')}>
-                Open IDE
+                IDEを開く
               </button>
             </>
           ) : (
             <>
-              <button onClick={() => navigate('/signin')}>Sign in</button>
-          <button onClick={() => navigate('/terms')}>Terms</button>
+              <button onClick={() => navigate('/signin')}>サインイン</button>
+              <button onClick={() => navigate('/createaccount')}>
+                利用規約
+              </button>
               <button className="home-nav-primary" onClick={() => navigate('/createaccount')}>
-                Get started
+                アカウントを作成
               </button>
             </>
           )}
@@ -65,25 +67,31 @@ export default function HomePage({ session }) {
         <section className="home-hero">
           <div className="home-hero-copy">
             <span className="home-eyebrow">POLIGO CLOUD IDE</span>
-            <h1>Build without<br />the lock-in.</h1>
+            <h1>縛られずに<br />コードを作る。</h1>
             <p>
-              A browser-based workspace for writing, running, and saving code.
-              Keep your projects in one place and move at your own pace.
+              コードの作成、実行、保存をブラウザだけで完結できるクラウドIDE。
+              プロジェクトをひとつの場所にまとめて、自由なペースで開発できます。
             </p>
 
             <div className="home-hero-actions">
               <button className="home-primary-button" onClick={() => navigate(session?.user ? '/ide' : '/createaccount')}>
-                {session?.user ? 'Open your IDE' : 'Create an account'}
+                {session?.user ? 'IDEを開く' : 'アカウントを作成'}
                 <span>→</span>
               </button>
-              <button className="home-secondary-button" onClick={() => navigate('/dashboard')}>
-                View dashboard
+              <button className="home-secondary-button" onClick={() => {
+                if (session?.user) {
+                  navigate('/dashboard')
+                } else {
+                  navigate('/signin')
+                }
+              }}>
+                ダッシュボードを見る
               </button>
             </div>
 
             <div className="home-trust-line">
               <span className="home-status-dot" />
-              Cloud projects · Multi-language execution · Source history
+              クラウドプロジェクト · 多言語実行 · ソース履歴
             </div>
           </div>
 
@@ -137,25 +145,25 @@ if name:
         <section className="home-feature-strip">
           <article>
             <span>01</span>
-            <h2>Write</h2>
-            <p>Monaco-powered editing with a familiar desktop IDE feel.</p>
+            <h2>書く</h2>
+            <p>使い慣れたデスクトップIDEの感覚でコードを編集できます。</p>
           </article>
           <article>
             <span>02</span>
-            <h2>Run</h2>
-            <p>Execute supported languages from the same browser workspace.</p>
+            <h2>実行</h2>
+            <p>同じブラウザ上のワークスペースから対応言語を実行できます。</p>
           </article>
           <article>
             <span>03</span>
-            <h2>Keep</h2>
-            <p>Persist projects, files, and source history in the cloud.</p>
+            <h2>保存</h2>
+            <p>プロジェクト、ファイル、ソース履歴をクラウドに保存できます。</p>
           </article>
         </section>
 
         <section className="home-language-section">
           <div>
-            <span className="home-eyebrow">SUPPORTED WORKFLOWS</span>
-            <h2>From static pages to native code.</h2>
+            <span className="home-eyebrow">対応言語</span>
+            <h2>静的なページからネイティブコードまで。</h2>
           </div>
           <div className="home-language-list">
             {LANGUAGES.map(language => (
@@ -173,8 +181,8 @@ if name:
       <footer className="home-footer">
         <span>© Poligo</span>
         <div>
-          <a href="https://poligo1.statuspage.io/" target="_blank" rel="noreferrer">System status</a>
-          <button onClick={() => navigate('/signin')}>Sign in</button>
+          <a href="https://poligo1.statuspage.io/" target="_blank" rel="noreferrer">システムステータス</a>
+          <button onClick={() => navigate('/signin')}>サインイン</button>
         </div>
       </footer>
     </div>
