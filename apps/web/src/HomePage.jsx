@@ -45,7 +45,10 @@ export default function HomePage({ session }) {
           {session?.user ? (
             <>
               <button onClick={() => navigate('/dashboard')}>ダッシュボード</button>
-              <button className="home-nav-primary" onClick={() => navigate('/ide')}>
+              <button className="home-nav-primary" onClick={() => {
+                const projectId = localStorage.getItem('poligo-current-project')
+                navigate(projectId ? '/ide/' + encodeURIComponent(projectId) : '/dashboard')
+              }}>
                 IDEを開く
               </button>
             </>
@@ -74,7 +77,15 @@ export default function HomePage({ session }) {
             </p>
 
             <div className="home-hero-actions">
-              <button className="home-primary-button" onClick={() => navigate(session?.user ? '/ide' : '/createaccount')}>
+              <button className="home-primary-button" onClick={() => {
+                if (!session?.user) {
+                  navigate('/createaccount')
+                  return
+                }
+
+                const projectId = localStorage.getItem('poligo-current-project')
+                navigate(projectId ? '/ide/' + encodeURIComponent(projectId) : '/dashboard')
+              }}>
                 {session?.user ? 'IDEを開く' : 'アカウントを作成'}
                 <span>→</span>
               </button>
