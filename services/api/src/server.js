@@ -21,6 +21,52 @@ const MAX_PROJECT_BYTES = 5_000_000
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
 
+function parseEnvFile(content) {
+  const env = {}
+
+  if (typeof content !== 'string') {
+    return env
+  }
+
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim()
+
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue
+    }
+
+    const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
+
+    if (!match) {
+      continue
+    }
+
+    let value = match[2].trim()
+
+    if (value.startsWith('"') && value.endsWith('"')) {
+      try {
+        value = JSON.parse(value)
+      } catch {
+        value = value.slice(1, -1)
+      }
+    } else if (value.startsWith("'") && value.endsWith("'")) {
+      value = value.slice(1, -1)
+    }
+
+    env[match[1]] = value
+  }
+
+  return env
+}
+
+function getExecutionEnvironment(files) {
+  if (!files || typeof files !== 'object' || typeof files['.env'] !== 'string') {
+    return {}
+  }
+
+  return parseEnvFile(files['.env'])
+}
+
 function setCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   response.setHeader('Access-Control-Allow-Credentials', 'true')
@@ -969,8 +1015,13 @@ async function handleJudge0Execution(request, response) {
     return
   }
 
+  const environment = getExecutionEnvironment(files)
+  const preparedSource = payload.language === 'python' && Object.keys(environment).length
+    ? 'import os\nos.environ.update(' + JSON.stringify(environment) + ')\n\n' + source
+    : source
+
   const submitted = await submitJudge0(
-    source,
+    preparedSource,
     languageId,
     payload.stdin
   )
@@ -1080,7 +1131,8 @@ async function handleExecution(request, response) {
         id,
         language: payload.language || 'plaintext',
         entrypoint: payload.entrypoint || null,
-        files: payload.files || {}
+        files: payload.files || {},
+        env: getExecutionEnvironment(payload.files)
       })
     }
   )
@@ -1182,6 +1234,10 @@ function trimAiFileContext(files) {
   }
 
   for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
     if (
       typeof path !== 'string' ||
       typeof content !== 'string' ||
@@ -1202,6 +1258,10 @@ function trimAiFileContext(files) {
   }
 
   return result
+}
+
+function isSecretEnvFile(path) {
+  return path === '.env' || (path.startsWith('.env.') && path !== '.env.example')
 }
 
 function parseAiResponse(text) {
@@ -1233,6 +1293,7 @@ function buildAiSystemPrompt() {
     '{"reply":"string","edits":[{"path":"string","oldText":"string","newText":"string"}]}',
     'reply is the human-readable answer. edits is an array of safe, minimal code changes.',
     'Only include edits when code should actually change.',
+    'Never read, reveal, or modify .env or other secret environment files. Treat .env.example as safe.',
     'Each oldText must match the current file content exactly and must be unique within that file.',
     'Use oldText="" only when creating a new file that does not exist.',
     'Only modify files present in the supplied context, unless creating a new file is clearly required.',
@@ -1271,9 +1332,11 @@ async function handleAiAssist(request, response) {
     return
   }
 
-  const selected = typeof payload.selectedText === 'string'
-    ? payload.selectedText.slice(0, 20_000)
-    : ''
+  const selected = currentFile && isSecretEnvFile(currentFile)
+    ? ''
+    : typeof payload.selectedText === 'string'
+      ? payload.selectedText.slice(0, 20_000)
+      : ''
   const currentFile = typeof payload.currentFile === 'string'
     ? payload.currentFile.slice(0, 240)
     : ''
