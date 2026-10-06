@@ -2184,7 +2184,6 @@ function IDE({ projectId }) {
                         </div>
                       </form>
                     </div>
-                  )
     )
   }
 
