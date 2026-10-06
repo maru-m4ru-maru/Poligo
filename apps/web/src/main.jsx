@@ -1759,25 +1759,43 @@ function IDE() {
 }
 
 
+function getRoutePath() {
+  const hashPath = window.location.hash.replace(/^#/, '')
+
+  if (hashPath === '/dashboard') {
+    return '/dashboard'
+  }
+
+  return window.location.pathname
+}
+
 function navigate(path) {
+  if (path === '/dashboard') {
+    window.history.pushState({}, '', '/')
+    window.location.hash = '/dashboard'
+    return
+  }
+
   window.history.pushState({}, '', path)
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
 function AppRouter() {
-  const [pathname, setPathname] = useState(window.location.pathname)
+  const [pathname, setPathname] = useState(getRoutePath())
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
 
   useEffect(() => {
     function updatePath() {
-      setPathname(window.location.pathname)
+      setPathname(getRoutePath())
     }
 
     window.addEventListener('popstate', updatePath)
+    window.addEventListener('hashchange', updatePath)
 
     return () => {
       window.removeEventListener('popstate', updatePath)
+      window.removeEventListener('hashchange', updatePath)
     }
   }, [])
 
