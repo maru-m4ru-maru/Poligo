@@ -259,6 +259,8 @@ function IDE({ projectId }) {
   const [quickOpenQuery, setQuickOpenQuery] = useState('')
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
+  const [newFileOpen, setNewFileOpen] = useState(false)
+  const [newFileName, setNewFileName] = useState('')
   const [previewKey, setPreviewKey] = useState(0)
   const [execution, setExecution] = useState({
     id: '',
@@ -844,34 +846,42 @@ function IDE({ projectId }) {
     }
   }
 
-  async function createFile() {
-    openInputDialog({
-      title: 'ファイルを作成',
-      message: 'Choose a file name for the new file.',
-      placeholder: 'example.py',
-      confirmLabel: 'Create',
-      onConfirm: async value => {
-        const normalized = value.trim()
+  function createFile() {
+    setNewFileName('')
+    setNewFileOpen(true)
+  }
 
-        if (!normalized || normalized.includes('/') || normalized.includes('\\')) {
-          return
-        }
+  function cancelCreateFile() {
+    setNewFileOpen(false)
+    setNewFileName('')
+  }
 
-        if (Object.prototype.hasOwnProperty.call(files, normalized)) {
-          setActiveFile(normalized)
-          setOpenFiles(current => current.includes(normalized) ? current : [...current, normalized])
-          return
-        }
+  function commitCreateFile() {
+    const normalized = newFileName.trim()
 
-        setFiles(current => ({
-          ...current,
-          [normalized]: ''
-        }))
-        setActiveFile(normalized)
-        setOpenFiles(current => [...current, normalized])
-        setSaveStatus('saving')
-      }
-    })
+    if (!normalized || normalized.includes('/') || normalized.includes('\\')) {
+      return
+    }
+
+    if (Object.prototype.hasOwnProperty.call(files, normalized)) {
+      setActiveFile(normalized)
+      setOpenFiles(current =>
+        current.includes(normalized)
+          ? current
+          : [...current, normalized]
+      )
+      cancelCreateFile()
+      return
+    }
+
+    setFiles(current => ({
+      ...current,
+      [normalized]: ''
+    }))
+    setActiveFile(normalized)
+    setOpenFiles(current => [...current, normalized])
+    setSaveStatus('saving')
+    cancelCreateFile()
   }
 
   async function deleteFile(name = activeFile) {
@@ -1446,6 +1456,35 @@ function IDE({ projectId }) {
             <>
               <div className="project-folder"><span>⌄</span><span>POLIGO</span></div>
               <div className="file-list">
+                {newFileOpen && (
+                  <div className="explorer-new-file">
+                    <FileIcon kind={getFileMeta(newFileName || 'file.txt').kind} size={14} />
+                    <input
+                      autoFocus
+                      value={newFileName}
+                      onChange={event => setNewFileName(event.target.value)}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          commitCreateFile()
+                        }
+
+                        if (event.key === 'Escape') {
+                          event.preventDefault()
+                          cancelCreateFile()
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!newFileName.trim()) {
+                          cancelCreateFile()
+                        }
+                      }}
+                      placeholder="ファイル名"
+                      aria-label="新しいファイル名"
+                    />
+                  </div>
+                )}
+
                 {Object.keys(files).map(name => (
                   <button
                     key={name}
