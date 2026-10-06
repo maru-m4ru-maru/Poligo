@@ -4,9 +4,9 @@ import { authClient } from './auth-client'
 export default function AuthPage({ mode }) {
   const isSignUp = mode === 'signup'
   const { isPending } = authClient.useSession()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [name, set名前] = useState('')
+  const [email, setメールアドレス] = useState('')
+  const [password, setパスワード] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -55,34 +55,34 @@ export default function AuthPage({ mode }) {
 
   if (isPending) {
     return (
-      <div className="auth-page">
-        <div className="auth-page-card">
-          <img className="auth-page-logo" src="/poligo-logo.svg" alt="Poligo" />
-          <div className="auth-page-loading">Checking session...</div>
+      <div class名前="auth-page">
+        <div class名前="auth-page-card">
+          <img class名前="auth-page-logo" src="/poligo-logo.svg" alt="Poligo" />
+          <div class名前="auth-page-loading">Checking session...</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-page-card">
-        <img className="auth-page-logo" src="/poligo-logo.svg" alt="Poligo" />
-        <div className="auth-page-accent" />
-        <h1>{isSignUp ? 'Create account' : 'Sign in'}</h1>
+    <div class名前="auth-page">
+      <div class名前="auth-page-card">
+        <img class名前="auth-page-logo" src="/poligo-logo.svg" alt="Poligo" />
+        <div class名前="auth-page-accent" />
+        <h1>{isSignUp ? 'アカウントを作成' : 'サインイン'}</h1>
         <p>
           {isSignUp
-            ? 'Create your Poligo account and keep your projects in the cloud.'
-            : 'Sign in to access your Poligo projects.'}
+            ? '作成 your Poligo account and keep your projects in the cloud.'
+            : 'サインイン to access your Poligo projects.'}
         </p>
 
-        <form className="auth-page-form" onSubmit={submit}>
+        <form class名前="auth-page-form" onSubmit={submit}>
           {isSignUp && (
             <label>
               <span>Display name</span>
               <input
                 value={name}
-                onChange={event => setName(event.target.value)}
+                onChange={event => set名前(event.target.value)}
                 autoComplete="name"
                 required
               />
@@ -90,10 +90,10 @@ export default function AuthPage({ mode }) {
           )}
 
           <label>
-            <span>Email</span>
+            <span>メールアドレス</span>
             <input
               value={email}
-              onChange={event => setEmail(event.target.value)}
+              onChange={event => setメールアドレス(event.target.value)}
               type="email"
               autoComplete="email"
               required
@@ -101,10 +101,10 @@ export default function AuthPage({ mode }) {
           </label>
 
           <label>
-            <span>Password</span>
+            <span>パスワード</span>
             <input
               value={password}
-              onChange={event => setPassword(event.target.value)}
+              onChange={event => setパスワード(event.target.value)}
               type="password"
               autoComplete={isSignUp ? 'new-password' : 'current-password'}
               minLength={8}
@@ -113,26 +113,26 @@ export default function AuthPage({ mode }) {
           </label>
 
           {error && (
-            <div className="auth-page-error">
+            <div class名前="auth-page-error">
               {error}
             </div>
           )}
 
-          <button className="auth-page-submit" type="submit" disabled={busy}>
+          <button class名前="auth-page-submit" type="submit" disabled={busy}>
             {busy
               ? isSignUp ? 'Creating account...' : 'Signing in...'
-              : isSignUp ? 'Create account' : 'Sign in'}
+              : isSignUp ? 'アカウントを作成' : 'サインイン'}
           </button>
         </form>
 
         <button
-          className="auth-page-switch"
+          class名前="auth-page-switch"
           type="button"
           onClick={() => switchMode(isSignUp ? 'signin' : 'signup')}
         >
           {isSignUp
-            ? 'Already have an account? Sign in'
-            : 'New to Poligo? Create an account'}
+            ? 'すでにアカウントをお持ちですか？ サインイン'
+            : 'New to Poligo? 作成 an account'}
         </button>
       </div>
     </div>
