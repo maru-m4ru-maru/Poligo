@@ -170,7 +170,7 @@ export default function AccountPage({ session }) {
           onClick={() => navigate('/dashboard')}
         >
           <span className="account-brand-logo">
-            <img src="/poligo-logo.svg" alt="Poligo" />
+            <img src="/poligo-logo-dark.svg" alt="Poligo" />
           </span>
         </button>
 
