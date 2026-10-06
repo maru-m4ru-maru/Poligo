@@ -286,7 +286,7 @@ function inlineCssReferences(source, filePath, files, seen = new Set()) {
   nextSeen.add(filePath)
 
   let css = source.replace(
-    /@import\\s+(?:url\\(\\s*)?["']?([^"'\\)\\s]+)["']?\\s*\\)?\\s*([^;]*);/gi,
+    /@import\s+(?:url\(\s*)?["']?([^"'\)\s]+)["']?\s*\)?\s*([^;]*);/gi,
     (match, reference, media) => {
       const resolved = resolveVirtualPath(filePath, reference)
       const imported = resolved ? files[resolved] : null
@@ -313,7 +313,7 @@ function inlineCssReferences(source, filePath, files, seen = new Set()) {
   )
 
   css = css.replace(
-    /url\\(\\s*["']?([^"'\\)]+)["']?\\s*\\)/gi,
+    /url\(\s*["']?([^"'\)]+)["']?\s*\)/gi,
     (match, reference) => {
       const resolved = resolveVirtualPath(filePath, reference)
       const asset = resolved ? files[resolved] : null
@@ -346,7 +346,7 @@ function rewriteModuleImports(source, filePath, files, seen = new Set()) {
   nextSeen.add(filePath)
 
   return source.replace(
-    /((?:import\\s+(?:[^'"]+?\\s+from\\s+)?|export\\s+(?:[^'"]+?\\s+from\\s+)?|import\\s*\\(\\s*))(["'])([^"']+)(\\2)/g,
+    /((?:import\s+(?:[^'"]+?\s+from\s+)?|export\s+(?:[^'"]+?\s+from\s+)?|import\s*\(\s*))(["'])([^"']+)(\2)/g,
     (match, prefix, quote, reference) => {
       const resolved = resolveVirtualPath(filePath, reference)
       const module = resolved ? files[resolved] : null
@@ -387,36 +387,36 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
 
   let html = files[entryFile]
 
-  if (!/<!doctype\\s+html/i.test(html)) {
-    html = '<!doctype html>\\n' + html
+  if (!/<!doctype\s+html/i.test(html)) {
+    html = '<!doctype html>\n' + html
   }
 
-  if (!/<html[\\s>]/i.test(html)) {
+  if (!/<html[\s>]/i.test(html)) {
     html =
       '<!doctype html><html lang="ja"><head></head><body>' +
       html.replace(/^<!doctype[^>]*>/i, '') +
       '</body></html>'
   }
 
-  if (!/<head[\\s>]/i.test(html)) {
+  if (!/<head[\s>]/i.test(html)) {
     html = html.replace(
       /<html([^>]*)>/i,
       '<html$1><head></head>'
     )
   }
 
-  if (!/<body[\\s>]/i.test(html)) {
+  if (!/<body[\s>]/i.test(html)) {
     html = html.replace(
-      /<\\/html>/i,
+      /<\/html>/i,
       '<body></body></html>'
     )
   }
 
   html = html.replace(
-    /<link\\b[^>]*>/gi,
+    /<link\b[^>]*>/gi,
     tag => {
-      const rel = tag.match(/\\brel\\s*=\\s*["']([^"']+)["']/i)?.[1]?.toLowerCase()
-      const href = tag.match(/\\bhref\\s*=\\s*["']([^"']+)["']/i)?.[1]
+      const rel = tag.match(/\brel\s*=\s*["']([^"']+)["']/i)?.[1]?.toLowerCase()
+      const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1]
 
       if (rel === 'stylesheet' && href) {
         const resolved = resolveVirtualPath(entryFile, href)
@@ -452,7 +452,7 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
     const css = inlineCssReferences(files['style.css'], 'style.css', files)
 
     html = html.replace(
-      /<\\/head>/i,
+      /<\/head>/i,
       '<style data-poligo-file="style.css">' +
         escapeInlineStyle(css) +
         '</style></head>'
@@ -460,8 +460,8 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
   }
 
   html = html.replace(
-    /<script\\b([^>]*)\\bsrc\\s*=\\s*["']([^"']+)["']([^>]*)>([\\s\\S]*?)<\\/script>/gi,
-    (match, before, reference, after, inline) => {
+    /<script\b([^>]*?)\bsrc\s*=\s*["']([^"']+)["']([^>]*)>([\s\S]*?)<\/script>/gi,
+    (match, before, reference, after) => {
       const resolved = resolveVirtualPath(entryFile, reference)
       const script = resolved ? files[resolved] : null
 
@@ -469,7 +469,7 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
         return match
       }
 
-      const typeMatch = (before + after).match(/\\btype\\s*=\\s*["']([^"']+)["']/i)
+      const typeMatch = (before + after).match(/\btype\s*=\s*["']([^"']+)["']/i)
       const type = typeMatch?.[1]?.toLowerCase()
 
       if (type === 'module') {
@@ -493,9 +493,9 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
   )
 
   html = html.replace(
-    /<(img|source|video|audio|track|image|use)\\b([^>]*)>/gi,
+    /<(img|source|video|audio|track|image|use)\b([^>]*)>/gi,
     (match, tagName, attributes) => {
-      const sourceMatch = attributes.match(/\\b(src|href)\\s*=\\s*["']([^"']+)["']/i)
+      const sourceMatch = attributes.match(/\b(src|href)\s*=\s*["']([^"']+)["']/i)
 
       if (!sourceMatch) {
         return match
@@ -536,7 +536,7 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
   )
 
   html = html.replace(
-    /<a\\b([^>]*)href\\s*=\\s*["']([^"']+\\.html?)["']([^>]*)>/gi,
+    /<a\b([^>]*)href\s*=\s*["']([^"']+\.html?)["']([^>]*)>/gi,
     (match, before, reference, after) => {
       if (depth >= 2) {
         return match
