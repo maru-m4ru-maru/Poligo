@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
 import { auth, initializeAuthDatabase } from './auth.js'
 import { getDatabase, getDatabaseStatus, initializeDatabase } from './turso.js'
+import {
+  decryptProjectSecrets,
+  encryptProjectSecrets
+} from './secretStore.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -541,7 +545,7 @@ async function getProjectById(projectId, ownerId) {
     files[file.path] = file.content
   }
 
-  return serializeProject(row, files)
+  return serializeProject(row, decryptProjectSecrets(files))
 }
 
 async function listProjects(ownerId) {
@@ -571,7 +575,9 @@ async function createProject(ownerId, payload) {
     }
   ]
 
-  for (const [path, content] of Object.entries(payload.files)) {
+  const storedFiles = encryptProjectSecrets(payload.files)
+
+  for (const [path, content] of Object.entries(storedFiles)) {
     statements.push({
       sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
       args: [id, path, content]
@@ -609,7 +615,9 @@ async function updateProject(projectId, ownerId, payload) {
     }
   ]
 
-  for (const [path, content] of Object.entries(payload.files)) {
+  const storedFiles = encryptProjectSecrets(payload.files)
+
+  for (const [path, content] of Object.entries(storedFiles)) {
     statements.push({
       sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
       args: [projectId, path, content]
@@ -693,7 +701,7 @@ async function getCommit(projectId, ownerId, commitId) {
     authorId: commit.author_id,
     message: commit.message,
     createdAt: Number(commit.created_at),
-    files
+    files: decryptProjectSecrets(files)
   }
 }
 
@@ -724,7 +732,9 @@ async function ensureInitialCommit(projectId, ownerId) {
     }
   ]
 
-  for (const [filePath, fileContent] of Object.entries(project.files)) {
+  const storedFiles = encryptProjectSecrets(project.files)
+
+  for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
       sql: 'INSERT INTO project_commit_files (commit_id, path, content) VALUES (?, ?, ?)',
       args: [commitId, filePath, fileContent]
@@ -759,7 +769,9 @@ async function commitProject(projectId, ownerId, payload) {
     }
   ]
 
-  for (const [filePath, fileContent] of Object.entries(project.files)) {
+  const storedFiles = encryptProjectSecrets(project.files)
+
+  for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
       sql: 'INSERT INTO project_commit_files (commit_id, path, content) VALUES (?, ?, ?)',
       args: [commitId, filePath, fileContent]
