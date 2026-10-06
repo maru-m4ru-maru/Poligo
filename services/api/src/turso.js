@@ -79,10 +79,10 @@ export async function initializeDatabase() {
     ], 'immediate')
 
     const secretRows = await database.prepare(
-      'SELECT project_id, path, content FROM project_files'
+      `SELECT project_id, path, content FROM project_files WHERE path = '.env' OR path LIKE '%.env.%' OR path LIKE '%/.env' OR path LIKE '%/.env.%'`
     )
     const commitSecretRows = await database.prepare(
-      'SELECT commit_id, path, content FROM project_commit_files'
+      `SELECT commit_id, path, content FROM project_commit_files WHERE path = '.env' OR path LIKE '%.env.%' OR path LIKE '%/.env' OR path LIKE '%/.env.%'`
     )
     const files = await secretRows.all()
     const commitFiles = await commitSecretRows.all()
