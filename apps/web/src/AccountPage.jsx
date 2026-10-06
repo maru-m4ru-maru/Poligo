@@ -172,7 +172,6 @@ export default function AccountPage({ session }) {
           <span className="account-brand-logo">
             <img src="/poligo-logo.svg" alt="Poligo" />
           </span>
-          <span>Poligo</span>
         </button>
 
         <button
@@ -290,11 +289,11 @@ export default function AccountPage({ session }) {
             </div>
 
             <div className="account-settings-profile">
-              <div>
+              <div className="account-settings-profile-row">
                 <span>表示名</span>
                 <strong>{session?.user?.name || '未設定'}</strong>
               </div>
-              <div>
+              <div className="account-settings-profile-row">
                 <span>メールアドレス</span>
                 <strong>{session?.user?.email || '未設定'}</strong>
               </div>
