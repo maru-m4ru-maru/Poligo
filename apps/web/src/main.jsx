@@ -200,17 +200,339 @@ function setupEditor(monaco) {
   })
 }
 
-function buildPreview(files) {
-  const html = files['index.html'] || ''
-  const css = files['style.css'] || ''
-  const js = files['app.js'] || ''
-  const withCss = html.replace('</head>', '<style>' + css + '</style></head>')
+function normalizeVirtualPath(path) {
+  const parts = path.replace(/\\/g, '/').split('/')
+  const result = []
 
-  if (withCss.includes('</body>')) {
-    return withCss.replace('</body>', '<script>' + js + '\n</script></body>')
+  for (const part of parts) {
+    if (!part || part === '.') continue
+
+    if (part === '..') {
+      result.pop()
+      continue
+    }
+
+    result.push(part)
   }
 
-  return withCss + '<script>' + js + '</script>'
+  return result.join('/')
+}
+
+function resolveVirtualPath(fromFile, reference) {
+  const clean = reference
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+
+  if (
+    !clean ||
+    clean.startsWith('#') ||
+    clean.startsWith('data:') ||
+    clean.startsWith('blob:') ||
+    /^[a-z][a-z0-9+.-]*:/i.test(clean)
+  ) {
+    return null
+  }
+
+  const withoutQuery = clean.split('#')[0].split('?')[0]
+
+  if (withoutQuery.startsWith('/')) {
+    return normalizeVirtualPath(withoutQuery.slice(1))
+  }
+
+  const directory = fromFile.includes('/')
+    ? fromFile.slice(0, fromFile.lastIndexOf('/'))
+    : ''
+
+  return normalizeVirtualPath(
+    directory
+      ? directory + '/' + withoutQuery
+      : withoutQuery
+  )
+}
+
+function fileExtension(path) {
+  const clean = path.split('?')[0].split('#')[0]
+  const index = clean.lastIndexOf('.')
+
+  return index >= 0
+    ? clean.slice(index + 1).toLowerCase()
+    : ''
+}
+
+function createSvgDataUrl(source) {
+  return 'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(source)
+}
+
+function createTextDataUrl(source, mime) {
+  return 'data:' + mime + ';charset=utf-8,' +
+    encodeURIComponent(source)
+}
+
+function escapeInlineScript(source) {
+  return source.replace(/<\\/script/gi, '<\\\\/script')
+}
+
+function escapeInlineStyle(source) {
+  return source.replace(/<\\/style/gi, '<\\\\/style')
+}
+
+function inlineCssReferences(source, filePath, files, seen = new Set()) {
+  if (seen.has(filePath)) {
+    return source
+  }
+
+  const nextSeen = new Set(seen)
+  nextSeen.add(filePath)
+
+  let css = source.replace(
+    /@import\\s+(?:url\\(\\s*)?["']?([^"'\\)\\s]+)["']?\\s*\\)?\\s*;?/gi,
+    (match, reference) => {
+      const resolved = resolveVirtualPath(filePath, reference)
+      const imported = resolved ? files[resolved] : null
+
+      if (typeof imported !== 'string' || fileExtension(resolved) !== 'css') {
+        return match
+      }
+
+      return inlineCssReferences(imported, resolved, files, nextSeen)
+    }
+  )
+
+  css = css.replace(
+    /url\\(\\s*["']?([^"'\\)]+)["']?\\s*\\)/gi,
+    (match, reference) => {
+      const resolved = resolveVirtualPath(filePath, reference)
+      const asset = resolved ? files[resolved] : null
+
+      if (typeof asset !== 'string') {
+        return match
+      }
+
+      if (fileExtension(resolved) === 'svg') {
+        return 'url("' + createSvgDataUrl(asset) + '")'
+      }
+
+      return match
+    }
+  )
+
+  return css
+}
+
+function rewriteModuleImports(source, filePath, files, seen = new Set()) {
+  if (seen.has(filePath)) {
+    return source
+  }
+
+  const nextSeen = new Set(seen)
+  nextSeen.add(filePath)
+
+  return source.replace(
+    /((?:import\\s+(?:[^'"]+?\\s+from\\s+)?|export\\s+(?:[^'"]+?\\s+from\\s+)?|import\\s*\\(\\s*))(["'])([^"']+)(\\2)/g,
+    (match, prefix, quote, reference) => {
+      const resolved = resolveVirtualPath(filePath, reference)
+      const module = resolved ? files[resolved] : null
+
+      if (
+        typeof module !== 'string' ||
+        !['js', 'mjs', 'jsx', 'ts', 'tsx'].includes(fileExtension(resolved))
+      ) {
+        return match
+      }
+
+      const rewritten = rewriteModuleImports(module, resolved, files, nextSeen)
+      const dataUrl = createTextDataUrl(rewritten, 'text/javascript')
+
+      return prefix + quote + dataUrl + quote
+    }
+  )
+}
+
+function getPreviewEntryFile(files, requestedFile) {
+  if (requestedFile && fileExtension(requestedFile) === 'html' && files[requestedFile]) {
+    return requestedFile
+  }
+
+  if (files['index.html']) {
+    return 'index.html'
+  }
+
+  return Object.keys(files).find(name => fileExtension(name) === 'html') || ''
+}
+
+function buildPreview(files, requestedFile = 'index.html', depth = 0) {
+  const entryFile = getPreviewEntryFile(files, requestedFile)
+
+  if (!entryFile || typeof files[entryFile] !== 'string') {
+    return '<!doctype html><html lang="ja"><body><main style="font-family:system-ui;padding:32px">HTMLファイルがありません。</main></body></html>'
+  }
+
+  let html = files[entryFile]
+
+  if (!/<!doctype\\s+html/i.test(html)) {
+    html = '<!doctype html>\\n' + html
+  }
+
+  if (!/<html[\\s>]/i.test(html)) {
+    html =
+      '<!doctype html><html lang="ja"><head></head><body>' +
+      html.replace(/^<!doctype[^>]*>/i, '') +
+      '</body></html>'
+  }
+
+  if (!/<head[\\s>]/i.test(html)) {
+    html = html.replace(
+      /<html([^>]*)>/i,
+      '<html$1><head></head>'
+    )
+  }
+
+  if (!/<body[\\s>]/i.test(html)) {
+    html = html.replace(
+      /<\\/html>/i,
+      '<body></body></html>'
+    )
+  }
+
+  html = html.replace(
+    /<link\\b[^>]*>/gi,
+    tag => {
+      const rel = tag.match(/\\brel\\s*=\\s*["']([^"']+)["']/i)?.[1]?.toLowerCase()
+      const href = tag.match(/\\bhref\\s*=\\s*["']([^"']+)["']/i)?.[1]
+
+      if (rel === 'stylesheet' && href) {
+        const resolved = resolveVirtualPath(entryFile, href)
+        const css = resolved ? files[resolved] : null
+
+        if (typeof css === 'string' && fileExtension(resolved) === 'css') {
+          return '<style data-poligo-file="' +
+            resolved +
+            '">' +
+            escapeInlineStyle(inlineCssReferences(css, resolved, files)) +
+            '</style>'
+        }
+      }
+
+      if (href && fileExtension(resolveVirtualPath(entryFile, href) || '') === 'svg') {
+        const resolved = resolveVirtualPath(entryFile, href)
+        const svg = resolved ? files[resolved] : null
+
+        if (typeof svg === 'string') {
+          return '<link rel="icon" href="' + createSvgDataUrl(svg) + '">'
+        }
+      }
+
+      return tag
+    }
+  )
+
+  html = html.replace(
+    /<script\\b([^>]*)\\bsrc\\s*=\\s*["']([^"']+)["']([^>]*)>([\\s\\S]*?)<\\/script>/gi,
+    (match, before, reference, after, inline) => {
+      const resolved = resolveVirtualPath(entryFile, reference)
+      const script = resolved ? files[resolved] : null
+
+      if (typeof script !== 'string') {
+        return match
+      }
+
+      const typeMatch = (before + after).match(/\\btype\\s*=\\s*["']([^"']+)["']/i)
+      const type = typeMatch?.[1]?.toLowerCase()
+
+      if (type === 'module') {
+        return '<script' +
+          before +
+          after +
+          '>' +
+          escapeInlineScript(
+            rewriteModuleImports(script, resolved, files)
+          ) +
+          '</script>'
+      }
+
+      return '<script' +
+        before +
+        after +
+        '>' +
+        escapeInlineScript(script) +
+        '</script>'
+    }
+  )
+
+  html = html.replace(
+    /<(img|source|video|audio|track|image|use)\\b([^>]*)>/gi,
+    (match, tagName, attributes) => {
+      const sourceMatch = attributes.match(/\\b(src|href)\\s*=\\s*["']([^"']+)["']/i)
+
+      if (!sourceMatch) {
+        return match
+      }
+
+      const resolved = resolveVirtualPath(entryFile, sourceMatch[2])
+      const asset = resolved ? files[resolved] : null
+
+      if (
+        typeof asset === 'string' &&
+        fileExtension(resolved) === 'svg'
+      ) {
+        const replacement = sourceMatch[1] +
+          '="' +
+          createSvgDataUrl(asset) +
+          '"'
+
+        return '<' +
+          tagName +
+          attributes.replace(sourceMatch[0], replacement) +
+          '>'
+      }
+
+      return match
+    }
+  )
+
+  html = html.replace(
+    /<a\\b([^>]*)href\\s*=\\s*["']([^"']+\\.html?)["']([^>]*)>/gi,
+    (match, before, reference, after) => {
+      if (depth >= 2) {
+        return match
+      }
+
+      const resolved = resolveVirtualPath(entryFile, reference)
+      const page = resolved ? files[resolved] : null
+
+      if (typeof page !== 'string' || fileExtension(resolved) !== 'html') {
+        return match
+      }
+
+      const data = buildPreview(files, resolved, depth + 1)
+      const href = createTextDataUrl(data, 'text/html')
+
+      return '<a' +
+        before +
+        'href="' +
+        href +
+        '"' +
+        after +
+        '>'
+    }
+  )
+
+  if (!/<meta[^>]+charset=/i.test(html)) {
+    html = html.replace(
+      /<head([^>]*)>/i,
+      '<head$1><meta charset="UTF-8">'
+    )
+  }
+
+  if (!/<meta[^>]+name=["']viewport["']/i.test(html)) {
+    html = html.replace(
+      /<head([^>]*)>/i,
+      '<head$1><meta name="viewport" content="width=device-width, initial-scale=1">'
+    )
+  }
+
+  return html
 }
 
 async function request(path, options = {}) {
@@ -260,6 +582,7 @@ function IDE({ projectId }) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [newFileOpen, setNewFileOpen] = useState(false)
+  const [editorMarkers, setEditorMarkers] = useState([])
   const [newFileName, setNewFileName] = useState('')
   const [previewKey, setPreviewKey] = useState(0)
   const [execution, setExecution] = useState({
@@ -278,6 +601,7 @@ function IDE({ projectId }) {
   const [dialogBusy, setDialogBusy] = useState(false)
   const terminalRef = useRef(null)
   const terminal = useRef(null)
+  const editorRef = useRef(null)
   const filesRef = useRef(files)
 
   const { data: session } = authClient.useSession()
@@ -633,7 +957,14 @@ function IDE({ projectId }) {
     }
   }, [])
 
-  const previewDoc = useMemo(() => preview || buildPreview(files), [files, preview])
+  const previewDoc = useMemo(
+    () => preview || buildPreview(files, activeFile),
+    [files, preview, activeFile]
+  )
+
+  useEffect(() => {
+    setEditorMarkers([])
+  }, [activeFile])
 
   async function handleSignOut() {
     await authClient.signOut()
@@ -811,8 +1142,26 @@ function IDE({ projectId }) {
   }
 
   function refreshPreview() {
-    setPreview(buildPreview(files))
+    setPreview(buildPreview(files, activeFile))
     setPreviewKey(value => value + 1)
+  }
+
+  function openPreviewWindow() {
+    const html = buildPreview(files, activeFile)
+    const blob = new Blob([html], {
+      type: 'text/html;charset=utf-8'
+    })
+    const url = URL.createObjectURL(blob)
+    const popup = window.open(url, '_blank', 'noopener,noreferrer')
+
+    if (!popup) {
+      URL.revokeObjectURL(url)
+      return
+    }
+
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url)
+    }, 60_000)
   }
 
   async function saveCurrentProject() {
@@ -1688,6 +2037,10 @@ function IDE({ projectId }) {
                 language={currentLanguage}
                 value={currentValue}
                 onChange={updateFile}
+                onValidate={markers => setEditorMarkers(markers)}
+                onMount={editor => {
+                  editorRef.current = editor
+                }}
                 theme="poligo-neutral"
                 beforeMount={setupEditor}
                 options={{
@@ -1746,6 +2099,29 @@ function IDE({ projectId }) {
                   )}
                   {bottomTab === 'problems' && (
                     <div className="problems-panel">
+                      {editorMarkers.map((marker, index) => (
+                        <button
+                          key={index}
+                          className="problem-item problem-item-error"
+                          onClick={() => {
+                            editorRef.current?.revealLineInCenter(marker.startLineNumber)
+                            editorRef.current?.setPosition({
+                              lineNumber: marker.startLineNumber,
+                              column: marker.startColumn || 1
+                            })
+                            editorRef.current?.focus()
+                          }}
+                        >
+                          <span>{marker.severity === 8 ? '!' : '×'}</span>
+                          <div>
+                            <strong>{marker.message}</strong>
+                            <small>
+                              HTML / 行 {marker.startLineNumber}:{marker.startColumn || 1}
+                            </small>
+                          </div>
+                        </button>
+                      ))}
+
                       {execution.error && (
                         <button
                           className="problem-item problem-item-error"
@@ -1759,22 +2135,26 @@ function IDE({ projectId }) {
                         </button>
                       )}
 
-                      {!execution.error && execution.result?.stderr && (
-                        <button
-                          className="problem-item problem-item-error"
-                          onClick={() => setBottomTab('output')}
-                        >
-                          <span>!</span>
-                          <div>
-                            <strong>{execution.result.stderr.split('\n')[0]}</strong>
-                            <small>実行出力</small>
-                          </div>
-                        </button>
-                      )}
+                      {!editorMarkers.length &&
+                        !execution.error &&
+                        execution.result?.stderr && (
+                          <button
+                            className="problem-item problem-item-error"
+                            onClick={() => setBottomTab('output')}
+                          >
+                            <span>!</span>
+                            <div>
+                              <strong>{execution.result.stderr.split('\n')[0]}</strong>
+                              <small>実行出力</small>
+                            </div>
+                          </button>
+                        )}
 
-                      {!execution.error && !execution.result?.stderr && (
-                        <div className="panel-empty">問題はありません。</div>
-                      )}
+                      {!editorMarkers.length &&
+                        !execution.error &&
+                        !execution.result?.stderr && (
+                          <div className="panel-empty">問題はありません。</div>
+                        )}
                     </div>
                   )}
                 </div>
@@ -1791,13 +2171,19 @@ function IDE({ projectId }) {
                 <span>○</span>
                 <span>プレビュー</span>
               </div>
-              <button className="preview-control">↗</button>
+              <button
+                className="preview-control"
+                onClick={openPreviewWindow}
+                title="新しいタブで開く"
+              >
+                ↗
+              </button>
             </div>
             <iframe
               key={previewKey}
               title="Poligo preview"
               srcDoc={previewDoc}
-              sandbox="allow-scripts"
+              sandbox="allow-scripts allow-forms allow-modals allow-downloads"
             />
           </section>
         </main>
