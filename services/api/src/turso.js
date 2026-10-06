@@ -1,4 +1,9 @@
 import { connect } from '@tursodatabase/serverless'
+import {
+  decryptSecret,
+  encryptSecret,
+  isEncryptedSecret
+} from './secretStore.js'
 
 const url = process.env.TURSO_DATABASE_URL || ''
 const authToken = process.env.TURSO_AUTH_TOKEN || ''
@@ -72,6 +77,54 @@ export async function initializeDatabase() {
       'CREATE INDEX IF NOT EXISTS idx_project_commits_project_id ON project_commits(project_id)',
       'CREATE INDEX IF NOT EXISTS idx_project_commit_files_commit_id ON project_commit_files(commit_id)'
     ], 'immediate')
+
+    const secretRows = await database.prepare(
+      'SELECT project_id, path, content FROM project_files'
+    )
+    const commitSecretRows = await database.prepare(
+      'SELECT commit_id, path, content FROM project_commit_files'
+    )
+    const files = await secretRows.all()
+    const commitFiles = await commitSecretRows.all()
+
+    const secretUpdates = []
+    const commitSecretUpdates = []
+
+    for (const file of files) {
+      const name = file.path.split('/').pop() || file.path
+      const secret =
+        name === '.env' ||
+        (name.startsWith('.env.') && name !== '.env.example')
+
+      if (secret && !isEncryptedSecret(file.content)) {
+        secretUpdates.push({
+          sql: 'UPDATE project_files SET content = ? WHERE project_id = ? AND path = ?',
+          args: [encryptSecret(file.content), file.project_id, file.path]
+        })
+      }
+    }
+
+    for (const file of commitFiles) {
+      const name = file.path.split('/').pop() || file.path
+      const secret =
+        name === '.env' ||
+        (name.startsWith('.env.') && name !== '.env.example')
+
+      if (secret && !isEncryptedSecret(file.content)) {
+        commitSecretUpdates.push({
+          sql: 'UPDATE project_commit_files SET content = ? WHERE commit_id = ? AND path = ?',
+          args: [encryptSecret(file.content), file.commit_id, file.path]
+        })
+      }
+    }
+
+    if (secretUpdates.length) {
+      await database.batch(secretUpdates, 'immediate')
+    }
+
+    if (commitSecretUpdates.length) {
+      await database.batch(commitSecretUpdates, 'immediate')
+    }
 
     status = 'online'
     error = null
