@@ -70,7 +70,10 @@ export default function HomePage({ session }) {
         <section className="home-hero">
           <div className="home-hero-copy">
             <span className="home-eyebrow">POLIGO</span>
-            <h1>ブラウザで、<br />コードを書く。</h1>
+            <h1>
+              <span>ブラウザで、</span>
+              <span>コードを書く。</span>
+            </h1>
             <p>
               コードの作成、実行、保存までをブラウザで完結。
               プロジェクトをクラウドにまとめて、すぐに開発を始められます。
@@ -106,51 +109,6 @@ export default function HomePage({ session }) {
             </div>
           </div>
 
-          <div className="home-hero-visual">
-            <div className="home-window">
-            <div className="home-window-bar">
-              <span />
-              <span />
-              <span />
-              <strong>Poligo</strong>
-            </div>
-
-            <div className="home-window-body">
-              <div className="home-window-sidebar">
-                <span className="home-window-sidebar-active">▦</span>
-                <span>⌕</span>
-                <span>⑂</span>
-                <span>⚙</span>
-              </div>
-
-              <div className="home-window-files">
-                <div className="home-window-label">EXPLORER</div>
-                <span className="home-file-active">index.html</span>
-                <span>style.css</span>
-                <span>main.py</span>
-                <span>main.cpp</span>
-              </div>
-
-              <div className="home-window-editor">
-                <div className="home-window-tabs">
-                  <span>main.py</span>
-                  <span>app.js</span>
-                </div>
-                <pre>{`print("Hello from Poligo")
-
-name = "builder"
-
-if name:
-    print("Ready to build.")`}</pre>
-                <div className="home-window-output">
-                  <div>OUTPUT</div>
-                  <strong>Hello from Poligo</strong>
-                  <span>Process completed</span>
-                </div>
-              </div>
-            </div>
-          </div>
-            </div>
         </section>
 
         <section className="home-feature-strip">
