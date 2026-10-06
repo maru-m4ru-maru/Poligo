@@ -182,9 +182,9 @@ function formatDate(timestamp) {
 }
 
 function navigate(path) {
-  if (path === '/dashboard') {
+  if (path === '/dashboard' || path === '/ide') {
     window.history.pushState({}, '', '/')
-    window.location.hash = '/dashboard'
+    window.location.hash = path
     return
   }
 
@@ -474,7 +474,7 @@ export default function Dashboard({ session }) {
       }
 
       localStorage.setItem('poligo-current-project', project.id)
-      navigate('/')
+      navigate('/ide')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Project creation failed')
       setCreating('')
@@ -728,7 +728,7 @@ export default function Dashboard({ session }) {
               />
               <kbd>⌘ K</kbd>
             </div>
-            <button className="stack-open-ide" onClick={() => navigate('/')}>
+            <button className="stack-open-ide" onClick={() => navigate('/ide')}>
               Open IDE
             </button>
           </div>
