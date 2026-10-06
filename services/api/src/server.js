@@ -1250,6 +1250,8 @@ async function submitJudge0(source, languageId, stdin, options = {}) {
     stack_limit: EXECUTION_STACK_LIMIT,
     max_processes_and_or_threads: EXECUTION_MAX_PROCESSES,
     max_file_size: EXECUTION_MAX_FILE_SIZE,
+    enable_network: false,
+    number_of_runs: 1,
     ...options
   }
 
