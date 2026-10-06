@@ -30,6 +30,66 @@ function buildPreview(files) {
     '</html>'
 }
 
+
+export function DemoPreview() {
+  const [files, setFiles] = useState(DEFAULT_FILES)
+  const [activeFile, setActiveFile] = useState('index.html')
+  const [previewKey, setPreviewKey] = useState(0)
+  const preview = useMemo(() => buildPreview(files), [files])
+
+  function updateFile(value) {
+    setFiles(current => ({
+      ...current,
+      [activeFile]: value
+    }))
+    setPreviewKey(value => value + 1)
+  }
+
+  return (
+    <div className="demo-embed">
+      <aside className="demo-embed-sidebar">
+        <div className="demo-embed-title">ファイル</div>
+        {Object.keys(files).map(name => (
+          <button
+            key={name}
+            className={activeFile === name ? 'active' : ''}
+            onClick={() => setActiveFile(name)}
+          >
+            {name}
+          </button>
+        ))}
+      </aside>
+
+      <section className="demo-embed-editor">
+        <div className="demo-embed-bar">
+          <span>デモ</span>
+          <strong>{activeFile}</strong>
+        </div>
+        <textarea
+          value={files[activeFile]}
+          onChange={event => updateFile(event.target.value)}
+          spellCheck="false"
+        />
+      </section>
+
+      <section className="demo-embed-preview">
+        <div className="demo-embed-bar">
+          <span>プレビュー</span>
+          <button onClick={() => setPreviewKey(value => value + 1)}>
+            更新
+          </button>
+        </div>
+        <iframe
+          key={previewKey}
+          title="Poligo Demo"
+          srcDoc={preview}
+          sandbox="allow-scripts"
+        />
+      </section>
+    </div>
+  )
+}
+
 export default function DemoPage() {
   const [files, setFiles] = useState(DEFAULT_FILES)
   const [activeFile, setActiveFile] = useState('index.html')
