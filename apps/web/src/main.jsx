@@ -1893,11 +1893,6 @@ function IDE({ projectId }) {
     terminal.current.writeln('')
     terminal.current.writeln('> run ' + activeFileName + ' [' + language + ']')
 
-    if (stdin) {
-      terminal.current.writeln('[stdin]')
-      writeTerminalLines(stdin)
-    }
-
     if (status === 'timeout') {
       terminal.current.writeln('Execution timed out.')
       return
@@ -1941,6 +1936,7 @@ function IDE({ projectId }) {
     })
 
     if (!serverExecution) {
+      refreshPreview()
       writeTerminalLines('ブラウザプレビューを更新しました。')
       return
     }
@@ -2025,6 +2021,15 @@ function IDE({ projectId }) {
           timedOut: true
         }
       }))
+
+      writeExecutionToTerminal({
+        activeFileName: activeFile,
+        language: currentLanguage,
+        stdin: '',
+        result: null,
+        error: 'Execution polling timed out.',
+        status: 'timeout'
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Execution failed'
 
@@ -2797,7 +2802,7 @@ function IDE({ projectId }) {
                         <button
                           key={'runtime-' + index}
                           className="problem-item problem-item-error"
-                          onClick={() => setBottomTab('output')}
+                          onClick={() => setBottomTab('terminal')}
                         >
                           <span>×</span>
                           <div>
@@ -2810,7 +2815,7 @@ function IDE({ projectId }) {
                       {execution.error && (
                         <button
                           className="problem-item problem-item-error"
-                          onClick={() => setBottomTab('output')}
+                          onClick={() => setBottomTab('terminal')}
                         >
                           <span>×</span>
                           <div>
@@ -2825,7 +2830,7 @@ function IDE({ projectId }) {
                         execution.result?.stderr && (
                           <button
                             className="problem-item problem-item-error"
-                            onClick={() => setBottomTab('output')}
+                            onClick={() => setBottomTab('terminal')}
                           >
                             <span>!</span>
                             <div>
