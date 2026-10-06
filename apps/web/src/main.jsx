@@ -23,6 +23,7 @@ import { authClient } from './auth-client'
 import AuthPage from './AuthPage'
 import Dashboard from './Dashboard'
 import HomePage from './HomePage'
+import TermsPage from './TermsPage'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build without an IDE vendor lock-in.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1785,6 +1786,7 @@ function AppRouter() {
   const [pathname, setPathname] = useState(getRoutePath())
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
+  const publicPath = pathname === '/' || pathname === '/terms'
 
   useEffect(() => {
     function updatePath() {
@@ -1808,18 +1810,22 @@ function AppRouter() {
       return
     }
 
-    if (!session?.user && !authPath) {
+    if (!session?.user && !authPath && !publicPath) {
       navigate('/signin')
     }
   }, [authPath, isPending, session])
 
-  if (isPending || (!session?.user && !authPath)) {
+  if (isPending || (!session?.user && !authPath && !publicPath)) {
     return (
       <div className="app-loading">
         <div className="app-loading-title">Poligo</div>
         <div className="app-loading-text">Checking account...</div>
       </div>
     )
+  }
+
+  if (pathname === '/terms') {
+    return <TermsPage />
   }
 
   if (pathname === '/signin') {
