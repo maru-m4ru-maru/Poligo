@@ -245,17 +245,17 @@ function IDE({ projectId }) {
   const [projectName, setProjectName] = useState('無題のプロジェクト')
   const [files, setFiles] = useState({})
   const [activeFile, setActiveFile] = useState('index.html')
-  const [openFiles, set開くFiles] = useState(['index.html'])
+  const [openFiles, setOpenFiles] = useState(['index.html'])
   const [activeView, setActiveView] = useState('files')
   const [bottomTab, setBottomTab] = useState('terminal')
   const [bottom開く, setBottom開く] = useState(true)
   const [preview, setPreview] = useState('')
   const [apiStatus, setApiStatus] = useState('checking')
-  const [saveStatus, set保存Status] = useState('saved')
+  const [saveStatus, setSaveStatus] = useState('saved')
   const [projectMenu開く, setProjectMenu開く] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [quick開く開く, setQuick開く開く] = useState(false)
-  const [quick開くQuery, setQuick開くQuery] = useState('')
+  const [quickOpenQuery, setQuickOpenQuery] = useState('')
   const [commandPalette開く, setCommandPalette開く] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [previewKey, setPreviewKey] = useState(0)
@@ -321,13 +321,13 @@ function IDE({ projectId }) {
     return results
   }, [files, searchQuery])
 
-  const quick開くResults = useMemo(() => {
-    const query = quick開くQuery.trim().toLowerCase()
+  const quickOpenResults = useMemo(() => {
+    const query = quickOpenQuery.trim().toLowerCase()
 
     return Object.keys(files).filter(name =>
       !query || name.toLowerCase().includes(query)
     )
-  }, [files, quick開くQuery])
+  }, [files, quickOpenQuery])
 
   const commands = useMemo(() => [
     {
@@ -413,11 +413,11 @@ function IDE({ projectId }) {
         setProjectName(result.currentProject.name)
         setFiles(result.currentProject.files)
         setActiveFile(firstFile(result.currentProject.files))
-        set開くFiles([firstFile(result.currentProject.files)])
+        setOpenFiles([firstFile(result.currentProject.files)])
         setWorkspaceReady(true)
       } catch (error) {
         if (!cancelled) {
-          set保存Status('storage error')
+          setSaveStatus('storage error')
           console.error(error)
         }
       }
@@ -437,7 +437,7 @@ function IDE({ projectId }) {
   useEffect(() => {
     if (!workspaceReady || !currentProjectId) return
 
-    set保存Status('saving')
+    setSaveStatus('saving')
 
     const timer = window.setTimeout(async () => {
       try {
@@ -462,9 +462,9 @@ function IDE({ projectId }) {
             : project
         )))
 
-        set保存Status('saved')
+        setSaveStatus('saved')
       } catch {
-        set保存Status('storage error')
+        setSaveStatus('storage error')
       }
     }, 500)
 
@@ -688,7 +688,7 @@ function IDE({ projectId }) {
     }
   }
 
-  function open確認Dialog({
+  function openConfirmDialog({
     title,
     message,
     confirmLabel = '確認',
@@ -754,7 +754,7 @@ function IDE({ projectId }) {
 
     if (!commit) return
 
-    open確認Dialog({
+    openConfirmDialog({
       title: '復元 commit',
       message: '"' + commit.message + '" will replace the current project files.',
       confirmLabel: '復元',
@@ -769,10 +769,10 @@ function IDE({ projectId }) {
 
           setFiles(nextFiles)
           setActiveFile(firstFile(nextFiles))
-          set開くFiles([firstFile(nextFiles)])
+          setOpenFiles([firstFile(nextFiles)])
           setPreview('')
           setPreviewKey(value => value + 1)
-          set保存Status('saved')
+          setSaveStatus('saved')
           await refreshSourceControl(commitId)
         } catch (error) {
           setSourceError(error instanceof Error ? error.message : '復元 failed')
@@ -792,11 +792,11 @@ function IDE({ projectId }) {
 
   function openFile(name) {
     setActiveFile(name)
-    set開くFiles(current => current.includes(name) ? current : [...current, name])
+    setOpenFiles(current => current.includes(name) ? current : [...current, name])
   }
 
   function closeFile(name) {
-    set開くFiles(current => {
+    setOpenFiles(current => {
       const next = current.filter(file => file !== name)
 
       if (name === activeFile) {
@@ -837,9 +837,9 @@ function IDE({ projectId }) {
           : project
       )))
 
-      set保存Status('saved')
+      setSaveStatus('saved')
     } catch {
-      set保存Status('storage error')
+      setSaveStatus('storage error')
     }
   }
 
@@ -858,7 +858,7 @@ function IDE({ projectId }) {
 
         if (Object.prototype.hasOwnProperty.call(files, normalized)) {
           setActiveFile(normalized)
-          set開くFiles(current => current.includes(normalized) ? current : [...current, normalized])
+          setOpenFiles(current => current.includes(normalized) ? current : [...current, normalized])
           return
         }
 
@@ -867,8 +867,8 @@ function IDE({ projectId }) {
           [normalized]: ''
         }))
         setActiveFile(normalized)
-        set開くFiles(current => [...current, normalized])
-        set保存Status('saving')
+        setOpenFiles(current => [...current, normalized])
+        setSaveStatus('saving')
       }
     })
   }
@@ -876,7 +876,7 @@ function IDE({ projectId }) {
   async function deleteFile(name = activeFile) {
     if (Object.keys(files).length <= 1) return
 
-    open確認Dialog({
+    openConfirmDialog({
       title: 'Delete file',
       message: '"' + name + '" will be removed from this project.',
       confirmLabel: 'Delete',
@@ -891,7 +891,7 @@ function IDE({ projectId }) {
           return next
         })
 
-        set開くFiles(current => current.filter(file => file !== name))
+        setOpenFiles(current => current.filter(file => file !== name))
         setActiveFile(current => current === name ? nextFile : current)
       }
     })
@@ -928,14 +928,14 @@ function IDE({ projectId }) {
       setProjectName(project.name)
       setFiles(project.files)
       setActiveFile(firstFile(project.files))
-      set開くFiles([firstFile(project.files)])
+      setOpenFiles([firstFile(project.files)])
       setPreview('')
       setPreviewKey(value => value + 1)
       localStorage.setItem('poligo-current-project', project.id)
       setProjectMenu開く(false)
-      set保存Status('saved')
+      setSaveStatus('saved')
     } catch {
-      set保存Status('storage error')
+      setSaveStatus('storage error')
     }
   }
 
@@ -948,13 +948,13 @@ function IDE({ projectId }) {
       setProjectName(project.name)
       setFiles(project.files)
       setActiveFile('index.html')
-      set開くFiles(['index.html'])
+      setOpenFiles(['index.html'])
       setPreview('')
       setPreviewKey(value => value + 1)
       setProjectMenu開く(false)
-      set保存Status('saved')
+      setSaveStatus('saved')
     } catch {
-      set保存Status('storage error')
+      setSaveStatus('storage error')
     }
   }
 
@@ -989,20 +989,20 @@ function IDE({ projectId }) {
       setProjectName(project.name)
       setFiles(project.files)
       setActiveFile(firstFile(project.files))
-      set開くFiles([firstFile(project.files)])
+      setOpenFiles([firstFile(project.files)])
       setPreview('')
       setPreviewKey(value => value + 1)
       setProjectMenu開く(false)
-      set保存Status('saved')
+      setSaveStatus('saved')
     } catch {
-      set保存Status('storage error')
+      setSaveStatus('storage error')
     }
   }
 
   async function removeCurrentProject() {
     if (!currentProject) return
 
-    open確認Dialog({
+    openConfirmDialog({
       title: 'プロジェクトを削除',
       message: '"' + projectName + '" and all of its files will be permanently removed.',
       confirmLabel: 'プロジェクトを削除',
@@ -1037,14 +1037,14 @@ function IDE({ projectId }) {
           setProjectName(nextProject.name)
           setFiles(nextProject.files)
           setActiveFile(firstFile(nextProject.files))
-          set開くFiles([firstFile(nextProject.files)])
+          setOpenFiles([firstFile(nextProject.files)])
           setPreview('')
           setPreviewKey(value => value + 1)
           localStorage.setItem('poligo-current-project', nextProject.id)
           setProjectMenu開く(false)
-          set保存Status('saved')
+          setSaveStatus('saved')
         } catch {
-          set保存Status('storage error')
+          setSaveStatus('storage error')
         }
       }
     })
@@ -1063,7 +1063,7 @@ function IDE({ projectId }) {
 
       if (modifier && key === 'p' && !event.shiftKey) {
         event.preventDefault()
-        setQuick開くQuery('')
+        setQuickOpenQuery('')
         setQuick開く開く(true)
         setCommandPalette開く(false)
         return
@@ -1184,7 +1184,7 @@ function IDE({ projectId }) {
 
   function resetProject() {
     setFiles(DEFAULT_FILES)
-    set開くFiles(['index.html'])
+    setOpenFiles(['index.html'])
     setActiveFile('index.html')
     setPreview('')
     setPreviewKey(value => value + 1)
@@ -1275,12 +1275,12 @@ function IDE({ projectId }) {
         <div className="quick-open" onClick={event => event.stopPropagation()}>
           <input
             autoFocus
-            value={quick開くQuery}
-            onChange={event => setQuick開くQuery(event.target.value)}
+            value={quickOpenQuery}
+            onChange={event => setQuickOpenQuery(event.target.value)}
             placeholder="開く file..."
           />
           <div className="quick-open-list">
-            {quick開くResults.map(name => (
+            {quickOpenResults.map(name => (
               <button
                 key={name}
                 className="quick-open-item"
@@ -1293,7 +1293,7 @@ function IDE({ projectId }) {
                 <span>{name}</span>
               </button>
             ))}
-            {!quick開くResults.length && (
+            {!quickOpenResults.length && (
               <div className="quick-open-empty">一致するファイルがありません。</div>
             )}
           </div>
