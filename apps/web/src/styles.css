@@ -6152,3 +6152,24 @@ body {
 .ai-auto-disable:hover {
   color: #9bb5d4;
 }
+
+.env-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-bottom: 1px solid #3a3328;
+  background: #1a1712;
+  color: #c9c2b5;
+  font-size: 12px;
+}
+
+.env-notice strong {
+  color: #e4ddd1;
+  font-weight: 600;
+}
+
+.env-notice span {
+  color: #9e978b;
+}
