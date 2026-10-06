@@ -1887,6 +1887,7 @@ function IDE({ projectId }) {
       const result = await request('/api/executions', {
         method: 'POST',
         body: JSON.stringify({
+          projectId: currentProjectId,
           language: currentLanguage,
           entrypoint: activeFile,
           files
