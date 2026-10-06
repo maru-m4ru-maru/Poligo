@@ -1261,7 +1261,8 @@ function trimAiFileContext(files) {
 }
 
 function isSecretEnvFile(path) {
-  return path === '.env' || (path.startsWith('.env.') && path !== '.env.example')
+  const name = path.split('/').pop() || path
+  return name === '.env' || (name.startsWith('.env.') && name !== '.env.example')
 }
 
 function parseAiResponse(text) {
