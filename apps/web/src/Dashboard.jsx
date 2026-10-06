@@ -745,10 +745,7 @@ export default function Dashboard({ session }) {
               <h1>何かを作ろう。</h1>
               <p>テンプレートから始めるか、既存のプロジェクトを続けて編集できます。</p>
             </div>
-            <div className="stack-cloud-pill">
-              <span />
-              Turso 接続済み
-            </div>
+
           </section>
 
           <section id="projects" className="stack-section">
