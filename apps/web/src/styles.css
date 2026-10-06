@@ -5946,3 +5946,57 @@ body {
     font-size: 44px;
   }
 }
+
+
+.home-hero {
+  display: block;
+  padding: 88px 0 76px;
+}
+
+.home-hero-copy {
+  max-width: 860px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.home-hero h1 {
+  display: grid;
+  gap: 0;
+  margin: 16px 0 22px;
+  color: #f7f9fc;
+  font-size: clamp(52px, 7vw, 88px);
+  line-height: .98;
+  letter-spacing: -.055em;
+  white-space: nowrap;
+}
+
+.home-hero h1 span {
+  display: block;
+}
+
+.home-hero-copy p {
+  max-width: 640px;
+  margin: 0 auto;
+  color: #a9b7ca;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.home-hero-actions {
+  justify-content: center;
+}
+
+.home-trust-line {
+  justify-content: center;
+}
+
+@media (max-width: 680px) {
+  .home-hero {
+    padding: 58px 0 54px;
+  }
+
+  .home-hero h1 {
+    font-size: clamp(38px, 11vw, 56px);
+    white-space: normal;
+  }
+}
