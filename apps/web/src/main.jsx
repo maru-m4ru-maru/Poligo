@@ -238,7 +238,7 @@ function firstFile(files) {
   return Object.keys(files)[0] || 'index.html'
 }
 
-function IDE() {
+function IDE({ projectId }) {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState('')
@@ -395,7 +395,16 @@ function IDE() {
       } catch {}
 
       try {
-        const result = await initializeWorkspace(DEFAULT_FILES)
+        const result = projectId
+          ? {
+              projects: await listProjects(),
+              currentProject: await getProject(projectId)
+            }
+          : await initializeWorkspace(DEFAULT_FILES)
+
+        if (!result.currentProject) {
+          throw new Error('Project not found')
+        }
 
         if (cancelled) return
 
@@ -1764,7 +1773,11 @@ function IDE() {
 function getRoutePath() {
   const hashPath = window.location.hash.replace(/^#/, '')
 
-  if (hashPath === '/dashboard' || hashPath === '/ide') {
+  if (
+    hashPath === '/dashboard' ||
+    hashPath === '/ide' ||
+    /^\/ide\/[^/]+$/.test(hashPath)
+  ) {
     return hashPath
   }
 
@@ -1772,7 +1785,11 @@ function getRoutePath() {
 }
 
 function navigate(path) {
-  if (path === '/dashboard' || path === '/ide') {
+  if (
+    path === '/dashboard' ||
+    path === '/ide' ||
+    path.startsWith('/ide/')
+  ) {
     window.history.pushState({}, '', '/')
     window.location.hash = path
     return
@@ -1787,6 +1804,7 @@ function AppRouter() {
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
   const publicPath = pathname === '/' || pathname === '/terms'
+  const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
     function updatePath() {
@@ -1806,7 +1824,7 @@ function AppRouter() {
     if (isPending) return
 
     if (session?.user && authPath) {
-      window.location.replace('/#/ide')
+      window.location.replace('/#/dashboard')
       return
     }
 
@@ -1840,8 +1858,12 @@ function AppRouter() {
     return <Dashboard session={session} />
   }
 
-  if (pathname === '/ide') {
-    return <IDE />
+  if (idePath) {
+    const projectId = pathname.startsWith('/ide/')
+      ? pathname.slice('/ide/'.length)
+      : ''
+
+    return <IDE projectId={projectId} />
   }
 
   return <HomePage session={session} />
