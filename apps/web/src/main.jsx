@@ -1801,10 +1801,17 @@ function navigate(path) {
 
 function AppRouter() {
   const [pathname, setPathname] = useState(getRoutePath())
+  const [authResolved, setAuthResolved] = useState(false)
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
   const publicPath = pathname === '/' || pathname === '/terms'
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
+
+  useEffect(() => {
+    if (!isPending) {
+      setAuthResolved(true)
+    }
+  }, [isPending])
 
   useEffect(() => {
     function updatePath() {
@@ -1833,7 +1840,12 @@ function AppRouter() {
     }
   }, [authPath, isPending, session])
 
-  if (isPending || (!session?.user && !authPath && !publicPath)) {
+  if (
+    !authResolved &&
+    isPending &&
+    !authPath &&
+    !publicPath
+  ) {
     return (
       <div className="app-loading">
         <div className="app-loading-title">Poligo</div>
