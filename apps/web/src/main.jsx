@@ -31,7 +31,10 @@ const DEFAULT_FILES = {
   'style.css': 'body {\n  margin: 0;\n  min-height: 100vh;\n  font-family: system-ui, sans-serif;\n  background: #10100e;\n  color: #ecece5;\n}\n\n.app {\n  max-width: 760px;\n  margin: 0 auto;\n  padding: 64px 24px;\n}',
   'app.js': 'const title = document.querySelector("h1")\n\ntitle.addEventListener("click", () => {\n  title.textContent = "It works."\n})',
   'main.py': 'print("Hello from Python")',
-  'main.cpp': '#include <iostream>\n\nint main() {\n    std::cout << "Hello from C++\\n";\n    return 0;\n}'
+  'main.cpp': '#include <iostream>\n\nint main() {\n    std::cout << "Hello from C++\\n";\n    return 0;\n  }',
+  '.env': '',
+  '.env.example': 'APP_ENV=development\nAPI_KEY=',
+  '.gitignore': 'node_modules/\n.env\n.env.*\n!.env.example\n__pycache__/\n'
 }
 
 const FILE_META = {
@@ -62,6 +65,10 @@ const FILE_META = {
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
+function isSecretEnvFile(path) {
+  return path === '.env' || (path.startsWith('.env.') && path !== '.env.example')
+}
+
 const SERVER_LANGUAGES = new Set([
   'python',
   'java',
@@ -85,6 +92,13 @@ const FILE_ICONS = {
 }
 
 function getFileMeta(name) {
+  if (name === '.env' || name.startsWith('.env.')) {
+    return {
+      language: 'plaintext',
+      kind: 'env'
+    }
+  }
+
   const extension = name.includes('.')
     ? name.split('.').pop().toLowerCase()
     : ''
@@ -1648,6 +1662,11 @@ function IDE({ projectId }) {
     try {
       for (const edit of edits) {
         const path = typeof edit?.path === 'string' ? edit.path.trim() : ''
+
+        if (isSecretEnvFile(path)) {
+          throw new Error('環境変数ファイルはPoligo AIから直接変更できません。')
+        }
+
         const oldText = typeof edit?.oldText === 'string' ? edit.oldText : null
         const newText = typeof edit?.newText === 'string' ? edit.newText : null
 
@@ -1750,13 +1769,20 @@ function IDE({ projectId }) {
     }
 
     const selection = editorRef.current?.getSelection()
-    const selectedText = selection
+    const rawSelectedText = selection
       ? editorRef.current?.getModel()?.getValueInRange(selection) || ''
       : ''
+    const selectedText = isSecretEnvFile(activeFile)
+      ? ''
+      : rawSelectedText
     const contextFiles = {}
     let contextBytes = 0
 
     for (const [path, content] of Object.entries(filesRef.current)) {
+      if (isSecretEnvFile(path)) {
+        continue
+      }
+
       if (path !== activeFile && contextBytes > 90_000) {
         break
       }
@@ -2429,6 +2455,13 @@ function IDE({ projectId }) {
               ))}
             </div>
 
+            {isSecretEnvFile(activeFile) && (
+              <div className="env-notice">
+                <strong>環境変数ファイル</strong>
+                <span>このファイルの内容はPoligo AIには送信されません。</span>
+              </div>
+            )}
+
             <div className="editor-pane">
               <Editor
                 height="100%"
@@ -2510,7 +2543,7 @@ function IDE({ projectId }) {
                         {!aiMessages.length && (
                           <div className="ai-empty">
                             <strong>コードについて相談できます。</strong>
-                            <span>現在のファイル、選択範囲、プロジェクト内のファイルをAIに渡せます。</span>
+                            <span>現在のファイル、選択範囲、プロジェクト内のファイルをAIに渡せます。環境変数ファイルは除外されます。</span>
                           </div>
                         )}
 
