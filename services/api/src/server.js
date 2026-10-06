@@ -1146,7 +1146,7 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
-  if (request.method === 'GET' && request.url === '/api/health') {
+  if ((request.method === 'GET' || request.method === 'HEAD') && request.url === '/api/health') {
     send(response, 200, {
       status: 'ok',
       service: 'api',
