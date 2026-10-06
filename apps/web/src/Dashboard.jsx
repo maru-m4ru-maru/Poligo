@@ -543,8 +543,8 @@ export default function Dashboard({ session }) {
           <button
             className={activeSection === 'account' ? 'active' : ''}
             onClick={() => {
-              setActiveSection('account')
-              document.getElementById('account')?.scrollIntoView({ behavior: 'smooth' })
+              window.history.pushState({}, '', '/')
+              window.location.hash = '/account'
             }}
           >
             <span className="stack-nav-icon">◯</span>
@@ -855,28 +855,6 @@ export default function Dashboard({ session }) {
             )}
           </section>
 
-          <section id="account" className="stack-account-section">
-            <div>
-              <span className="stack-eyebrow">アカウント</span>
-              <h2>{data.user.name}</h2>
-              <p>{data.user.email}</p>
-            </div>
-
-            <div className="stack-account-stats">
-              <div>
-                <span>プロジェクト</span>
-                <strong>{stats.projectCount}</strong>
-              </div>
-              <div>
-                <span>ファイル</span>
-                <strong>{stats.fileCount}</strong>
-              </div>
-              <div>
-                <span>保存容量</span>
-                <strong>{formatBytes(stats.storageBytes)}</strong>
-              </div>
-            </div>
-          </section>
         </div>
       </main>
     </div>
