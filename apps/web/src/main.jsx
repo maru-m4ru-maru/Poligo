@@ -1974,6 +1974,17 @@ function IDE({ projectId }) {
     }
   }
 
+  function resetProject() {
+    setExecutionStdin('')
+    terminalInputBuffer.current = ''
+    setTerminalLines([])
+    setFiles(DEFAULT_FILES)
+    setOpenFiles(['index.html'])
+    setActiveFile('index.html')
+    setPreview('')
+    setPreviewKey(value => value + 1)
+  }
+
   function renderAiPanel() {
     return (
       <div className="ai-panel">
