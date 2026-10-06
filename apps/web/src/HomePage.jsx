@@ -1,5 +1,4 @@
 import { authClient } from './auth-client'
-import { DemoPreview } from './DemoPage'
 
 function navigate(path) {
   if (path === '/dashboard' || path === '/ide') {
@@ -99,9 +98,6 @@ export default function HomePage({ session }) {
               }}>
                 ダッシュボード
               </button>
-              <button className="home-secondary-button" onClick={() => navigate('/demo')}>
-                デモを試す
-              </button>
             </div>
 
             <div className="home-trust-line">
@@ -111,16 +107,47 @@ export default function HomePage({ session }) {
           </div>
 
           <div className="home-hero-visual">
-            <div className="home-demo-frame-wrap">
-              <div className="home-demo-label">
-                <span>DEMO</span>
-                <strong>アカウント不要</strong>
+            <div className="home-window">
+            <div className="home-window-bar">
+              <span />
+              <span />
+              <span />
+              <strong>Poligo</strong>
+            </div>
+
+            <div className="home-window-body">
+              <div className="home-window-sidebar">
+                <span className="home-window-sidebar-active">▦</span>
+                <span>⌕</span>
+                <span>⑂</span>
+                <span>⚙</span>
               </div>
-              <DemoPreview />
-              <button className="home-demo-open" onClick={() => navigate('/demo')}>
-                デモを開く
-                <span>→</span>
-              </button>
+
+              <div className="home-window-files">
+                <div className="home-window-label">EXPLORER</div>
+                <span className="home-file-active">index.html</span>
+                <span>style.css</span>
+                <span>main.py</span>
+                <span>main.cpp</span>
+              </div>
+
+              <div className="home-window-editor">
+                <div className="home-window-tabs">
+                  <span>main.py</span>
+                  <span>app.js</span>
+                </div>
+                <pre>{`print("Hello from Poligo")
+
+name = "builder"
+
+if name:
+    print("Ready to build.")`}</pre>
+                <div className="home-window-output">
+                  <div>OUTPUT</div>
+                  <strong>Hello from Poligo</strong>
+                  <span>Process completed</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
