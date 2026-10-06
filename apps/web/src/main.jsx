@@ -405,7 +405,7 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
   const entryFile = getPreviewEntryFile(files, requestedFile)
 
   if (!entryFile || typeof files[entryFile] !== 'string') {
-    return '<!doctype html><html lang="ja"><body><main style="font-family:system-ui;padding:32px">HTMLファイルがありません。</main></body></html>'
+    return '<!doctype html><html lang="ja"><body style="margin:0;background:#f8fafc;color:#334155"><main style="font-family:system-ui;padding:40px;max-width:680px;margin:0 auto"><div style="font-size:12px;color:#64748b;letter-spacing:.08em">POLIGO PREVIEW</div><h1 style="font-size:24px;margin:12px 0 8px">プレビュー対象がありません</h1><p style="font-size:14px;line-height:1.7;color:#64748b;margin:0">このプロジェクトにはHTMLファイルがないため、ブラウザプレビューを表示できません。サーバー実行言語の結果はターミナルに表示されます。</p></main></body></html>'
   }
 
   let html = files[entryFile]
@@ -635,6 +635,10 @@ function firstFile(files) {
   return Object.keys(files)[0] || 'index.html'
 }
 
+function isServerLanguage(language) {
+  return SERVER_LANGUAGES.has(language)
+}
+
 function IDE({ projectId }) {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [projects, setProjects] = useState([])
@@ -683,6 +687,9 @@ function IDE({ projectId }) {
   const [dialogBusy, setDialogBusy] = useState(false)
   const terminalRef = useRef(null)
   const terminal = useRef(null)
+  const terminalPendingLines = useRef([])
+  const terminalInputBuffer = useRef('')
+  const activeFileRef = useRef(activeFile)
   const editorRef = useRef(null)
   const fileUploadRef = useRef(null)
   const filesRef = useRef(files)
@@ -690,6 +697,10 @@ function IDE({ projectId }) {
   const { data: session } = authClient.useSession()
   const currentLanguage = getFileMeta(activeFile).language
   const currentValue = files[activeFile] ?? ''
+
+  useEffect(() => {
+    activeFileRef.current = activeFile
+  }, [activeFile])
   const currentProject = projects.find(project => project.id === currentProjectId)
 
   const searchResults = useMemo(() => {
@@ -972,15 +983,43 @@ function IDE({ projectId }) {
     instance.loadAddon(fit)
     instance.open(terminalRef.current)
     fit.fit()
+
+    function flushPendingLines() {
+      const lines = terminalPendingLines.current
+
+      terminalPendingLines.current = []
+
+      for (const line of lines) {
+        instance.writeln(line)
+      }
+    }
+
+    const isServerLanguage = () => {
+      return SERVER_LANGUAGES.has(getFileMeta(activeFileRef.current).language)
+    }
+
     instance.writeln('Poligo ターミナル')
-    instance.writeln('利用可能なコマンドは「help」で確認できます。')
-    instance.write('$ ')
+    instance.writeln('通常のシェル操作は「$」、標準入力は「stdin>」から入力できます。')
+    instance.write(isServerLanguage() ? 'stdin> ' : '$ ')
 
     let buffer = ''
 
     instance.onData(data => {
       if (data === '\r') {
         instance.write('\r\n')
+
+        if (isServerLanguage()) {
+          const inputLine = buffer
+
+          terminalInputBuffer.current = ''
+          setExecutionStdin(current => (
+            current ? current + '\n' + inputLine : inputLine
+          ))
+
+          buffer = ''
+          instance.write('stdin> ')
+          return
+        }
 
         if (buffer === 'clear') {
           instance.clear()
@@ -1011,14 +1050,14 @@ function IDE({ projectId }) {
             .then(result => instance.writeln(JSON.stringify(result)))
             .catch(error => instance.writeln(error.message))
         } else if (buffer === 'run') {
-          setPreview(buildPreview(filesRef.current))
-          setPreviewKey(value => value + 1)
-          instance.writeln('プレビューを更新しました。')
+          void runProject()
+          return
         } else if (buffer) {
           instance.writeln(buffer + ': command not found')
         }
 
         buffer = ''
+        terminalInputBuffer.current = ''
         instance.write('$ ')
         return
       }
@@ -1026,18 +1065,29 @@ function IDE({ projectId }) {
       if (data === '\u007f') {
         if (buffer.length) {
           buffer = buffer.slice(0, -1)
+          terminalInputBuffer.current = buffer
           instance.write('\b \b')
         }
         return
       }
 
+      if (data === '\u0003') {
+        buffer = ''
+        terminalInputBuffer.current = ''
+        instance.write('^C\r\n')
+        instance.write(isServerLanguage() ? 'stdin> ' : '$ ')
+        return
+      }
+
       if (data >= ' ') {
         buffer += data
+        terminalInputBuffer.current = buffer
         instance.write(data)
       }
     })
 
     terminal.current = instance
+    flushPendingLines()
 
     const resize = () => fit.fit()
     window.addEventListener('resize', resize)
@@ -1048,7 +1098,6 @@ function IDE({ projectId }) {
       terminal.current = null
     }
   }, [])
-
   const previewDoc = useMemo(
     () => preview || buildPreview(files, activeFile),
     [files, preview, activeFile]
@@ -1873,11 +1922,14 @@ function IDE({ projectId }) {
   }
 
   function writeTerminalLines(text) {
-    if (!terminal.current) return
+    const lines = String(text || '').split('\n')
 
-    String(text || '')
-      .split('\n')
-      .forEach(line => terminal.current.writeln(line))
+    if (!terminal.current) {
+      terminalPendingLines.current.push(...lines)
+      return
+    }
+
+    lines.forEach(line => terminal.current.writeln(line))
   }
 
   function writeExecutionToTerminal({
@@ -1944,11 +1996,6 @@ function IDE({ projectId }) {
     writeTerminalLines('')
     writeTerminalLines('> run ' + activeFile + ' [' + currentLanguage + ']')
 
-    if (executionStdin) {
-      writeTerminalLines('[stdin]')
-      writeTerminalLines(executionStdin)
-    }
-
     writeTerminalLines('Waiting for execution...')
 
     try {
@@ -1971,6 +2018,8 @@ function IDE({ projectId }) {
       })
 
       writeTerminalLines('Execution ' + result.id + ' queued.')
+      setExecutionStdin('')
+      terminalInputBuffer.current = ''
 
       for (let attempt = 0; attempt < 120; attempt += 1) {
         const status = await request(
@@ -1992,11 +2041,13 @@ function IDE({ projectId }) {
           writeExecutionToTerminal({
             activeFileName: activeFile,
             language: currentLanguage,
-            stdin: executionStdin,
+            stdin: '',
             result: status.result || null,
             error: '',
             status: status.status
           })
+
+          writeTerminalLines(isServerLanguage(currentLanguage) ? 'stdin> ' : '$ ')
 
           return
         }
@@ -2010,6 +2061,8 @@ function IDE({ projectId }) {
           window.setTimeout(resolve, attempt < 8 ? 150 : 300)
         })
       }
+
+      writeTerminalLines('Process exited with code 0.')
 
       setExecution(current => ({
         ...current,
@@ -2052,6 +2105,8 @@ function IDE({ projectId }) {
   }
 
   function resetProject() {
+    setExecutionStdin('')
+    terminalInputBuffer.current = ''
     setFiles(DEFAULT_FILES)
     setOpenFiles(['index.html'])
     setActiveFile('index.html')
@@ -2748,21 +2803,6 @@ function IDE({ projectId }) {
                 <div className="bottom-content">
                   {bottomTab === 'terminal' && (
                     <div className="terminal-panel">
-                      {SERVER_LANGUAGES.has(currentLanguage) && (
-                        <div className="terminal-stdin">
-                          <div>
-                            <strong>標準入力</strong>
-                            <span>実行時にこの内容を input() などへ渡します。</span>
-                          </div>
-                          <textarea
-                            value={executionStdin}
-                            onChange={event => setExecutionStdin(event.target.value)}
-                            placeholder="例: maru\n18\nJapan"
-                            spellCheck={false}
-                            rows={2}
-                          />
-                        </div>
-                      )}
                       <div className="terminal" ref={terminalRef} />
                     </div>
                   )}
