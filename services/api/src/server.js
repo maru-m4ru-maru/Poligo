@@ -218,7 +218,11 @@ function decodeExecutionFile(content) {
     return Buffer.from(data, 'base64')
   }
 
-  return Buffer.from(decodeURIComponent(data), 'utf8')
+  try {
+    return Buffer.from(decodeURIComponent(data), 'utf8')
+  } catch {
+    throw new Error('invalid data URL file content')
+  }
 }
 
 function normalizeExecutionFiles(files) {
