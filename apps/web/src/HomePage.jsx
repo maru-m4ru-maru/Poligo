@@ -20,6 +20,9 @@ export default function HomePage({ session }) {
         </button>
 
         <div className="home-nav-actions">
+          <button onClick={() => document.getElementById('terms')?.scrollIntoView({ behavior: 'smooth' })}>
+            Terms
+          </button>
           <a href="https://poligo1.statuspage.io/" target="_blank" rel="noreferrer">
             Status
           </a>
@@ -179,13 +182,14 @@ if name:
 
             <article className="home-term-card">
               <span>02</span>
-              <h3>Strict enforcement</h3>
+              <h3>Zero tolerance</h3>
               <p>
-                When unauthorized multiple-account use is confirmed, Poligo may suspend access,
-                restrict usage, or delete the affected account.
+                Unauthorized multiple-account use is treated as a serious violation.
+                Poligo may suspend or delete the affected accounts without prior notice.
               </p>
               <p>
-                Related accounts may also be blocked when they are determined to belong to the same user.
+                The operator may also prohibit the same person from accessing or using
+                Poligo and all other services operated by the operator, including related accounts.
               </p>
             </article>
 
@@ -212,8 +216,8 @@ if name:
               <span>05</span>
               <h3>Suspension and deletion</h3>
               <p>
-                Violations may result in suspension, access restrictions, data deletion,
-                or account deletion without prior notice.
+                Violations may result in suspension, permanent access restrictions, data deletion,
+                account deletion, or a ban from all services operated by the operator without prior notice.
               </p>
             </article>
 
