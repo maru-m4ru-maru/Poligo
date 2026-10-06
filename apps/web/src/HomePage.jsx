@@ -109,6 +109,12 @@ export default function HomePage({ session }) {
             </div>
           </div>
 
+          <div className="home-hero-brand">
+            <div className="home-hero-brand-inner">
+              <img src="/poligo-logo.svg" alt="Poligo" />
+              <span>ブラウザで開発するためのIDE</span>
+            </div>
+          </div>
         </section>
 
         <section className="home-feature-strip">
