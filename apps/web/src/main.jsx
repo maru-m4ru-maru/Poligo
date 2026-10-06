@@ -167,6 +167,14 @@ function ActivityIcon({ type }) {
     return <svg {...common}><circle cx="8.4" cy="8.4" r="4.8" /><path d="m12 12 4 4" /></svg>
   }
 
+  if (type === 'ai') {
+    return <svg {...common}><path d="M5 6.5h10v7H5z" /><path d="M8 13.5v2M12 13.5v2M8.5 9h.01M11.5 9h.01" /></svg>
+  }
+
+  if (type === 'preview') {
+    return <svg {...common}><rect x="3.5" y="5" width="13" height="10" rx="1.5" /><path d="M6 8h2M6 11h8M11 8h2" /></svg>
+  }
+
   if (type === 'source') {
     return <svg {...common}><circle cx="5" cy="5" r="2" /><circle cx="15" cy="15" r="2" /><path d="M7 6.3 13 13.7M7 15h4a4 4 0 0 0 4-4V7" /></svg>
   }
@@ -636,6 +644,7 @@ function IDE({ projectId }) {
   const [activeFile, setActiveFile] = useState('index.html')
   const [openFiles, setOpenFiles] = useState(['index.html'])
   const [activeView, setActiveView] = useState('files')
+  const [rightPaneView, setRightPaneView] = useState('preview')
   const [bottomTab, setBottomTab] = useState('terminal')
   const [bottomOpen, setBottomOpen] = useState(true)
   const [preview, setPreview] = useState('')
@@ -760,10 +769,10 @@ function IDE({ projectId }) {
     },
     {
       id: 'output',
-      title: '出力を開く',
+      title: 'ターミナルを開く',
       hint: '実行結果を表示',
       run: () => {
-        setBottomTab('output')
+        setBottomTab('terminal')
         setBottomOpen(true)
       }
     },
@@ -781,7 +790,7 @@ function IDE({ projectId }) {
       title: 'Poligo AIを開く',
       hint: 'コード支援AI',
       run: () => {
-        setBottomTab('ai')
+        setRightPaneView('ai')
         setBottomOpen(true)
       }
     },
@@ -1804,7 +1813,7 @@ function IDE({ projectId }) {
     setAiPrompt('')
     setAiBusy(true)
     setBottomOpen(true)
-    setBottomTab('ai')
+    setRightPaneView('ai')
 
     try {
       const result = await request('/api/ai/assist', {
@@ -1863,15 +1872,61 @@ function IDE({ projectId }) {
     }
   }
 
+  function writeTerminalLines(text) {
+    if (!terminal.current) return
+
+    String(text || '')
+      .split('\n')
+      .forEach(line => terminal.current.writeln(line))
+  }
+
+  function writeExecutionToTerminal({
+    activeFileName,
+    language,
+    stdin,
+    result,
+    error,
+    status
+  }) {
+    if (!terminal.current) return
+
+    terminal.current.writeln('')
+    terminal.current.writeln('> run ' + activeFileName + ' [' + language + ']')
+
+    if (stdin) {
+      terminal.current.writeln('[stdin]')
+      writeTerminalLines(stdin)
+    }
+
+    if (status === 'timeout') {
+      terminal.current.writeln('Execution timed out.')
+      return
+    }
+
+    if (error) {
+      terminal.current.writeln(error)
+      return
+    }
+
+    if (result?.stdout) {
+      writeTerminalLines(result.stdout)
+    }
+
+    if (result?.stderr) {
+      writeTerminalLines(result.stderr)
+    }
+
+    if (result?.exitCode !== null && result?.exitCode !== undefined) {
+      terminal.current.writeln('')
+      terminal.current.writeln('Process exited with code ' + result.exitCode + '.')
+    }
+  }
+
   async function runProject() {
     const serverExecution = SERVER_LANGUAGES.has(currentLanguage)
 
-    if (!serverExecution) {
-      refreshPreview()
-    }
-
     setBottomOpen(true)
-    setBottomTab('output')
+    setBottomTab('terminal')
     setExecution({
       id: '',
       status: serverExecution ? 'queued' : 'succeeded',
@@ -1886,8 +1941,19 @@ function IDE({ projectId }) {
     })
 
     if (!serverExecution) {
+      writeTerminalLines('ブラウザプレビューを更新しました。')
       return
     }
+
+    writeTerminalLines('')
+    writeTerminalLines('> run ' + activeFile + ' [' + currentLanguage + ']')
+
+    if (executionStdin) {
+      writeTerminalLines('[stdin]')
+      writeTerminalLines(executionStdin)
+    }
+
+    writeTerminalLines('Waiting for execution...')
 
     try {
       const result = await request('/api/executions', {
@@ -1908,6 +1974,8 @@ function IDE({ projectId }) {
         error: ''
       })
 
+      writeTerminalLines('Execution ' + result.id + ' queued.')
+
       for (let attempt = 0; attempt < 120; attempt += 1) {
         const status = await request(
           '/api/executions/' + encodeURIComponent(result.id)
@@ -1924,6 +1992,16 @@ function IDE({ projectId }) {
             result: status.result || null,
             error: ''
           })
+
+          writeExecutionToTerminal({
+            activeFileName: activeFile,
+            language: currentLanguage,
+            stdin: executionStdin,
+            result: status.result || null,
+            error: '',
+            status: status.status
+          })
+
           return
         }
 
@@ -1948,11 +2026,22 @@ function IDE({ projectId }) {
         }
       }))
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Execution failed'
+
       setExecution({
         id: '',
         status: 'failed',
         result: null,
-        error: error instanceof Error ? error.message : 'Execution failed'
+        error: message
+      })
+
+      writeExecutionToTerminal({
+        activeFileName: activeFile,
+        language: currentLanguage,
+        stdin: executionStdin,
+        result: null,
+        error: message,
+        status: 'failed'
       })
     }
   }
@@ -1963,6 +2052,135 @@ function IDE({ projectId }) {
     setActiveFile('index.html')
     setPreview('')
     setPreviewKey(value => value + 1)
+  }
+
+  function renderAiPanel() {
+    return (
+      <div className="ai-panel">
+                      <div className="ai-panel-head">
+                        <div>
+                          <strong>Poligo AI</strong>
+                          <span>OpenRouter</span>
+                        </div>
+                        <div className="ai-model-picker" role="group" aria-label="AIモデル">
+                          {[
+                            ['auto', '自動'],
+                            ['fast', '速度重視'],
+                            ['code', '賢さ重視'],
+                            ['reasoning', '推論重視']
+                          ].map(([id, label]) => (
+                            <button
+                              key={id}
+                              type="button"
+                              className={aiMode === id ? 'active' : ''}
+                              onClick={() => setAiMode(id)}
+                              disabled={aiBusy}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="ai-message-list">
+                        {!aiMessages.length && (
+                          <div className="ai-empty">
+                            <strong>コードについて相談できます。</strong>
+                            <span>現在のファイル、選択範囲、プロジェクト内のファイルをAIに渡せます。環境変数ファイルは除外されます。</span>
+                          </div>
+                        )}
+
+                        {aiMessages.map((message, index) => (
+                          <div key={index} className={'ai-message ai-message-' + message.role}>
+                            <div className="ai-message-role">
+                              {message.role === 'user' ? 'あなた' : 'Poligo AI'}
+                              {message.model && <span>{message.model}</span>}
+                            </div>
+                            <div className="ai-message-text">{message.text}</div>
+
+                            {message.edits?.length > 0 && (
+                              <div className="ai-edit-card">
+                                <div className="ai-edit-title">コード変更 {message.edits.length}件</div>
+                                <div className="ai-edit-files">
+                                  {[...new Set(message.edits.map(edit => edit.path))].map(path => (
+                                    <span key={path}>{path}</span>
+                                  ))}
+                                </div>
+                                {message.applyError && (
+                                  <div className="ai-apply-error">{message.applyError}</div>
+                                )}
+                                {!message.applied ? (
+                                  <div className="ai-edit-actions">
+                                    <button
+                                      type="button"
+                                      onClick={() => applyAiMessage(index, false)}
+                                    >
+                                      1度だけ適用
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="primary"
+                                      onClick={() => applyAiMessage(index, true)}
+                                    >
+                                      毎回確認せず適用
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="ai-applied">適用済み</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {aiBusy && (
+                          <div className="ai-message ai-message-assistant">
+                            <div className="ai-message-role">Poligo AI</div>
+                            <div className="ai-thinking">考えています...</div>
+                          </div>
+                        )}
+                      </div>
+
+                      <form
+                        className="ai-input-area"
+                        onSubmit={event => {
+                          event.preventDefault()
+                          void submitAiRequest()
+                        }}
+                      >
+                        <textarea
+                          value={aiPrompt}
+                          onChange={event => setAiPrompt(event.target.value)}
+                          placeholder="コードの質問、バグ修正、リファクタリング、機能追加など..."
+                          rows={3}
+                          disabled={aiBusy}
+                        />
+                        <div className="ai-input-footer">
+                          <div className="ai-input-status">
+                            <span>
+                              {aiAutoApply ? '自動適用: ON' : '変更は確認後に適用'}
+                            </span>
+                            {aiAutoApply && (
+                              <button
+                                type="button"
+                                className="ai-auto-disable"
+                                onClick={() => {
+                                  localStorage.removeItem('poligo-ai-auto-apply')
+                                  setAiAutoApply(false)
+                                }}
+                              >
+                                解除
+                              </button>
+                            )}
+                          </div>
+                          <button type="submit" disabled={aiBusy || !aiPrompt.trim()}>
+                            {aiBusy ? '処理中...' : '送信'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )
+    )
   }
 
   if (!workspaceReady) {
@@ -2165,10 +2383,7 @@ function IDE({ projectId }) {
           </span>
           <button
             className="dashboard-button"
-            onClick={() => {
-              setBottomTab('ai')
-              setBottomOpen(true)
-            }}
+            onClick={() => setRightPaneView('ai')}
           >
             AI
           </button>
@@ -2204,6 +2419,20 @@ function IDE({ projectId }) {
                 <ActivityIcon type={type} />
               </button>
             ))}
+            <button
+              className={'activity-button ' + (rightPaneView === 'ai' ? 'active' : '')}
+              onClick={() => setRightPaneView('ai')}
+              title="AI"
+            >
+              <ActivityIcon type="ai" />
+            </button>
+            <button
+              className={'activity-button ' + (rightPaneView === 'preview' ? 'active' : '')}
+              onClick={() => setRightPaneView('preview')}
+              title="プレビュー"
+            >
+              <ActivityIcon type="preview" />
+            </button>
           </div>
           <button
             className={'activity-button ' + (activeView === 'settings' ? 'active' : '')}
@@ -2499,9 +2728,7 @@ function IDE({ projectId }) {
             <div className={'bottom-panel ' + (bottomOpen ? 'open' : '')}>
               <div className="bottom-tabs">
                 {[
-                  ['ai', 'AI'],
                   ['terminal', 'ターミナル'],
-                  ['output', '出力'],
                   ['problems', '問題']
                 ].map(([id, label]) => (
                   <button
@@ -2521,182 +2748,24 @@ function IDE({ projectId }) {
               </div>
               {bottomOpen && (
                 <div className="bottom-content">
-                  {bottomTab === 'ai' && (
-                    <div className="ai-panel">
-                      <div className="ai-panel-head">
-                        <div>
-                          <strong>Poligo AI</strong>
-                          <span>OpenRouter</span>
-                        </div>
-                        <div className="ai-model-picker" role="group" aria-label="AIモデル">
-                          {[
-                            ['auto', '自動'],
-                            ['fast', '速度重視'],
-                            ['code', '賢さ重視'],
-                            ['reasoning', '推論重視']
-                          ].map(([id, label]) => (
-                            <button
-                              key={id}
-                              type="button"
-                              className={aiMode === id ? 'active' : ''}
-                              onClick={() => setAiMode(id)}
-                              disabled={aiBusy}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="ai-message-list">
-                        {!aiMessages.length && (
-                          <div className="ai-empty">
-                            <strong>コードについて相談できます。</strong>
-                            <span>現在のファイル、選択範囲、プロジェクト内のファイルをAIに渡せます。環境変数ファイルは除外されます。</span>
-                          </div>
-                        )}
-
-                        {aiMessages.map((message, index) => (
-                          <div key={index} className={'ai-message ai-message-' + message.role}>
-                            <div className="ai-message-role">
-                              {message.role === 'user' ? 'あなた' : 'Poligo AI'}
-                              {message.model && <span>{message.model}</span>}
-                            </div>
-                            <div className="ai-message-text">{message.text}</div>
-
-                            {message.edits?.length > 0 && (
-                              <div className="ai-edit-card">
-                                <div className="ai-edit-title">コード変更 {message.edits.length}件</div>
-                                <div className="ai-edit-files">
-                                  {[...new Set(message.edits.map(edit => edit.path))].map(path => (
-                                    <span key={path}>{path}</span>
-                                  ))}
-                                </div>
-                                {message.applyError && (
-                                  <div className="ai-apply-error">{message.applyError}</div>
-                                )}
-                                {!message.applied ? (
-                                  <div className="ai-edit-actions">
-                                    <button
-                                      type="button"
-                                      onClick={() => applyAiMessage(index, false)}
-                                    >
-                                      1度だけ適用
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="primary"
-                                      onClick={() => applyAiMessage(index, true)}
-                                    >
-                                      毎回確認せず適用
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="ai-applied">適用済み</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-
-                        {aiBusy && (
-                          <div className="ai-message ai-message-assistant">
-                            <div className="ai-message-role">Poligo AI</div>
-                            <div className="ai-thinking">考えています...</div>
-                          </div>
-                        )}
-                      </div>
-
-                      <form
-                        className="ai-input-area"
-                        onSubmit={event => {
-                          event.preventDefault()
-                          void submitAiRequest()
-                        }}
-                      >
-                        <textarea
-                          value={aiPrompt}
-                          onChange={event => setAiPrompt(event.target.value)}
-                          placeholder="コードの質問、バグ修正、リファクタリング、機能追加など..."
-                          rows={3}
-                          disabled={aiBusy}
-                        />
-                        <div className="ai-input-footer">
-                          <div className="ai-input-status">
-                            <span>
-                              {aiAutoApply ? '自動適用: ON' : '変更は確認後に適用'}
-                            </span>
-                            {aiAutoApply && (
-                              <button
-                                type="button"
-                                className="ai-auto-disable"
-                                onClick={() => {
-                                  localStorage.removeItem('poligo-ai-auto-apply')
-                                  setAiAutoApply(false)
-                                }}
-                              >
-                                解除
-                              </button>
-                            )}
-                          </div>
-                          <button type="submit" disabled={aiBusy || !aiPrompt.trim()}>
-                            {aiBusy ? '処理中...' : '送信'}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  )}
-                  {bottomTab === 'terminal' && <div className="terminal" ref={terminalRef} />}
-                  {bottomTab === 'output' && (
-                    <div className="output-panel">
+                  {bottomTab === 'terminal' && (
+                    <div className="terminal-panel">
                       {SERVER_LANGUAGES.has(currentLanguage) && (
-                        <div className="output-execution-target">
-                          <span>実行対象</span>
-                          <strong>{activeFile}</strong>
-                          <small>{currentLanguage}</small>
-                        </div>
-                      )}
-                      {SERVER_LANGUAGES.has(currentLanguage) && (
-                        <div className="output-stdin">
-                          <div className="output-section-label">標準入力</div>
+                        <div className="terminal-stdin">
+                          <div>
+                            <strong>標準入力</strong>
+                            <span>実行時にこの内容を input() などへ渡します。</span>
+                          </div>
                           <textarea
                             value={executionStdin}
                             onChange={event => setExecutionStdin(event.target.value)}
-                            placeholder="input() などへの入力"
+                            placeholder="例: maru\n18\nJapan"
                             spellCheck={false}
-                            rows={3}
+                            rows={2}
                           />
                         </div>
                       )}
-                      {runtimeProblems.map((problem, index) => (
-                        <pre
-                          key={'runtime-output-' + index}
-                          className="output-raw output-error-raw"
-                        >
-                          {problem.message + (problem.stack ? '\n\n' + problem.stack : '')}
-                        </pre>
-                      ))}
-
-                      {execution.error && (
-                        <pre className="output-raw output-error-raw">{execution.error}</pre>
-                      )}
-
-                      {!runtimeProblems.length && !execution.error && execution.status === 'queued' && !execution.result && (
-                        <div className="output-running">実行を待機しています...</div>
-                      )}
-
-                      {!runtimeProblems.length && !execution.error && execution.status === 'running' && !execution.result && (
-                        <div className="output-running">実行中...</div>
-                      )}
-
-                      {!runtimeProblems.length && !execution.error && execution.result && (
-                        <pre className="output-raw">
-                          {(execution.result.stdout || '') +
-                            (execution.result.stderr
-                              ? (execution.result.stdout ? '\n' : '') + execution.result.stderr
-                              : '')}
-                        </pre>
-                      )}
+                      <div className="terminal" ref={terminalRef} />
                     </div>
                   )}
                   {bottomTab === 'problems' && (
@@ -2778,29 +2847,35 @@ function IDE({ projectId }) {
             </div>
           </section>
 
-          <section className="preview-section">
-            <div className="preview-toolbar">
-              <button className="preview-control">‹</button>
-              <button className="preview-control">›</button>
-              <button className="preview-control" onClick={refreshPreview}>↻</button>
-              <div className="preview-address">
-                <span>○</span>
-                <span>プレビュー</span>
-              </div>
-              <button
-                className="preview-control"
-                onClick={openPreviewWindow}
-                title="新しいタブで開く"
-              >
-                ↗
-              </button>
-            </div>
-            <iframe
-              key={previewKey}
-              title="Poligo preview"
-              srcDoc={previewDoc}
-              sandbox="allow-scripts allow-forms allow-modals allow-downloads"
-            />
+          <section className={'preview-section ' + (rightPaneView === 'ai' ? 'ai-mode' : '')}>
+            {rightPaneView === 'ai' ? (
+              renderAiPanel()
+            ) : (
+              <>
+                <div className="preview-toolbar">
+                  <button className="preview-control">‹</button>
+                  <button className="preview-control">›</button>
+                  <button className="preview-control" onClick={refreshPreview}>↻</button>
+                  <div className="preview-address">
+                    <span>○</span>
+                    <span>プレビュー</span>
+                  </div>
+                  <button
+                    className="preview-control"
+                    onClick={openPreviewWindow}
+                    title="新しいタブで開く"
+                  >
+                    ↗
+                  </button>
+                </div>
+                <iframe
+                  key={previewKey}
+                  title="Poligo preview"
+                  srcDoc={previewDoc}
+                  sandbox="allow-scripts allow-forms allow-modals allow-downloads"
+                />
+              </>
+            )}
           </section>
         </main>
       </div>
