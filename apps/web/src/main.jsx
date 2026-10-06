@@ -1144,19 +1144,9 @@ function IDE({ projectId }) {
       })
 
       for (let attempt = 0; attempt < 120; attempt += 1) {
-        await new Promise(resolve => setTimeout(resolve, 500))
-
         const status = await request(
           '/api/executions/' + encodeURIComponent(result.id)
         )
-
-        if (status.status === 'running' || status.status === 'queued') {
-          setExecution(current => ({
-            ...current,
-            status: status.status
-          }))
-          continue
-        }
 
         if (
           status.status === 'succeeded' ||
@@ -1171,6 +1161,15 @@ function IDE({ projectId }) {
           })
           return
         }
+
+        setExecution(current => ({
+          ...current,
+          status: status.status === 'running' ? 'running' : 'queued'
+        }))
+
+        await new Promise(resolve => {
+          window.setTimeout(resolve, attempt < 8 ? 150 : 300)
+        })
       }
 
       setExecution(current => ({
