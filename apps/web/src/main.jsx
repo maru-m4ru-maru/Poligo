@@ -24,6 +24,7 @@ import AuthPage from './AuthPage'
 import Dashboard from './Dashboard'
 import HomePage from './HomePage'
 import TermsPage from './TermsPage'
+import AccountPage from './AccountPage'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1775,6 +1776,7 @@ function getRoutePath() {
 
   if (
     hashPath === '/dashboard' ||
+    hashPath === '/account' ||
     hashPath === '/ide' ||
     /^\/ide\/[^/]+$/.test(hashPath)
   ) {
@@ -1787,6 +1789,7 @@ function getRoutePath() {
 function navigate(path) {
   if (
     path === '/dashboard' ||
+    path === '/account' ||
     path === '/ide' ||
     path.startsWith('/ide/')
   ) {
@@ -1805,6 +1808,7 @@ function AppRouter() {
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
   const publicPath = pathname === '/' || pathname === '/terms'
+  const accountPath = pathname === '/account'
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
@@ -1868,6 +1872,10 @@ function AppRouter() {
 
   if (pathname === '/dashboard') {
     return <Dashboard session={session} />
+  }
+
+  if (accountPath) {
+    return <AccountPage session={session} />
   }
 
   if (idePath) {
