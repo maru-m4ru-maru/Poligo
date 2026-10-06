@@ -5779,3 +5779,39 @@ body {
   font-weight: 700;
   text-align: left;
 }
+
+
+.explorer-new-file {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  gap: 8px;
+  padding: 0 10px;
+  border-left: 2px solid #3b82f6;
+  background: #151d29;
+  box-sizing: border-box;
+}
+
+.explorer-new-file input {
+  min-width: 0;
+  flex: 1;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid #3b4d65;
+  border-radius: 3px;
+  outline: none;
+  background: #0d141e;
+  color: #edf4fb;
+  font: inherit;
+  font-size: 11px;
+}
+
+.explorer-new-file input:focus {
+  border-color: #4b8bea;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, .18);
+}
+
+.explorer-new-file input::placeholder {
+  color: #677990;
+}
