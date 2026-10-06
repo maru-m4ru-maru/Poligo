@@ -26,7 +26,7 @@ import HomePage from './HomePage'
 import TermsPage from './TermsPage'
 
 const DEFAULT_FILES = {
-  'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>Build without an IDE vendor lock-in.</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
+  'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
   'style.css': 'body {\n  margin: 0;\n  min-height: 100vh;\n  font-family: system-ui, sans-serif;\n  background: #10100e;\n  color: #ecece5;\n}\n\n.app {\n  max-width: 760px;\n  margin: 0 auto;\n  padding: 64px 24px;\n}',
   'app.js': 'const title = document.querySelector("h1")\n\ntitle.addEventListener("click", () => {\n  title.textContent = "It works."\n})',
   'main.py': 'print("Hello from Python")',
@@ -242,21 +242,21 @@ function IDE({ projectId }) {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [projects, setProjects] = useState([])
   const [currentProjectId, setCurrentProjectId] = useState('')
-  const [projectName, setProjectName] = useState('Untitled Project')
+  const [projectName, setProjectName] = useState('無題のプロジェクト')
   const [files, setFiles] = useState({})
   const [activeFile, setActiveFile] = useState('index.html')
-  const [openFiles, setOpenFiles] = useState(['index.html'])
+  const [openFiles, set開くFiles] = useState(['index.html'])
   const [activeView, setActiveView] = useState('files')
   const [bottomTab, setBottomTab] = useState('terminal')
-  const [bottomOpen, setBottomOpen] = useState(true)
+  const [bottom開く, setBottom開く] = useState(true)
   const [preview, setPreview] = useState('')
   const [apiStatus, setApiStatus] = useState('checking')
-  const [saveStatus, setSaveStatus] = useState('saved')
-  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const [saveStatus, set保存Status] = useState('saved')
+  const [projectMenu開く, setProjectMenu開く] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [quickOpenOpen, setQuickOpenOpen] = useState(false)
-  const [quickOpenQuery, setQuickOpenQuery] = useState('')
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [quick開く開く, setQuick開く開く] = useState(false)
+  const [quick開くQuery, setQuick開くQuery] = useState('')
+  const [commandPalette開く, setCommandPalette開く] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [previewKey, setPreviewKey] = useState(0)
   const [execution, setExecution] = useState({
@@ -321,13 +321,13 @@ function IDE({ projectId }) {
     return results
   }, [files, searchQuery])
 
-  const quickOpenResults = useMemo(() => {
-    const query = quickOpenQuery.trim().toLowerCase()
+  const quick開くResults = useMemo(() => {
+    const query = quick開くQuery.trim().toLowerCase()
 
     return Object.keys(files).filter(name =>
       !query || name.toLowerCase().includes(query)
     )
-  }, [files, quickOpenQuery])
+  }, [files, quick開くQuery])
 
   const commands = useMemo(() => [
     {
@@ -354,7 +354,7 @@ function IDE({ projectId }) {
       hint: 'ターミナルを開く',
       run: () => {
         setBottomTab('terminal')
-        setBottomOpen(true)
+        setBottom開く(true)
       }
     },
     {
@@ -363,7 +363,7 @@ function IDE({ projectId }) {
       hint: '実行結果を表示',
       run: () => {
         setBottomTab('output')
-        setBottomOpen(true)
+        setBottom開く(true)
       }
     },
     {
@@ -372,7 +372,7 @@ function IDE({ projectId }) {
       hint: '実行エラーを表示',
       run: () => {
         setBottomTab('problems')
-        setBottomOpen(true)
+        setBottom開く(true)
       }
     },
     {
@@ -413,11 +413,11 @@ function IDE({ projectId }) {
         setProjectName(result.currentProject.name)
         setFiles(result.currentProject.files)
         setActiveFile(firstFile(result.currentProject.files))
-        setOpenFiles([firstFile(result.currentProject.files)])
+        set開くFiles([firstFile(result.currentProject.files)])
         setWorkspaceReady(true)
       } catch (error) {
         if (!cancelled) {
-          setSaveStatus('storage error')
+          set保存Status('storage error')
           console.error(error)
         }
       }
@@ -437,7 +437,7 @@ function IDE({ projectId }) {
   useEffect(() => {
     if (!workspaceReady || !currentProjectId) return
 
-    setSaveStatus('saving')
+    set保存Status('saving')
 
     const timer = window.setTimeout(async () => {
       try {
@@ -462,9 +462,9 @@ function IDE({ projectId }) {
             : project
         )))
 
-        setSaveStatus('saved')
+        set保存Status('saved')
       } catch {
-        setSaveStatus('storage error')
+        set保存Status('storage error')
       }
     }, 500)
 
@@ -688,12 +688,12 @@ function IDE({ projectId }) {
     }
   }
 
-  function openConfirmDialog({
+  function open確認Dialog({
     title,
     message,
-    confirmLabel = 'Confirm',
+    confirmLabel = '確認',
     danger = false,
-    onConfirm
+    on確認
   }) {
     setDialog({
       type: 'confirm',
@@ -701,7 +701,7 @@ function IDE({ projectId }) {
       message,
       confirmLabel,
       danger,
-      onConfirm
+      on確認
     })
   }
 
@@ -710,8 +710,8 @@ function IDE({ projectId }) {
     message,
     value = '',
     placeholder = '',
-    confirmLabel = 'Save',
-    onConfirm
+    confirmLabel = '保存',
+    on確認
   }) {
     setDialog({
       type: 'input',
@@ -720,11 +720,11 @@ function IDE({ projectId }) {
       value,
       placeholder,
       confirmLabel,
-      onConfirm
+      on確認
     })
   }
 
-  async function handleDialogConfirm() {
+  async function handleDialog確認() {
     if (!dialog || dialogBusy) return
 
     setDialogBusy(true)
@@ -738,9 +738,9 @@ function IDE({ projectId }) {
           return
         }
 
-        await dialog.onConfirm(value)
+        await dialog.on確認(value)
       } else {
-        await dialog.onConfirm()
+        await dialog.on確認()
       }
 
       setDialog(null)
@@ -754,12 +754,12 @@ function IDE({ projectId }) {
 
     if (!commit) return
 
-    openConfirmDialog({
-      title: 'Restore commit',
+    open確認Dialog({
+      title: '復元 commit',
       message: '"' + commit.message + '" will replace the current project files.',
-      confirmLabel: 'Restore',
+      confirmLabel: '復元',
       danger: true,
-      onConfirm: async () => {
+      on確認: async () => {
         setSourceLoading(true)
         setSourceError('')
 
@@ -769,13 +769,13 @@ function IDE({ projectId }) {
 
           setFiles(nextFiles)
           setActiveFile(firstFile(nextFiles))
-          setOpenFiles([firstFile(nextFiles)])
+          set開くFiles([firstFile(nextFiles)])
           setPreview('')
           setPreviewKey(value => value + 1)
-          setSaveStatus('saved')
+          set保存Status('saved')
           await refreshSourceControl(commitId)
         } catch (error) {
-          setSourceError(error instanceof Error ? error.message : 'Restore failed')
+          setSourceError(error instanceof Error ? error.message : '復元 failed')
           setSourceLoading(false)
           throw error
         }
@@ -792,11 +792,11 @@ function IDE({ projectId }) {
 
   function openFile(name) {
     setActiveFile(name)
-    setOpenFiles(current => current.includes(name) ? current : [...current, name])
+    set開くFiles(current => current.includes(name) ? current : [...current, name])
   }
 
   function closeFile(name) {
-    setOpenFiles(current => {
+    set開くFiles(current => {
       const next = current.filter(file => file !== name)
 
       if (name === activeFile) {
@@ -837,19 +837,19 @@ function IDE({ projectId }) {
           : project
       )))
 
-      setSaveStatus('saved')
+      set保存Status('saved')
     } catch {
-      setSaveStatus('storage error')
+      set保存Status('storage error')
     }
   }
 
   async function createFile() {
     openInputDialog({
-      title: 'Create file',
+      title: 'ファイルを作成',
       message: 'Choose a file name for the new file.',
       placeholder: 'example.py',
       confirmLabel: 'Create',
-      onConfirm: async value => {
+      on確認: async value => {
         const normalized = value.trim()
 
         if (!normalized || normalized.includes('/') || normalized.includes('\\')) {
@@ -858,7 +858,7 @@ function IDE({ projectId }) {
 
         if (Object.prototype.hasOwnProperty.call(files, normalized)) {
           setActiveFile(normalized)
-          setOpenFiles(current => current.includes(normalized) ? current : [...current, normalized])
+          set開くFiles(current => current.includes(normalized) ? current : [...current, normalized])
           return
         }
 
@@ -867,8 +867,8 @@ function IDE({ projectId }) {
           [normalized]: ''
         }))
         setActiveFile(normalized)
-        setOpenFiles(current => [...current, normalized])
-        setSaveStatus('saving')
+        set開くFiles(current => [...current, normalized])
+        set保存Status('saving')
       }
     })
   }
@@ -876,12 +876,12 @@ function IDE({ projectId }) {
   async function deleteFile(name = activeFile) {
     if (Object.keys(files).length <= 1) return
 
-    openConfirmDialog({
+    open確認Dialog({
       title: 'Delete file',
       message: '"' + name + '" will be removed from this project.',
       confirmLabel: 'Delete',
       danger: true,
-      onConfirm: async () => {
+      on確認: async () => {
         const remainingNames = Object.keys(files).filter(file => file !== name)
         const nextFile = remainingNames[0]
 
@@ -891,7 +891,7 @@ function IDE({ projectId }) {
           return next
         })
 
-        setOpenFiles(current => current.filter(file => file !== name))
+        set開くFiles(current => current.filter(file => file !== name))
         setActiveFile(current => current === name ? nextFile : current)
       }
     })
@@ -899,7 +899,7 @@ function IDE({ projectId }) {
 
   async function switchProject(id) {
     if (id === currentProjectId) {
-      setProjectMenuOpen(false)
+      setProjectMenu開く(false)
       return
     }
 
@@ -928,48 +928,48 @@ function IDE({ projectId }) {
       setProjectName(project.name)
       setFiles(project.files)
       setActiveFile(firstFile(project.files))
-      setOpenFiles([firstFile(project.files)])
+      set開くFiles([firstFile(project.files)])
       setPreview('')
       setPreviewKey(value => value + 1)
       localStorage.setItem('poligo-current-project', project.id)
-      setProjectMenuOpen(false)
-      setSaveStatus('saved')
+      setProjectMenu開く(false)
+      set保存Status('saved')
     } catch {
-      setSaveStatus('storage error')
+      set保存Status('storage error')
     }
   }
 
   async function newProject() {
     try {
-      const project = await createProject('Untitled Project', DEFAULT_FILES)
+      const project = await createProject('無題のプロジェクト', DEFAULT_FILES)
 
       setProjects(current => [project, ...current])
       setCurrentProjectId(project.id)
       setProjectName(project.name)
       setFiles(project.files)
       setActiveFile('index.html')
-      setOpenFiles(['index.html'])
+      set開くFiles(['index.html'])
       setPreview('')
       setPreviewKey(value => value + 1)
-      setProjectMenuOpen(false)
-      setSaveStatus('saved')
+      setProjectMenu開く(false)
+      set保存Status('saved')
     } catch {
-      setSaveStatus('storage error')
+      set保存Status('storage error')
     }
   }
 
   async function renameProject() {
     openInputDialog({
-      title: 'Rename project',
+      title: 'プロジェクト名を変更',
       message: 'Choose a new name for this project.',
       value: projectName,
-      placeholder: 'Project name',
+      placeholder: 'プロジェクト名',
       confirmLabel: 'Rename',
-      onConfirm: async name => {
+      on確認: async name => {
         if (name === projectName) return
 
         setProjectName(name)
-        setProjectMenuOpen(false)
+        setProjectMenu開く(false)
       }
     })
   }
@@ -989,25 +989,25 @@ function IDE({ projectId }) {
       setProjectName(project.name)
       setFiles(project.files)
       setActiveFile(firstFile(project.files))
-      setOpenFiles([firstFile(project.files)])
+      set開くFiles([firstFile(project.files)])
       setPreview('')
       setPreviewKey(value => value + 1)
-      setProjectMenuOpen(false)
-      setSaveStatus('saved')
+      setProjectMenu開く(false)
+      set保存Status('saved')
     } catch {
-      setSaveStatus('storage error')
+      set保存Status('storage error')
     }
   }
 
   async function removeCurrentProject() {
     if (!currentProject) return
 
-    openConfirmDialog({
-      title: 'Delete project',
+    open確認Dialog({
+      title: 'プロジェクトを削除',
       message: '"' + projectName + '" and all of its files will be permanently removed.',
-      confirmLabel: 'Delete project',
+      confirmLabel: 'プロジェクトを削除',
       danger: true,
-      onConfirm: async () => {
+      on確認: async () => {
         try {
           await saveProject({
             id: currentProjectId,
@@ -1037,14 +1037,14 @@ function IDE({ projectId }) {
           setProjectName(nextProject.name)
           setFiles(nextProject.files)
           setActiveFile(firstFile(nextProject.files))
-          setOpenFiles([firstFile(nextProject.files)])
+          set開くFiles([firstFile(nextProject.files)])
           setPreview('')
           setPreviewKey(value => value + 1)
           localStorage.setItem('poligo-current-project', nextProject.id)
-          setProjectMenuOpen(false)
-          setSaveStatus('saved')
+          setProjectMenu開く(false)
+          set保存Status('saved')
         } catch {
-          setSaveStatus('storage error')
+          set保存Status('storage error')
         }
       }
     })
@@ -1063,23 +1063,23 @@ function IDE({ projectId }) {
 
       if (modifier && key === 'p' && !event.shiftKey) {
         event.preventDefault()
-        setQuickOpenQuery('')
-        setQuickOpenOpen(true)
-        setCommandPaletteOpen(false)
+        setQuick開くQuery('')
+        setQuick開く開く(true)
+        setCommandPalette開く(false)
         return
       }
 
       if (modifier && event.shiftKey && key === 'p') {
         event.preventDefault()
         setCommandQuery('')
-        setCommandPaletteOpen(true)
-        setQuickOpenOpen(false)
+        setCommandPalette開く(true)
+        setQuick開く開く(false)
         return
       }
 
       if (event.key === 'Escape') {
-        setQuickOpenOpen(false)
-        setCommandPaletteOpen(false)
+        setQuick開く開く(false)
+        setCommandPalette開く(false)
 
         if (dialog && !dialogBusy) {
           setDialog(null)
@@ -1096,7 +1096,7 @@ function IDE({ projectId }) {
 
   async function runProject() {
     refreshPreview()
-    setBottomOpen(true)
+    setBottom開く(true)
     setBottomTab('output')
     setExecution({
       id: '',
@@ -1104,7 +1104,7 @@ function IDE({ projectId }) {
       result: SERVER_LANGUAGES.has(currentLanguage)
         ? null
         : {
-            stdout: 'Browser preview updated.',
+            stdout: 'ブラウザプレビューを更新しました。',
             stderr: '',
             exitCode: 0
           },
@@ -1184,7 +1184,7 @@ function IDE({ projectId }) {
 
   function resetProject() {
     setFiles(DEFAULT_FILES)
-    setOpenFiles(['index.html'])
+    set開くFiles(['index.html'])
     setActiveFile('index.html')
     setPreview('')
     setPreviewKey(value => value + 1)
@@ -1194,7 +1194,7 @@ function IDE({ projectId }) {
     return (
       <div className="app-loading">
         <img className="app-loading-logo" src="/poligo-mark.svg" alt="Poligo" />
-        <div className="app-loading-text">Loading workspace...</div>
+        <div className="app-loading-text">ワークスペースを読み込み中...</div>
       </div>
     )
   }
@@ -1221,7 +1221,7 @@ function IDE({ projectId }) {
                 type="button"
                 onClick={() => setDialog(null)}
                 disabled={dialogBusy}
-                aria-label="Close"
+                aria-label="閉じる"
               >
                 ×
               </button>
@@ -1240,7 +1240,7 @@ function IDE({ projectId }) {
                 onKeyDown={event => {
                   if (event.key === 'Enter') {
                     event.preventDefault()
-                    void handleDialogConfirm()
+                    void handleDialog確認()
                   }
                 }}
                 placeholder={dialog.placeholder}
@@ -1260,7 +1260,7 @@ function IDE({ projectId }) {
               <button
                 className={'poligo-dialog-confirm' + (dialog.danger ? ' danger' : '')}
                 type="button"
-                onClick={() => void handleDialogConfirm()}
+                onClick={() => void handleDialog確認()}
                 disabled={dialogBusy}
               >
                 {dialogBusy ? 'Working...' : dialog.confirmLabel}
@@ -1270,39 +1270,39 @@ function IDE({ projectId }) {
         </div>
       )}
 
-      {quickOpenOpen && (
-      <div className="ide-overlay" onClick={() => setQuickOpenOpen(false)}>
+      {quick開く開く && (
+      <div className="ide-overlay" onClick={() => setQuick開く開く(false)}>
         <div className="quick-open" onClick={event => event.stopPropagation()}>
           <input
             autoFocus
-            value={quickOpenQuery}
-            onChange={event => setQuickOpenQuery(event.target.value)}
-            placeholder="Open file..."
+            value={quick開くQuery}
+            onChange={event => setQuick開くQuery(event.target.value)}
+            placeholder="開く file..."
           />
           <div className="quick-open-list">
-            {quickOpenResults.map(name => (
+            {quick開くResults.map(name => (
               <button
                 key={name}
                 className="quick-open-item"
                 onClick={() => {
                   openFile(name)
-                  setQuickOpenOpen(false)
+                  setQuick開く開く(false)
                 }}
               >
                 <FileIcon kind={getFileMeta(name).kind} size={15} />
                 <span>{name}</span>
               </button>
             ))}
-            {!quickOpenResults.length && (
-              <div className="quick-open-empty">No matching files.</div>
+            {!quick開くResults.length && (
+              <div className="quick-open-empty">一致するファイルがありません。</div>
             )}
           </div>
         </div>
       </div>
     )}
 
-    {commandPaletteOpen && (
-      <div className="ide-overlay" onClick={() => setCommandPaletteOpen(false)}>
+    {commandPalette開く && (
+      <div className="ide-overlay" onClick={() => setCommandPalette開く(false)}>
         <div className="command-palette" onClick={event => event.stopPropagation()}>
           <input
             autoFocus
@@ -1316,7 +1316,7 @@ function IDE({ projectId }) {
                 key={command.id}
                 className="command-item"
                 onClick={() => {
-                  setCommandPaletteOpen(false)
+                  setCommandPalette開く(false)
                   command.run()
                 }}
               >
@@ -1325,7 +1325,7 @@ function IDE({ projectId }) {
               </button>
             ))}
             {!commands.length && (
-              <div className="quick-open-empty">No matching commands.</div>
+              <div className="quick-open-empty">一致するコマンドがありません。</div>
             )}
           </div>
         </div>
@@ -1337,31 +1337,31 @@ function IDE({ projectId }) {
         <div className="topbar-left">
           <button
             className="product-button"
-            aria-label="Open dashboard"
+            aria-label="開く dashboard"
             title="ダッシュボード"
             onClick={() => navigate('/dashboard')}
           >
             <img src="/poligo-mark.svg" alt="" />
           </button>
-          <button className="menu-button">File</button>
-          <button className="menu-button">Edit</button>
-          <button className="menu-button">View</button>
+          <button className="menu-button">ファイル</button>
+          <button className="menu-button">編集</button>
+          <button className="menu-button">表示</button>
         </div>
         <div className="project-title-wrap">
           <button
-            className={'project-picker ' + (projectMenuOpen ? 'open' : '')}
-            onClick={() => setProjectMenuOpen(value => !value)}
+            className={'project-picker ' + (projectMenu開く ? 'open' : '')}
+            onClick={() => setProjectMenu開く(value => !value)}
           >
             <span className="project-title">{projectName}</span>
             <span className="project-picker-arrow">⌄</span>
-            <span className="project-visibility">Private</span>
+            <span className="project-visibility">非公開</span>
             <span className={'save-status ' + saveStatus.replace(/\s/g, '-').replace(' ', '-')}>
               {saveStatus}
             </span>
           </button>
-          {projectMenuOpen && (
+          {projectMenu開く && (
             <div className="project-menu">
-              <div className="project-menu-head">PROJECTS</div>
+              <div className="project-menu-head">プロジェクト</div>
               <div className="project-menu-list">
                 {projects.map(project => (
                   <button
@@ -1375,10 +1375,10 @@ function IDE({ projectId }) {
                 ))}
               </div>
               <div className="project-menu-actions">
-                <button onClick={newProject}>New</button>
-                <button onClick={duplicateCurrentProject}>Duplicate</button>
-                <button onClick={renameProject}>Rename</button>
-                <button className="danger" onClick={removeCurrentProject}>Delete</button>
+                <button onClick={newProject}>新規</button>
+                <button onClick={duplicateCurrentProject}>複製</button>
+                <button onClick={renameProject}>名前を変更</button>
+                <button className="danger" onClick={removeCurrentProject}>削除</button>
               </div>
             </div>
           )}
@@ -1398,7 +1398,7 @@ function IDE({ projectId }) {
             <span className={'status-dot ' + apiStatus} />
             {apiStatus}
           </span>
-          <button className="top-button" onClick={resetProject}>Reset</button>
+          <button className="top-button" onClick={resetProject}>リセット</button>
           <button className="run-button" onClick={runProject}><span>▶</span> 実行</button>
         </div>
       </header>
@@ -1409,7 +1409,7 @@ function IDE({ projectId }) {
             {[
               ['files', 'Files'],
               ['search', 'Search'],
-              ['source', 'Source control']
+              ['source', 'ソース管理']
             ].map(([type, label]) => (
               <button
                 key={type}
@@ -1599,7 +1599,7 @@ function IDE({ projectId }) {
                     </button>
                     <button
                       className="source-restore-button"
-                      title="Restore this commit"
+                      title="復元 this commit"
                       onClick={() => void restoreSelectedCommit(commit.id)}
                     >
                       ↶
@@ -1635,7 +1635,7 @@ function IDE({ projectId }) {
                       event.stopPropagation()
                       closeFile(name)
                     }}
-                    aria-label={'Close ' + name}
+                    aria-label={'閉じる ' + name}
                   >
                     ×
                   </button>
@@ -1664,7 +1664,7 @@ function IDE({ projectId }) {
               />
             </div>
 
-            <div className={'bottom-panel ' + (bottomOpen ? 'open' : '')}>
+            <div className={'bottom-panel ' + (bottom開く ? 'open' : '')}>
               <div className="bottom-tabs">
                 {[
                   ['terminal', 'ターミナル'],
@@ -1676,17 +1676,17 @@ function IDE({ projectId }) {
                     className={'bottom-tab ' + (bottomTab === id ? 'active' : '')}
                     onClick={() => {
                       setBottomTab(id)
-                      setBottomOpen(true)
+                      setBottom開く(true)
                     }}
                   >
                     {label}
                   </button>
                 ))}
-                <button className="bottom-collapse" onClick={() => setBottomOpen(value => !value)}>
-                  {bottomOpen ? '⌄' : '⌃'}
+                <button className="bottom-collapse" onClick={() => setBottom開く(value => !value)}>
+                  {bottom開く ? '⌄' : '⌃'}
                 </button>
               </div>
-              {bottomOpen && (
+              {bottom開く && (
                 <div className="bottom-content">
                   {bottomTab === 'terminal' && <div className="terminal" ref={terminalRef} />}
                   {bottomTab === 'output' && (
@@ -1750,7 +1750,7 @@ function IDE({ projectId }) {
               <button className="preview-control" onClick={refreshPreview}>↻</button>
               <div className="preview-address">
                 <span>○</span>
-                <span>preview</span>
+                <span>プレビュー</span>
               </div>
               <button className="preview-control">↗</button>
             </div>
@@ -1837,7 +1837,7 @@ function AppRouter() {
     return (
       <div className="app-loading">
         <div className="app-loading-title">Poligo</div>
-        <div className="app-loading-text">Checking account...</div>
+        <div className="app-loading-text">アカウントを確認中...</div>
       </div>
     )
   }
