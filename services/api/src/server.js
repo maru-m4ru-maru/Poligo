@@ -18,8 +18,21 @@ const openRouterModels = {
 }
 const MAX_FILES = 200
 const MAX_PROJECT_BYTES = 5_000_000
+const MAX_REQUEST_BYTES = 8_000_000
+const MAX_EXECUTION_ARCHIVE_BYTES = 3_000_000
+const EXECUTION_WINDOW_MS = 5 * 60 * 1000
+const EXECUTION_REQUESTS_PER_WINDOW = 12
+const EXECUTION_RECORD_TTL_MS = 10 * 60 * 1000
+const EXECUTION_CPU_TIME_LIMIT = 2
+const EXECUTION_WALL_TIME_LIMIT = 5
+const EXECUTION_MEMORY_LIMIT = 128_000
+const EXECUTION_STACK_LIMIT = 64_000
+const EXECUTION_MAX_PROCESSES = 60
+const EXECUTION_MAX_FILE_SIZE = 1_024
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
+const executionRateState = new Map()
+const executionOwners = new Map()
 
 function parseEnvFile(content) {
   const env = {}
@@ -67,6 +80,263 @@ function getExecutionEnvironment(files) {
   return parseEnvFile(files['.env'])
 }
 
+
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256)
+
+  for (let index = 0; index < 256; index += 1) {
+    let value = index
+
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1)
+        ? 0xedb88320 ^ (value >>> 1)
+        : value >>> 1
+    }
+
+    table[index] = value >>> 0
+  }
+
+  return table
+})()
+
+function crc32(bytes) {
+  let value = 0xffffffff
+
+  for (const byte of bytes) {
+    value = CRC32_TABLE[(value ^ byte) & 0xff] ^ (value >>> 8)
+  }
+
+  return (value ^ 0xffffffff) >>> 0
+}
+
+function zipStore(files) {
+  const localParts = []
+  const centralParts = []
+  let offset = 0
+
+  for (const file of files) {
+    const name = Buffer.from(file.path, 'utf8')
+    const data = Buffer.from(file.data)
+    const checksum = crc32(data)
+    const local = Buffer.alloc(30 + name.length)
+
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(0x0800, 6)
+    local.writeUInt16LE(0, 8)
+    local.writeUInt16LE(0, 10)
+    local.writeUInt32LE(checksum, 14)
+    local.writeUInt32LE(data.length, 18)
+    local.writeUInt32LE(data.length, 22)
+    local.writeUInt16LE(name.length, 26)
+    local.writeUInt16LE(0, 28)
+    name.copy(local, 30)
+
+    const central = Buffer.alloc(46 + name.length)
+
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(0x0800, 8)
+    central.writeUInt16LE(0, 10)
+    central.writeUInt16LE(0, 12)
+    central.writeUInt32LE(checksum, 16)
+    central.writeUInt32LE(data.length, 20)
+    central.writeUInt32LE(data.length, 24)
+    central.writeUInt16LE(name.length, 28)
+    central.writeUInt16LE(0, 30)
+    central.writeUInt16LE(0, 32)
+    central.writeUInt16LE(0, 34)
+    central.writeUInt16LE(0, 36)
+    central.writeUInt32LE(0, 38)
+    central.writeUInt32LE(offset, 42)
+    name.copy(central, 46)
+
+    localParts.push(local, data)
+    centralParts.push(central)
+    offset += local.length + data.length
+  }
+
+  const centralDirectory = Buffer.concat(centralParts)
+  const end = Buffer.alloc(22)
+
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(0, 4)
+  end.writeUInt16LE(0, 6)
+  end.writeUInt16LE(files.length, 8)
+  end.writeUInt16LE(files.length, 10)
+  end.writeUInt32LE(centralDirectory.length, 12)
+  end.writeUInt32LE(offset, 16)
+  end.writeUInt16LE(0, 20)
+
+  return Buffer.concat([
+    ...localParts,
+    centralDirectory,
+    end
+  ])
+}
+
+function decodeExecutionFile(content) {
+  if (typeof content !== 'string') {
+    return Buffer.alloc(0)
+  }
+
+  const match = content.match(/^data:([^;,]+)?((?:;[^,]*)*),([\s\S]*)$/)
+
+  if (!match) {
+    return Buffer.from(content, 'utf8')
+  }
+
+  const metadata = match[2] || ''
+  const data = match[3] || ''
+
+  if (metadata.split(';').includes('base64')) {
+    return Buffer.from(data, 'base64')
+  }
+
+  return Buffer.from(decodeURIComponent(data), 'utf8')
+}
+
+function normalizeExecutionFiles(files) {
+  if (!files || typeof files !== 'object' || Array.isArray(files)) {
+    throw new Error('project files must be an object')
+  }
+
+  const normalized = {}
+  let totalBytes = 0
+
+  for (const [path, value] of Object.entries(files)) {
+    if (
+      typeof path !== 'string' ||
+      path.length === 0 ||
+      path.length > 240 ||
+      path.includes('\\') ||
+      path.startsWith('/') ||
+      path.split('/').includes('..')
+    ) {
+      throw new Error('invalid project file path')
+    }
+
+    if (typeof value !== 'string') {
+      throw new Error('project file content must be text')
+    }
+
+    totalBytes += Buffer.byteLength(value, 'utf8')
+
+    if (totalBytes > MAX_PROJECT_BYTES) {
+      throw new Error('project is too large')
+    }
+
+    normalized[path] = value
+  }
+
+  if (Object.keys(normalized).length > MAX_FILES) {
+    throw new Error('too many project files')
+  }
+
+  return normalized
+}
+
+function buildPythonAdditionalFiles(files, entrypoint) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (
+      path === entrypoint ||
+      isSecretEnvFile(path)
+    ) {
+      continue
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (!archiveFiles.length) {
+    return ''
+  }
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('Python execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
+function preparePythonSource(source, entrypoint, environment) {
+  if (!Object.keys(environment).length) {
+    return source
+  }
+
+  const encodedSource = Buffer.from(source, 'utf8').toString('base64')
+  const entrypointLiteral = JSON.stringify(entrypoint)
+  const environmentLiteral = JSON.stringify(environment)
+
+  return [
+    'import base64',
+    'import os',
+    'import sys',
+    'os.environ.update(' + environmentLiteral + ')',
+    'sys.path.insert(0, os.getcwd())',
+    '_poligo_source = base64.b64decode(' + JSON.stringify(encodedSource) + ').decode("utf-8")',
+    '_poligo_globals = {',
+    '    "__name__": "__main__",',
+    '    "__file__": ' + entrypointLiteral + ',',
+    '    "__package__": None,',
+    '}',
+    'exec(compile(_poligo_source, ' + entrypointLiteral + ', "exec"), _poligo_globals)'
+  ].join('\n')
+}
+
+function consumeExecutionQuota(userId) {
+  const now = Date.now()
+  const current = executionRateState.get(userId) || []
+  const recent = current.filter(timestamp => now - timestamp < EXECUTION_WINDOW_MS)
+
+  if (recent.length >= EXECUTION_REQUESTS_PER_WINDOW) {
+    const oldest = recent[0] || now
+    return Math.max(1, Math.ceil((EXECUTION_WINDOW_MS - (now - oldest)) / 1000))
+  }
+
+  recent.push(now)
+  executionRateState.set(userId, recent)
+  return 0
+}
+
+function registerExecution(id, userId) {
+  executionOwners.set(id, {
+    userId,
+    expiresAt: Date.now() + EXECUTION_RECORD_TTL_MS
+  })
+}
+
+function getExecutionOwner(id) {
+  const record = executionOwners.get(id)
+
+  if (!record) {
+    return null
+  }
+
+  if (record.expiresAt <= Date.now()) {
+    executionOwners.delete(id)
+    return null
+  }
+
+  return record
+}
+
+function retainExecution(id) {
+  const record = executionOwners.get(id)
+
+  if (record) {
+    record.expiresAt = Date.now() + EXECUTION_RECORD_TTL_MS
+  }
+}
+
 function setCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   response.setHeader('Access-Control-Allow-Credentials', 'true')
@@ -89,7 +359,7 @@ async function readJson(request) {
   for await (const chunk of request) {
     body += chunk
 
-    if (body.length > 6_000_000) {
+    if (body.length > MAX_REQUEST_BYTES) {
       throw new Error('request too large')
     }
   }
@@ -833,7 +1103,11 @@ async function getJudge0Languages() {
 
 function findLatestJudge0LanguageId(languages, patterns) {
   const candidates = languages
-    .filter(item => Number.isInteger(item?.id) && typeof item?.name === 'string')
+    .filter(item =>
+      item?.is_archived !== true &&
+      Number.isInteger(item?.id) &&
+      typeof item?.name === 'string'
+    )
     .map(item => ({
       id: item.id,
       name: item.name,
@@ -930,13 +1204,25 @@ function findJudge0LanguageId(languages, language) {
   return null
 }
 
-async function submitJudge0(source, languageId, stdin) {
+async function submitJudge0(source, languageId, stdin, options = {}) {
   let lastResponse = null
   let lastResult = null
   const sourceCode = Buffer.from(source, 'utf8').toString('base64')
   const input = typeof stdin === 'string'
     ? Buffer.from(stdin.slice(0, 32_000), 'utf8').toString('base64')
     : ''
+  const submission = {
+    source_code: sourceCode,
+    language_id: languageId,
+    stdin: input,
+    cpu_time_limit: EXECUTION_CPU_TIME_LIMIT,
+    wall_time_limit: EXECUTION_WALL_TIME_LIMIT,
+    memory_limit: EXECUTION_MEMORY_LIMIT,
+    stack_limit: EXECUTION_STACK_LIMIT,
+    max_processes_and_or_threads: EXECUTION_MAX_PROCESSES,
+    max_file_size: EXECUTION_MAX_FILE_SIZE,
+    ...options
+  }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const judge0Response = await fetch(
@@ -946,11 +1232,7 @@ async function submitJudge0(source, languageId, stdin) {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          source_code: sourceCode,
-          language_id: languageId,
-          stdin: input
-        })
+        body: JSON.stringify(submission)
       }
     )
 
@@ -987,11 +1269,8 @@ async function submitJudge0(source, languageId, stdin) {
   }
 }
 
-async function handleJudge0Execution(request, response) {
-  const payload = await readJson(request)
-  const files = payload.files && typeof payload.files === 'object'
-    ? payload.files
-    : {}
+async function handleJudge0Execution(response, payload, id, ownerId) {
+  const files = normalizeExecutionFiles(payload.files)
   const entrypoint = typeof payload.entrypoint === 'string'
     ? payload.entrypoint
     : ''
@@ -1015,15 +1294,24 @@ async function handleJudge0Execution(request, response) {
     return
   }
 
-  const environment = getExecutionEnvironment(files)
-  const preparedSource = payload.language === 'python' && Object.keys(environment).length
-    ? 'import os\nos.environ.update(' + JSON.stringify(environment) + ')\n\n' + source
-    : source
+  let preparedSource = source
+  const options = {}
+
+  if (payload.language === 'python') {
+    const environment = getExecutionEnvironment(files)
+    preparedSource = preparePythonSource(source, entrypoint, environment)
+    const additionalFiles = buildPythonAdditionalFiles(files, entrypoint)
+
+    if (additionalFiles) {
+      options.additional_files = additionalFiles
+    }
+  }
 
   const submitted = await submitJudge0(
     preparedSource,
     languageId,
-    payload.stdin
+    payload.stdin,
+    options
   )
   const judge0Response = submitted.response
   const result = submitted.result
@@ -1034,6 +1322,8 @@ async function handleJudge0Execution(request, response) {
       upstreamStatus === 502 ||
       upstreamStatus === 503
 
+    executionOwners.delete(id)
+
     send(response, busy ? 503 : 502, {
       error: result.error ||
         result.message ||
@@ -1042,6 +1332,9 @@ async function handleJudge0Execution(request, response) {
     })
     return
   }
+
+  executionOwners.delete(id)
+  registerExecution(result.token, ownerId)
 
   send(response, 202, {
     id: result.token,
@@ -1052,7 +1345,7 @@ async function handleJudge0Execution(request, response) {
 async function handleJudge0ExecutionStatus(response, id) {
   const judge0Response = await fetch(
     judge0Url + '/submissions/' + encodeURIComponent(id) +
-      '?base64_encoded=false&fields=stdout,stderr,compile_output,status_id,status,message,time,memory',
+      '?base64_encoded=false&fields=stdout,stderr,compile_output,status_id,status,message,time,wall_time,memory,exit_code,exit_signal',
     {
       method: 'GET'
     }
@@ -1076,6 +1369,7 @@ async function handleJudge0ExecutionStatus(response, id) {
   const statusId = Number(result.status_id)
 
   if (statusId === 1 || statusId === 2) {
+    retainExecution(id)
     send(response, 200, {
       id,
       status: 'running',
@@ -1085,18 +1379,36 @@ async function handleJudge0ExecutionStatus(response, id) {
   }
 
   const successful = statusId === 3
+  const timedOut = statusId === 5
   const output = result.stdout || ''
-  const errorOutput = result.compile_output || result.stderr || result.message || ''
+  const errorOutput = [
+    result.compile_output,
+    result.stderr,
+    result.message
+  ].filter(value => typeof value === 'string' && value).join('\n')
+
+  retainExecution(id)
 
   send(response, 200, {
     id,
-    status: successful ? 'succeeded' : 'failed',
+    status: successful
+      ? 'succeeded'
+      : timedOut
+        ? 'timeout'
+        : 'failed',
     result: {
       stdout: output,
       stderr: errorOutput,
-      exitCode: successful ? 0 : null,
+      exitCode: Number.isInteger(result.exit_code)
+        ? result.exit_code
+        : null,
+      signal: Number.isInteger(result.exit_signal)
+        ? result.exit_signal
+        : null,
       time: result.time || null,
-      memory: result.memory || null
+      wallTime: result.wall_time || null,
+      memory: result.memory || null,
+      timedOut
     }
   })
 }
@@ -1113,15 +1425,7 @@ function runnerHeaders() {
   return headers
 }
 
-async function handleExecution(request, response) {
-  if (!runnerUrl) {
-    await handleJudge0Execution(request, response)
-    return
-  }
-
-  const payload = await readJson(request)
-  const id = randomUUID()
-
+async function handleRunnerExecution(response, payload, id) {
   const runnerResponse = await fetch(
     runnerUrl.replace(/\/$/, '') + '/v1/run',
     {
@@ -1131,7 +1435,7 @@ async function handleExecution(request, response) {
         id,
         language: payload.language || 'plaintext',
         entrypoint: payload.entrypoint || null,
-        files: payload.files || {},
+        files: payload.files,
         env: getExecutionEnvironment(payload.files)
       })
     }
@@ -1147,13 +1451,144 @@ async function handleExecution(request, response) {
     }
   }
 
+  if (!runnerResponse.ok) {
+    executionOwners.delete(id)
+  }
+
   send(response, runnerResponse.ok ? 202 : 502, {
     id,
     ...result
   })
 }
 
-async function handleExecutionStatus(response, id) {
+async function handleExecution(request, response) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  const payload = await readJson(request)
+
+  try {
+    payload.files = normalizeExecutionFiles(payload.files)
+  } catch (error) {
+    send(response, 400, {
+      error: error instanceof Error ? error.message : 'invalid execution files'
+    })
+    return
+  }
+
+  if (typeof payload.projectId !== 'string' || !payload.projectId) {
+    send(response, 400, {
+      error: 'project id is required'
+    })
+    return
+  }
+
+  const project = await getProjectById(payload.projectId, session.user.id)
+
+  if (!project) {
+    send(response, 404, {
+      error: 'project not found'
+    })
+    return
+  }
+
+  if (
+    typeof payload.entrypoint !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(payload.files, payload.entrypoint)
+  ) {
+    send(response, 400, {
+      error: 'entrypoint file not found'
+    })
+    return
+  }
+
+  const retryAfter = consumeExecutionQuota(session.user.id)
+
+  if (retryAfter) {
+    response.setHeader('Retry-After', String(retryAfter))
+    send(response, 429, {
+      error: 'execution rate limit exceeded',
+      retryAfter
+    })
+    return
+  }
+
+  const id = randomUUID()
+  registerExecution(id, session.user.id)
+
+  if (!runnerUrl) {
+    await handleJudge0Execution(response, payload, id, session.user.id)
+    return
+  }
+
+  await handleRunnerExecution(response, payload, id)
+}
+
+async function handleExecutionStatus(request, response, id) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  const owner = getExecutionOwner(id)
+
+  if (!owner) {
+    send(response, 404, {
+      error: 'execution not found'
+    })
+    return
+  }
+
+  if (owner.userId !== session.user.id) {
+    send(response, 403, {
+      error: 'execution access denied'
+    })
+    return
+  }
+
+  if (!runnerUrl) {
+    await handleJudge0ExecutionStatus(response, id)
+    return
+  }
+
+  const runnerResponse = await fetch(
+    runnerUrl.replace(/\/$/, '') + '/v1/runs/' + encodeURIComponent(id),
+    {
+      method: 'GET',
+      headers: runnerHeaders()
+    }
+  )
+
+  let result
+
+  try {
+    result = await runnerResponse.json()
+  } catch {
+    result = {
+      error: 'runner returned invalid JSON'
+    }
+  }
+
+  if (!runnerResponse.ok) {
+    send(response, 502, result)
+    return
+  }
+
+  retainExecution(id)
+  send(response, 200, result)
+}
+
+(response, id) {
   if (!runnerUrl) {
     await handleJudge0ExecutionStatus(response, id)
     return
@@ -1628,7 +2063,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     try {
-      await handleExecutionStatus(response, id)
+      await handleExecutionStatus(request, response, id)
     } catch (error) {
       send(response, 502, {
         error: error instanceof Error ? error.message : 'runner request failed'
