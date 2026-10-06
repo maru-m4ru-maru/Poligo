@@ -39,3 +39,13 @@ services:
         value: https://poligo-api-g0wc.onrender.com
       - key: BETTER_AUTH_SECRET
         sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_SITE_URL
+        value: https://poligo-web-2n2l.onrender.com
+      - key: OPENROUTER_MODEL_FAST
+        value: qwen/qwen-2.5-coder-7b-instruct:free
+      - key: OPENROUTER_MODEL_CODE
+        value: qwen/qwen-2.5-coder-32b-instruct:free
+      - key: OPENROUTER_MODEL_REASONING
+        value: deepseek/deepseek-r1-distill-qwen-32b:free
