@@ -32,7 +32,7 @@ export default function HomePage({ session }) {
     <div className="home-page">
       <header className="home-nav">
         <button className="home-brand" onClick={() => navigate('/')}>
-          <img src="/poligo-logo.svg" alt="Poligo" />
+          <img src="/poligo-logo-dark.svg" alt="Poligo" />
         </button>
 
         <div className="home-nav-actions">
@@ -111,7 +111,7 @@ export default function HomePage({ session }) {
 
           <div className="home-hero-brand">
             <div className="home-hero-brand-inner">
-              <img src="/poligo-logo.svg" alt="Poligo" />
+              <img src="/poligo-logo-dark.svg" alt="Poligo" />
               <span>ブラウザで開発するためのIDE</span>
             </div>
           </div>
