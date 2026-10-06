@@ -2489,9 +2489,9 @@ function IDE({ projectId }) {
                         <div className="ai-model-picker" role="group" aria-label="AIモデル">
                           {[
                             ['auto', '自動'],
-                            ['fast', '高速'],
-                            ['code', 'Coder 32B'],
-                            ['reasoning', '推論 32B']
+                            ['fast', '速度重視'],
+                            ['code', '賢さ重視'],
+                            ['reasoning', '推論重視']
                           ].map(([id, label]) => (
                             <button
                               key={id}
@@ -2580,9 +2580,23 @@ function IDE({ projectId }) {
                           disabled={aiBusy}
                         />
                         <div className="ai-input-footer">
-                          <span>
-                            {aiAutoApply ? '自動適用: ON' : '変更は確認後に適用'}
-                          </span>
+                          <div className="ai-input-status">
+                            <span>
+                              {aiAutoApply ? '自動適用: ON' : '変更は確認後に適用'}
+                            </span>
+                            {aiAutoApply && (
+                              <button
+                                type="button"
+                                className="ai-auto-disable"
+                                onClick={() => {
+                                  localStorage.removeItem('poligo-ai-auto-apply')
+                                  setAiAutoApply(false)
+                                }}
+                              >
+                                解除
+                              </button>
+                            )}
+                          </div>
                           <button type="submit" disabled={aiBusy || !aiPrompt.trim()}>
                             {aiBusy ? '処理中...' : '送信'}
                           </button>
