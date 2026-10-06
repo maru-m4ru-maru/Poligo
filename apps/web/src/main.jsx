@@ -2806,94 +2806,100 @@ function IDE({ projectId }) {
                     {label}
                   </button>
                 ))}
-                <button className="bottom-collapse" onClick={() => setBottomOpen(value => !value)}>
+                <button
+                  className="bottom-collapse"
+                  onClick={() => setBottomOpen(value => !value)}
+                >
                   {bottomOpen ? '⌄' : '⌃'}
                 </button>
               </div>
+
               <div className="bottom-content">
-                  <div
-                    className={'terminal-panel ' + (
-                      bottomTab === 'terminal' ? '' : 'panel-hidden'
+                <div
+                  className={
+                    'terminal-panel ' +
+                    (bottomTab === 'terminal' ? '' : 'panel-hidden')
+                  }
+                >
+                  <div className="terminal" ref={terminalRef} />
+                </div>
+
+                <div
+                  className={
+                    'problems-panel ' +
+                    (bottomTab === 'problems' ? '' : 'panel-hidden')
+                  }
+                >
+                  {editorMarkers.map((marker, index) => (
+                    <button
+                      key={'editor-' + index}
+                      className="problem-item problem-item-error"
+                      onClick={() => {
+                        editorRef.current?.revealLineInCenter(marker.startLineNumber)
+                        editorRef.current?.setPosition({
+                          lineNumber: marker.startLineNumber,
+                          column: marker.startColumn || 1
+                        })
+                        editorRef.current?.focus()
+                      }}
+                    >
+                      <span>{marker.severity === 8 ? '!' : '×'}</span>
+                      <div>
+                        <strong>{marker.message}</strong>
+                        <small>
+                          {currentLanguage.toUpperCase()} / 行 {marker.startLineNumber}:{marker.startColumn || 1}
+                        </small>
+                      </div>
+                    </button>
+                  ))}
+
+                  {runtimeProblems.map((problem, index) => (
+                    <button
+                      key={'runtime-' + index}
+                      className="problem-item problem-item-error"
+                      onClick={() => setBottomTab('terminal')}
+                    >
+                      <span>×</span>
+                      <div>
+                        <strong>{problem.message}</strong>
+                        <small>プレビュー実行時エラー</small>
+                      </div>
+                    </button>
+                  ))}
+
+                  {execution.error && (
+                    <button
+                      className="problem-item problem-item-error"
+                      onClick={() => setBottomTab('terminal')}
+                    >
+                      <span>×</span>
+                      <div>
+                        <strong>{execution.error}</strong>
+                        <small>実行エラー</small>
+                      </div>
+                    </button>
+                  )}
+
+                  {!editorMarkers.length &&
+                    !execution.error &&
+                    execution.result?.stderr && (
+                      <button
+                        className="problem-item problem-item-error"
+                        onClick={() => setBottomTab('terminal')}
+                      >
+                        <span>!</span>
+                        <div>
+                          <strong>{execution.result.stderr.split('\n')[0]}</strong>
+                          <small>実行出力</small>
+                        </div>
+                      </button>
                     )}
-                  >
-                    <div className="terminal" ref={terminalRef} />
-                  </div>
-                  <div
-                    className={'problems-panel ' + (
-                      bottomTab === 'problems' ? '' : 'panel-hidden'
+
+                  {!editorMarkers.length &&
+                    !execution.error &&
+                    !execution.result?.stderr && (
+                      <div className="panel-empty">問題はありません。</div>
                     )}
-                  >
-                      {editorMarkers.map((marker, index) => (
-                        <button
-                          key={'editor-' + index}
-                          className="problem-item problem-item-error"
-                          onClick={() => {
-                            editorRef.current?.revealLineInCenter(marker.startLineNumber)
-                            editorRef.current?.setPosition({
-                              lineNumber: marker.startLineNumber,
-                              column: marker.startColumn || 1
-                            })
-                            editorRef.current?.focus()
-                          }}
-                        >
-                          <span>{marker.severity === 8 ? '!' : '×'}</span>
-                          <div>
-                            <strong>{marker.message}</strong>
-                            <small>
-                              {currentLanguage.toUpperCase()} / 行 {marker.startLineNumber}:{marker.startColumn || 1}
-                            </small>
-                          </div>
-                        </button>
-                      ))}
-
-                      {runtimeProblems.map((problem, index) => (
-                        <button
-                          key={'runtime-' + index}
-                          className="problem-item problem-item-error"
-                          onClick={() => setBottomTab('terminal')}
-                        >
-                          <span>×</span>
-                          <div>
-                            <strong>{problem.message}</strong>
-                            <small>プレビュー実行時エラー</small>
-                          </div>
-                        </button>
-                      ))}
-
-                      {execution.error && (
-                        <button
-                          className="problem-item problem-item-error"
-                          onClick={() => setBottomTab('terminal')}
-                        >
-                          <span>×</span>
-                          <div>
-                            <strong>{execution.error}</strong>
-                            <small>実行エラー</small>
-                          </div>
-                        </button>
-                      )}
-
-                      {!editorMarkers.length &&
-                        !execution.error &&
-                        execution.result?.stderr && (
-                          <button
-                            className="problem-item problem-item-error"
-                            onClick={() => setBottomTab('terminal')}
-                          >
-                            <span>!</span>
-                            <div>
-                              <strong>{execution.result.stderr.split('\n')[0]}</strong>
-                              <small>実行出力</small>
-                            </div>
-                          </button>
-                        )}
-
-                      {!editorMarkers.length &&
-                        !execution.error &&
-                        !execution.result?.stderr && (
-                          <div className="panel-empty">問題はありません。</div>
-                        )}
-                    </div>
                 </div>
               </div>
             </div>
