@@ -1383,7 +1383,7 @@ function IDE({ projectId }) {
 
     const safeName = normalized
       .replace(/\\/g, '/')
-      .replace(/^\\/+/, '')
+      .replace(/^\/+/, '')
 
     if (
       !safeName ||
