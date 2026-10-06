@@ -2462,7 +2462,7 @@ function IDE({ projectId }) {
             {isSecretEnvFile(activeFile) && (
               <div className="env-notice">
                 <strong>環境変数ファイル</strong>
-                <span>このファイルの内容はPoligo AIには送信されません。</span>
+                <span>保存時は暗号化され、Poligo AIには送信されません。</span>
               </div>
             )}
 
