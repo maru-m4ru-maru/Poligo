@@ -14,14 +14,14 @@ import {
   listProjects,
   saveProject,
   claimWorkspace,
-  listCommits,
-  getCommitDiff,
-  createCommit,
-  restoreCommit
+  listコミットs,
+  getコミットDiff,
+  createコミット,
+  restoreコミット
 } from './projectStore'
 import { authClient } from './auth-client'
 import AuthPage from './AuthPage'
-import Dashboard from './Dashboard'
+import ダッシュボード from './ダッシュボード'
 import HomePage from './HomePage'
 import TermsPage from './TermsPage'
 
@@ -265,10 +265,10 @@ function IDE({ projectId }) {
     result: null,
     error: ''
   })
-  const [sourceCommits, setSourceCommits] = useState([])
+  const [sourceコミットs, setSourceコミットs] = useState([])
   const [sourceDiff, setSourceDiff] = useState([])
-  const [sourceCommitMessage, setSourceCommitMessage] = useState('')
-  const [sourceSelectedCommit, setSourceSelectedCommit] = useState('')
+  const [sourceコミットMessage, setSourceコミットMessage] = useState('')
+  const [sourceSelectedコミット, setSourceSelectedコミット] = useState('')
   const [sourceLoading, setSourceLoading] = useState(false)
   const [sourceError, setSourceError] = useState('')
   const [dialog, setDialog] = useState(null)
@@ -297,7 +297,7 @@ function IDE({ projectId }) {
         results.push({
           name,
           type: 'file',
-          preview: 'Filename match'
+          preview: 'ファイル名の一致'
         })
         continue
       }
@@ -332,26 +332,26 @@ function IDE({ projectId }) {
   const commands = useMemo(() => [
     {
       id: 'new-file',
-      title: 'New File',
-      hint: 'Create a file',
+      title: '新しいファイル',
+      hint: 'ファイルを作成',
       run: () => void createFile()
     },
     {
       id: 'save',
-      title: 'Save Project',
+      title: 'プロジェクトを保存',
       hint: 'Ctrl+S',
       run: () => void saveCurrentProject()
     },
     {
       id: 'run',
-      title: 'Run',
-      hint: 'Execute current file',
+      title: '実行',
+      hint: '現在のファイルを実行',
       run: () => void runProject()
     },
     {
       id: 'terminal',
-      title: 'Toggle Terminal',
-      hint: 'Open terminal',
+      title: 'ターミナルを表示/非表示',
+      hint: 'ターミナルを開く',
       run: () => {
         setBottomTab('terminal')
         setBottomOpen(true)
@@ -359,8 +359,8 @@ function IDE({ projectId }) {
     },
     {
       id: 'output',
-      title: 'Open Output',
-      hint: 'Show execution result',
+      title: '出力を開く',
+      hint: '実行結果を表示',
       run: () => {
         setBottomTab('output')
         setBottomOpen(true)
@@ -368,8 +368,8 @@ function IDE({ projectId }) {
     },
     {
       id: 'problems',
-      title: 'Open Problems',
-      hint: 'Show execution errors',
+      title: '問題を開く',
+      hint: '実行エラーを表示',
       run: () => {
         setBottomTab('problems')
         setBottomOpen(true)
@@ -377,7 +377,7 @@ function IDE({ projectId }) {
     },
     {
       id: 'dashboard',
-      title: 'Open Dashboard',
+      title: 'ダッシュボードを開く',
       hint: 'Poligo Cloud',
       run: () => navigate('/dashboard')
     }
@@ -494,21 +494,21 @@ function IDE({ projectId }) {
       setSourceError('')
 
       try {
-        const result = await listCommits(currentProjectId)
+        const result = await listコミットs(currentProjectId)
         const commits = Array.isArray(result.commits) ? result.commits : []
 
         if (cancelled) return
 
-        setSourceCommits(commits)
+        setSourceコミットs(commits)
 
-        const selectedId = commits.some(commit => commit.id === sourceSelectedCommit)
-          ? sourceSelectedCommit
+        const selectedId = commits.some(commit => commit.id === sourceSelectedコミット)
+          ? sourceSelectedコミット
           : commits[0]?.id || ''
 
-        setSourceSelectedCommit(selectedId)
+        setSourceSelectedコミット(selectedId)
 
         if (selectedId) {
-          const diff = await getCommitDiff(currentProjectId, selectedId)
+          const diff = await getコミットDiff(currentProjectId, selectedId)
 
           if (!cancelled) {
             setSourceDiff(diff.files || [])
@@ -518,7 +518,7 @@ function IDE({ projectId }) {
         }
       } catch (error) {
         if (!cancelled) {
-          setSourceError(error instanceof Error ? error.message : 'Source control failed')
+          setSourceError(error instanceof Error ? error.message : 'ソース管理の読み込みに失敗しました')
         }
       } finally {
         if (!cancelled) {
@@ -553,8 +553,8 @@ function IDE({ projectId }) {
     instance.loadAddon(fit)
     instance.open(terminalRef.current)
     fit.fit()
-    instance.writeln('Poligo terminal')
-    instance.writeln('Type "help" for available commands.')
+    instance.writeln('Poligo ターミナル')
+    instance.writeln('利用可能なコマンドは「help」で確認できます。')
     instance.write('$ ')
 
     let buffer = ''
@@ -594,7 +594,7 @@ function IDE({ projectId }) {
         } else if (buffer === 'run') {
           setPreview(buildPreview(filesRef.current))
           setPreviewKey(value => value + 1)
-          instance.writeln('Preview refreshed.')
+          instance.writeln('プレビューを更新しました。')
         } else if (buffer) {
           instance.writeln(buffer + ': command not found')
         }
@@ -637,39 +637,39 @@ function IDE({ projectId }) {
     window.location.assign('/signin')
   }
 
-  async function refreshSourceControl(selectedCommitId = '') {
+  async function refreshSourceControl(selectedコミットId = '') {
     if (!currentProjectId) return
 
     setSourceLoading(true)
     setSourceError('')
 
     try {
-      const result = await listCommits(currentProjectId)
+      const result = await listコミットs(currentProjectId)
       const commits = Array.isArray(result.commits) ? result.commits : []
       const selectedId =
-        commits.find(commit => commit.id === selectedCommitId)?.id ||
-        commits.find(commit => commit.id === sourceSelectedCommit)?.id ||
+        commits.find(commit => commit.id === selectedコミットId)?.id ||
+        commits.find(commit => commit.id === sourceSelectedコミット)?.id ||
         commits[0]?.id ||
         ''
 
-      setSourceCommits(commits)
-      setSourceSelectedCommit(selectedId)
+      setSourceコミットs(commits)
+      setSourceSelectedコミット(selectedId)
 
       if (selectedId) {
-        const diff = await getCommitDiff(currentProjectId, selectedId)
+        const diff = await getコミットDiff(currentProjectId, selectedId)
         setSourceDiff(diff.files || [])
       } else {
         setSourceDiff([])
       }
     } catch (error) {
-      setSourceError(error instanceof Error ? error.message : 'Source control failed')
+      setSourceError(error instanceof Error ? error.message : 'ソース管理の読み込みに失敗しました')
     } finally {
       setSourceLoading(false)
     }
   }
 
   async function commitChanges() {
-    const message = sourceCommitMessage.trim()
+    const message = sourceコミットMessage.trim()
 
     if (!message || !currentProjectId) return
 
@@ -678,12 +678,12 @@ function IDE({ projectId }) {
 
     try {
       await saveCurrentProject()
-      const commit = await createCommit(currentProjectId, message)
+      const commit = await createコミット(currentProjectId, message)
 
-      setSourceCommitMessage('')
+      setSourceコミットMessage('')
       await refreshSourceControl(commit.id)
     } catch (error) {
-      setSourceError(error instanceof Error ? error.message : 'Commit failed')
+      setSourceError(error instanceof Error ? error.message : 'コミット failed')
       setSourceLoading(false)
     }
   }
@@ -749,8 +749,8 @@ function IDE({ projectId }) {
     }
   }
 
-  async function restoreSelectedCommit(commitId) {
-    const commit = sourceCommits.find(item => item.id === commitId)
+  async function restoreSelectedコミット(commitId) {
+    const commit = sourceコミットs.find(item => item.id === commitId)
 
     if (!commit) return
 
@@ -764,7 +764,7 @@ function IDE({ projectId }) {
         setSourceError('')
 
         try {
-          const restored = await restoreCommit(currentProjectId, commitId)
+          const restored = await restoreコミット(currentProjectId, commitId)
           const nextFiles = restored.files
 
           setFiles(nextFiles)
@@ -1338,7 +1338,7 @@ function IDE({ projectId }) {
           <button
             className="product-button"
             aria-label="Open dashboard"
-            title="Dashboard"
+            title="ダッシュボード"
             onClick={() => navigate('/dashboard')}
           >
             <img src="/poligo-mark.svg" alt="" />
@@ -1384,12 +1384,12 @@ function IDE({ projectId }) {
           )}
         </div>
         <div className="topbar-right">
-          <button className="top-icon" title="Settings"><ActivityIcon type="settings" /></button>
+          <button className="top-icon" title="設定"><ActivityIcon type="settings" /></button>
           <span className="account-name">
             {session?.user?.name}
           </span>
           <button className="dashboard-button" onClick={() => navigate('/dashboard')}>
-            Dashboard
+            ダッシュボード
           </button>
           <button className="signout-button" onClick={handleSignOut}>
             Sign out
@@ -1399,7 +1399,7 @@ function IDE({ projectId }) {
             {apiStatus}
           </span>
           <button className="top-button" onClick={resetProject}>Reset</button>
-          <button className="run-button" onClick={runProject}><span>▶</span> Run</button>
+          <button className="run-button" onClick={runProject}><span>▶</span> 実行</button>
         </div>
       </header>
 
@@ -1424,7 +1424,7 @@ function IDE({ projectId }) {
           <button
             className={'activity-button ' + (activeView === 'settings' ? 'active' : '')}
             onClick={() => setActiveView('settings')}
-            title="Settings"
+            title="設定"
           >
             <ActivityIcon type="settings" />
           </button>
@@ -1465,7 +1465,7 @@ function IDE({ projectId }) {
                 autoFocus
                 value={searchQuery}
                 onChange={event => setSearchQuery(event.target.value)}
-                placeholder="Search in files"
+                placeholder="ファイルを検索"
               />
               {!searchQuery && (
                 <div className="search-hint">
@@ -1474,7 +1474,7 @@ function IDE({ projectId }) {
               )}
               {searchQuery && !searchResults.length && (
                 <div className="search-hint">
-                  No matches.
+                  一致する項目がありません。
                 </div>
               )}
               {searchResults.map(result => (
@@ -1492,7 +1492,7 @@ function IDE({ projectId }) {
                   <div className="search-result-copy">
                     <strong>{result.name}</strong>
                     <span>
-                      {result.line ? 'Line ' + result.line + ' · ' : ''}
+                      {result.line ? '行 ' + result.line + ' · ' : ''}
                       {result.preview}
                     </span>
                   </div>
@@ -1505,22 +1505,22 @@ function IDE({ projectId }) {
             <div className="source-control-view">
               <div className="source-control-commit">
                 <input
-                  value={sourceCommitMessage}
-                  onChange={event => setSourceCommitMessage(event.target.value)}
+                  value={sourceコミットMessage}
+                  onChange={event => setSourceコミットMessage(event.target.value)}
                   onKeyDown={event => {
-                    if (event.key === 'Enter' && sourceCommitMessage.trim()) {
+                    if (event.key === 'Enter' && sourceコミットMessage.trim()) {
                       void commitChanges()
                     }
                   }}
-                  placeholder="Commit message"
+                  placeholder="コミットメッセージ"
                   disabled={sourceLoading}
                 />
                 <button
                   className="source-commit-button"
                   onClick={() => void commitChanges()}
-                  disabled={sourceLoading || !sourceCommitMessage.trim()}
+                  disabled={sourceLoading || !sourceコミットMessage.trim()}
                 >
-                  Commit
+                  コミット
                 </button>
               </div>
 
@@ -1530,16 +1530,16 @@ function IDE({ projectId }) {
 
               <div className="source-control-section">
                 <div className="source-control-section-title">
-                  <span>CHANGES</span>
+                  <span>変更</span>
                   <span>{sourceDiff.length}</span>
                 </div>
 
                 {sourceLoading && (
-                  <div className="source-control-empty">Loading...</div>
+                  <div className="source-control-empty">読み込み中...</div>
                 )}
 
                 {!sourceLoading && !sourceDiff.length && (
-                  <div className="source-control-empty">No changes.</div>
+                  <div className="source-control-empty">変更はありません。</div>
                 )}
 
                 {!sourceLoading && sourceDiff.map(file => (
@@ -1558,31 +1558,31 @@ function IDE({ projectId }) {
 
               <div className="source-control-section">
                 <div className="source-control-section-title">
-                  <span>HISTORY</span>
-                  <span>{sourceCommits.length}</span>
+                  <span>履歴</span>
+                  <span>{sourceコミットs.length}</span>
                 </div>
 
-                {!sourceCommits.length && !sourceLoading && (
-                  <div className="source-control-empty">No commits.</div>
+                {!sourceコミットs.length && !sourceLoading && (
+                  <div className="source-control-empty">コミットはありません。</div>
                 )}
 
-                {sourceCommits.map(commit => (
+                {sourceコミットs.map(commit => (
                   <div
                     key={commit.id}
                     className={'source-commit-row ' + (
-                      sourceSelectedCommit === commit.id ? 'active' : ''
+                      sourceSelectedコミット === commit.id ? 'active' : ''
                     )}
                   >
                     <button
                       className="source-commit-select"
                       onClick={async () => {
-                        setSourceSelectedCommit(commit.id)
+                        setSourceSelectedコミット(commit.id)
                         try {
-                          const diff = await getCommitDiff(currentProjectId, commit.id)
+                          const diff = await getコミットDiff(currentProjectId, commit.id)
                           setSourceDiff(diff.files || [])
                         } catch (error) {
                           setSourceError(
-                            error instanceof Error ? error.message : 'Diff failed'
+                            error instanceof Error ? error.message : '差分の取得に失敗しました'
                           )
                         }
                       }}
@@ -1600,7 +1600,7 @@ function IDE({ projectId }) {
                     <button
                       className="source-restore-button"
                       title="Restore this commit"
-                      onClick={() => void restoreSelectedCommit(commit.id)}
+                      onClick={() => void restoreSelectedコミット(commit.id)}
                     >
                       ↶
                     </button>
@@ -1612,8 +1612,8 @@ function IDE({ projectId }) {
 
           {activeView === 'settings' && (
             <div className="empty-view">
-              <div className="empty-title">Settings</div>
-              <div className="empty-text">Workspace settings will appear here.</div>
+              <div className="empty-title">設定</div>
+              <div className="empty-text">ワークスペースの設定をここに表示します。</div>
             </div>
           )}
         </aside>
@@ -1667,9 +1667,9 @@ function IDE({ projectId }) {
             <div className={'bottom-panel ' + (bottomOpen ? 'open' : '')}>
               <div className="bottom-tabs">
                 {[
-                  ['terminal', 'TERMINAL'],
-                  ['output', 'OUTPUT'],
-                  ['problems', 'PROBLEMS']
+                  ['terminal', 'ターミナル'],
+                  ['output', '出力'],
+                  ['problems', '問題']
                 ].map(([id, label]) => (
                   <button
                     key={id}
@@ -1715,7 +1715,7 @@ function IDE({ projectId }) {
                           <span>×</span>
                           <div>
                             <strong>{execution.error}</strong>
-                            <small>Execution error</small>
+                            <small>実行エラー</small>
                           </div>
                         </button>
                       )}
@@ -1728,13 +1728,13 @@ function IDE({ projectId }) {
                           <span>!</span>
                           <div>
                             <strong>{execution.result.stderr.split('\n')[0]}</strong>
-                            <small>Execution output</small>
+                            <small>実行出力</small>
                           </div>
                         </button>
                       )}
 
                       {!execution.error && !execution.result?.stderr && (
-                        <div className="panel-empty">No problems.</div>
+                        <div className="panel-empty">問題はありません。</div>
                       )}
                     </div>
                   )}
@@ -1855,7 +1855,7 @@ function AppRouter() {
   }
 
   if (pathname === '/dashboard') {
-    return <Dashboard session={session} />
+    return <ダッシュボード session={session} />
   }
 
   if (idePath) {
