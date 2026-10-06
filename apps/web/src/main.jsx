@@ -689,6 +689,7 @@ function IDE({ projectId }) {
   const terminal = useRef(null)
   const terminalPendingLines = useRef([])
   const terminalInputBuffer = useRef('')
+  const terminalModeRef = useRef('')
   const activeFileRef = useRef(activeFile)
   const editorRef = useRef(null)
   const fileUploadRef = useRef(null)
@@ -773,15 +774,6 @@ function IDE({ projectId }) {
       id: 'terminal',
       title: 'ターミナルを表示/非表示',
       hint: 'ターミナルを開く',
-      run: () => {
-        setBottomTab('terminal')
-        setBottomOpen(true)
-      }
-    },
-    {
-      id: 'output',
-      title: 'ターミナルを開く',
-      hint: '実行結果を表示',
       run: () => {
         setBottomTab('terminal')
         setBottomOpen(true)
@@ -998,9 +990,13 @@ function IDE({ projectId }) {
       return SERVER_LANGUAGES.has(getFileMeta(activeFileRef.current).language)
     }
 
+    const initialTerminalMode = isServerLanguage() ? 'stdin' : 'shell'
+
+    terminalModeRef.current = initialTerminalMode
+
     instance.writeln('Poligo ターミナル')
     instance.writeln('通常のシェル操作は「$」、標準入力は「stdin>」から入力できます。')
-    instance.write(isServerLanguage() ? 'stdin> ' : '$ ')
+    instance.write(initialTerminalMode === 'stdin' ? 'stdin> ' : '$ ')
 
     let buffer = ''
 
@@ -1102,6 +1098,21 @@ function IDE({ projectId }) {
     () => preview || buildPreview(files, activeFile),
     [files, preview, activeFile]
   )
+
+  useEffect(() => {
+    if (!terminal.current) return
+
+    const nextMode = isServerLanguage(currentLanguage)
+      ? 'stdin'
+      : 'shell'
+
+    if (terminalModeRef.current === nextMode) return
+
+    terminalModeRef.current = nextMode
+    terminalInputBuffer.current = ''
+    terminal.current.write('\r\n')
+    terminal.current.write(nextMode === 'stdin' ? 'stdin> ' : '$ ')
+  }, [currentLanguage])
 
   useEffect(() => {
     setEditorMarkers([])
