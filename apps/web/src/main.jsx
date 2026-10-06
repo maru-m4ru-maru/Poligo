@@ -309,6 +309,10 @@ function inlineCssReferences(source, filePath, files, seen = new Set()) {
         return match
       }
 
+      if (asset.startsWith('data:')) {
+        return 'url("' + asset + '")'
+      }
+
       if (fileExtension(resolved) === 'svg') {
         return 'url("' + createSvgDataUrl(asset) + '")'
       }
@@ -487,6 +491,18 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
       const resolved = resolveVirtualPath(entryFile, sourceMatch[2])
       const asset = resolved ? files[resolved] : null
 
+      if (typeof asset === 'string' && asset.startsWith('data:')) {
+        const replacement = sourceMatch[1] +
+          '="' +
+          asset +
+          '"'
+
+        return '<' +
+          tagName +
+          attributes.replace(sourceMatch[0], replacement) +
+          '>'
+      }
+
       if (
         typeof asset === 'string' &&
         fileExtension(resolved) === 'svg'
@@ -617,6 +633,7 @@ function IDE({ projectId }) {
   const terminalRef = useRef(null)
   const terminal = useRef(null)
   const editorRef = useRef(null)
+  const fileUploadRef = useRef(null)
   const filesRef = useRef(files)
 
   const { data: session } = authClient.useSession()
@@ -1214,6 +1231,81 @@ function IDE({ projectId }) {
   function createFile() {
     setNewFileName('')
     setNewFileOpen(true)
+  }
+
+  function openFileUpload() {
+    fileUploadRef.current?.click()
+  }
+
+  async function handleFileUpload(event) {
+    const uploaded = Array.from(event.target.files || [])
+
+    event.target.value = ''
+
+    for (const file of uploaded) {
+      const path = file.name.replace(/\\/g, '/').replace(/^\\/+/, '')
+
+      if (
+        !path ||
+        path.split('/').some(part => !part || part === '.' || part === '..')
+      ) {
+        continue
+      }
+
+      const extension = fileExtension(path)
+      const textExtensions = new Set([
+        'html',
+        'htm',
+        'css',
+        'js',
+        'mjs',
+        'jsx',
+        'ts',
+        'tsx',
+        'json',
+        'md',
+        'txt',
+        'svg',
+        'xml'
+      ])
+
+      let value
+
+      if (textExtensions.has(extension) || file.type.startsWith('text/')) {
+        value = await file.text()
+      } else {
+        const buffer = await file.arrayBuffer()
+        const bytes = new Uint8Array(buffer)
+        let binary = ''
+
+        for (let offset = 0; offset < bytes.length; offset += 8192) {
+          binary += String.fromCharCode(
+            ...bytes.subarray(offset, offset + 8192)
+          )
+        }
+
+        value =
+          'data:' +
+          (file.type || 'application/octet-stream') +
+          ';base64,' +
+          btoa(binary)
+      }
+
+      setFiles(current => ({
+        ...current,
+        [path]: value
+      }))
+      setActiveFile(path)
+      setOpenFiles(current =>
+        current.includes(path)
+          ? current
+          : [...current, path]
+      )
+    }
+
+    if (uploaded.length) {
+      setSaveStatus('saving')
+    }
   }
 
   function cancelCreateFile() {
@@ -1818,7 +1910,15 @@ function IDE({ projectId }) {
             {activeView === 'files' && (
               <div className="explorer-actions">
                 <button className="more-button" onClick={() => void createFile()} title="新しいファイル">＋</button>
+                <button className="more-button" onClick={openFileUpload} title="ファイルをアップロード">↑</button>
                 <button className="more-button" onClick={() => void deleteFile()} title="ファイルを削除">−</button>
+                <input
+                  ref={fileUploadRef}
+                  type="file"
+                  multiple
+                  hidden
+                  onChange={handleFileUpload}
+                />
               </div>
             )}
           </div>
