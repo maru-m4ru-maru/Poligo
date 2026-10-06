@@ -24,7 +24,6 @@ import AuthPage from './AuthPage'
 import Dashboard from './Dashboard'
 import HomePage from './HomePage'
 import TermsPage from './TermsPage'
-import DemoPage from './DemoPage'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1776,7 +1775,6 @@ function getRoutePath() {
 
   if (
     hashPath === '/dashboard' ||
-    hashPath === '/demo' ||
     hashPath === '/ide' ||
     /^\/ide\/[^/]+$/.test(hashPath)
   ) {
@@ -1805,7 +1803,7 @@ function AppRouter() {
   const [pathname, setPathname] = useState(getRoutePath())
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
-  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/demo'
+  const publicPath = pathname === '/' || pathname === '/terms'
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
@@ -1846,10 +1844,6 @@ function AppRouter() {
 
   if (pathname === '/terms') {
     return <TermsPage />
-  }
-
-  if (pathname === '/demo') {
-    return <DemoPage />
   }
 
   if (pathname === '/signin') {
