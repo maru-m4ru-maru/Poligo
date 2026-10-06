@@ -402,7 +402,7 @@ export default function Dashboard({ session }) {
 
   function openProject(id) {
     localStorage.setItem('poligo-current-project', id)
-    navigate('/')
+    navigate('/ide')
   }
 
   function openProjectContextMenu(event, project) {
