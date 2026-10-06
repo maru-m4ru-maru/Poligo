@@ -556,6 +556,13 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
     )
   }
 
+  const runtimeBridge = '<script>' +
+    'window.addEventListener("error",function(event){parent.postMessage({source:"poligo-preview",type:"error",message:event.message||"JavaScript error",stack:event.error&&event.error.stack||""},"*")});' +
+    'window.addEventListener("unhandledrejection",function(event){var reason=event.reason||{};parent.postMessage({source:"poligo-preview",type:"error",message:reason.message||String(reason),stack:reason.stack||""},"*")});' +
+    '</script>'
+
+  html = html.replace(/<head([^>]*)>/i, '<head$1>' + runtimeBridge)
+
   if (!/<meta[^>]+name=["']viewport["']/i.test(html)) {
     html = html.replace(
       /<head([^>]*)>/i,
@@ -622,6 +629,7 @@ function IDE({ projectId }) {
     result: null,
     error: ''
   })
+  const [runtimeProblems, setRuntimeProblems] = useState([])
   const [sourceCommits, setSourceCommits] = useState([])
   const [sourceDiff, setSourceDiff] = useState([])
   const [sourceCommitMessage, setSourceCommitMessage] = useState('')
@@ -996,8 +1004,37 @@ function IDE({ projectId }) {
 
   useEffect(() => {
     setEditorMarkers([])
+    setRuntimeProblems([])
     setPreview('')
   }, [activeFile])
+
+  useEffect(() => {
+    function handlePreviewMessage(event) {
+      if (event.data?.source !== 'poligo-preview') {
+        return
+      }
+
+      const problem = {
+        message: event.data.message || 'JavaScriptの実行中にエラーが発生しました。',
+        stack: event.data.stack || '',
+        type: event.data.type || 'error'
+      }
+
+      setRuntimeProblems(current => [
+        ...current.slice(-19),
+        problem
+      ])
+
+      setBottomOpen(true)
+      setBottomTab('problems')
+    }
+
+    window.addEventListener('message', handlePreviewMessage)
+
+    return () => {
+      window.removeEventListener('message', handlePreviewMessage)
+    }
+  }, [])
 
   async function handleSignOut() {
     await authClient.signOut()
@@ -1175,6 +1212,7 @@ function IDE({ projectId }) {
   }
 
   function refreshPreview() {
+    setRuntimeProblems([])
     setPreview(buildPreview(files, activeFile))
     setPreviewKey(value => value + 1)
   }
@@ -2206,11 +2244,20 @@ function IDE({ projectId }) {
                   {bottomTab === 'terminal' && <div className="terminal" ref={terminalRef} />}
                   {bottomTab === 'output' && (
                     <div className="output-panel">
+                      {runtimeProblems.map((problem, index) => (
+                        <pre
+                          key={'runtime-output-' + index}
+                          className="output-raw output-error-raw"
+                        >
+                          {problem.message + (problem.stack ? '\n\n' + problem.stack : '')}
+                        </pre>
+                      ))}
+
                       {execution.error && (
                         <pre className="output-raw output-error-raw">{execution.error}</pre>
                       )}
 
-                      {!execution.error && execution.result && (
+                      {!runtimeProblems.length && !execution.error && execution.result && (
                         <pre className="output-raw">
                           {(execution.result.stdout || '') +
                             (execution.result.stderr
@@ -2224,7 +2271,7 @@ function IDE({ projectId }) {
                     <div className="problems-panel">
                       {editorMarkers.map((marker, index) => (
                         <button
-                          key={index}
+                          key={'editor-' + index}
                           className="problem-item problem-item-error"
                           onClick={() => {
                             editorRef.current?.revealLineInCenter(marker.startLineNumber)
@@ -2239,8 +2286,22 @@ function IDE({ projectId }) {
                           <div>
                             <strong>{marker.message}</strong>
                             <small>
-                              HTML / 行 {marker.startLineNumber}:{marker.startColumn || 1}
+                              {currentLanguage.toUpperCase()} / 行 {marker.startLineNumber}:{marker.startColumn || 1}
                             </small>
+                          </div>
+                        </button>
+                      ))}
+
+                      {runtimeProblems.map((problem, index) => (
+                        <button
+                          key={'runtime-' + index}
+                          className="problem-item problem-item-error"
+                          onClick={() => setBottomTab('output')}
+                        >
+                          <span>×</span>
+                          <div>
+                            <strong>{problem.message}</strong>
+                            <small>プレビュー実行時エラー</small>
                           </div>
                         </button>
                       ))}
