@@ -427,6 +427,21 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
     }
   )
 
+  if (
+    entryFile === 'index.html' &&
+    typeof files['style.css'] === 'string' &&
+    !html.includes('data-poligo-file="style.css"')
+  ) {
+    const css = inlineCssReferences(files['style.css'], 'style.css', files)
+
+    html = html.replace(
+      /<\\/head>/i,
+      '<style data-poligo-file="style.css">' +
+        escapeInlineStyle(css) +
+        '</style></head>'
+    )
+  }
+
   html = html.replace(
     /<script\\b([^>]*)\\bsrc\\s*=\\s*["']([^"']+)["']([^>]*)>([\\s\\S]*?)<\\/script>/gi,
     (match, before, reference, after, inline) => {
@@ -964,6 +979,7 @@ function IDE({ projectId }) {
 
   useEffect(() => {
     setEditorMarkers([])
+    setPreview('')
   }, [activeFile])
 
   async function handleSignOut() {
@@ -1208,16 +1224,23 @@ function IDE({ projectId }) {
   function commitCreateFile() {
     const normalized = newFileName.trim()
 
-    if (!normalized || normalized.includes('/') || normalized.includes('\\')) {
+    const safeName = normalized
+      .replace(/\\/g, '/')
+      .replace(/^\\/+/, '')
+
+    if (
+      !safeName ||
+      safeName.split('/').some(part => !part || part === '.' || part === '..')
+    ) {
       return
     }
 
-    if (Object.prototype.hasOwnProperty.call(files, normalized)) {
-      setActiveFile(normalized)
+    if (Object.prototype.hasOwnProperty.call(files, safeName)) {
+      setActiveFile(safeName)
       setOpenFiles(current =>
-        current.includes(normalized)
+        current.includes(safeName)
           ? current
-          : [...current, normalized]
+          : [...current, safeName]
       )
       cancelCreateFile()
       return
@@ -1225,10 +1248,10 @@ function IDE({ projectId }) {
 
     setFiles(current => ({
       ...current,
-      [normalized]: ''
+      [safeName]: ''
     }))
-    setActiveFile(normalized)
-    setOpenFiles(current => [...current, normalized])
+    setActiveFile(safeName)
+    setOpenFiles(current => [...current, safeName])
     setSaveStatus('saving')
     cancelCreateFile()
   }
