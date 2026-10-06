@@ -66,7 +66,8 @@ const FILE_META = {
 const API_URL = import.meta.env.VITE_API_URL || ''
 
 function isSecretEnvFile(path) {
-  return path === '.env' || (path.startsWith('.env.') && path !== '.env.example')
+  const name = path.split('/').pop() || path
+  return name === '.env' || (name.startsWith('.env.') && name !== '.env.example')
 }
 
 const SERVER_LANGUAGES = new Set([
