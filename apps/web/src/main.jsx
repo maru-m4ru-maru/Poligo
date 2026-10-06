@@ -973,8 +973,19 @@ function IDE({ projectId }) {
 
     const fit = new FitAddon()
     instance.loadAddon(fit)
+    terminal.current = instance
     instance.open(terminalRef.current)
-    fit.fit()
+
+    function fitTerminal() {
+      if (!terminalRef.current || !terminal.current) return
+      fit.fit()
+      terminal.current.refresh(0, Math.max(0, terminal.current.rows - 1))
+    }
+
+    fitTerminal()
+    window.requestAnimationFrame(fitTerminal)
+    window.setTimeout(fitTerminal, 80)
+    window.setTimeout(fitTerminal, 250)
 
     function flushPendingLines() {
       const lines = terminalPendingLines.current
@@ -1082,14 +1093,17 @@ function IDE({ projectId }) {
       }
     })
 
-    terminal.current = instance
     flushPendingLines()
 
-    const resize = () => fit.fit()
+    const resize = () => fitTerminal()
+    const observer = new ResizeObserver(() => fitTerminal())
+
     window.addEventListener('resize', resize)
+    observer.observe(terminalRef.current)
 
     return () => {
       window.removeEventListener('resize', resize)
+      observer.disconnect()
       instance.dispose()
       terminal.current = null
     }
@@ -1951,7 +1965,37 @@ function IDE({ projectId }) {
     error,
     status
   }) {
-    if (!terminal.current) return
+    if (!terminal.current) {
+      terminalPendingLines.current.push('')
+      terminalPendingLines.current.push('> run ' + activeFileName + ' [' + language + ']')
+
+      if (status === 'timeout') {
+        terminalPendingLines.current.push('Execution timed out.')
+        return
+      }
+
+      if (error) {
+        terminalPendingLines.current.push(error)
+        return
+      }
+
+      if (result?.stdout) {
+        terminalPendingLines.current.push(...String(result.stdout).split('\n'))
+      }
+
+      if (result?.stderr) {
+        terminalPendingLines.current.push(...String(result.stderr).split('\n'))
+      }
+
+      if (result?.exitCode !== null && result?.exitCode !== undefined) {
+        terminalPendingLines.current.push('')
+        terminalPendingLines.current.push(
+          'Process exited with code ' + result.exitCode + '.'
+        )
+      }
+
+      return
+    }
 
     terminal.current.writeln('')
     terminal.current.writeln('> run ' + activeFileName + ' [' + language + ']')
