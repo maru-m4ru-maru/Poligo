@@ -717,9 +717,9 @@ export default function Dashboard({ session }) {
       <main className="stack-dashboard-main">
         <header className="stack-dashboard-topbar">
           <div className="stack-breadcrumb">
-            <span>Cloud</span>
+            <span>クラウド</span>
             <span>/</span>
-            <strong>Dashboard</strong>
+            <strong>ダッシュボード</strong>
           </div>
 
           <div className="stack-top-actions">
@@ -860,7 +860,7 @@ export default function Dashboard({ session }) {
 
           <section id="account" className="stack-account-section">
             <div>
-              <span className="stack-eyebrow">ACCOUNT</span>
+              <span className="stack-eyebrow">アカウント</span>
               <h2>{data.user.name}</h2>
               <p>{data.user.email}</p>
             </div>
