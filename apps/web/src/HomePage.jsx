@@ -11,6 +11,22 @@ function navigate(path) {
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
+const LANGUAGES = [
+  { name: 'HTML', icon: '/icons/html5.svg' },
+  { name: 'CSS', icon: '/icons/css.svg' },
+  { name: 'JavaScript', icon: '/icons/javascript.svg' },
+  { name: 'Python', icon: '/icons/python.svg' },
+  { name: 'C', icon: '/icons/c.svg' },
+  { name: 'C++', icon: '/icons/cplusplus.svg' },
+  { name: 'Java', icon: 'https://cdn.simpleicons.org/java/ED8B00' },
+  { name: 'Go', icon: 'https://cdn.simpleicons.org/go/00ADD8' },
+  { name: 'Rust', icon: 'https://cdn.simpleicons.org/rust/000000' },
+  { name: 'PHP', icon: 'https://cdn.simpleicons.org/php/777BB4' },
+  { name: 'Ruby', icon: 'https://cdn.simpleicons.org/ruby/CC342D' },
+  { name: 'Kotlin', icon: 'https://cdn.simpleicons.org/kotlin/7F52FF' },
+  { name: 'C#', icon: 'https://cdn.simpleicons.org/csharp/239120' }
+]
+
 export default function HomePage({ session }) {
   return (
     <div className="home-page">
@@ -142,20 +158,14 @@ if name:
             <h2>From static pages to native code.</h2>
           </div>
           <div className="home-language-list">
-            <span>HTML</span>
-            <span>CSS</span>
-            <span>JavaScript</span>
-            <span>Python</span>
-            <span>C</span>
-            <span>C++</span>
-            <span>Java</span>
-            <span>Go</span>
-            <span>Rust</span>
-            <span>PHP</span>
-            <span>Ruby</span>
-            <span>Kotlin</span>
-            <span>C#</span>
-          </div>        </section>
+            {LANGUAGES.map(language => (
+              <div className="home-language-chip" key={language.name}>
+                <img src={language.icon} alt="" aria-hidden="true" />
+                <span>{language.name}</span>
+              </div>
+            ))}
+          </div>
+        </section>
 
 
       </main>
