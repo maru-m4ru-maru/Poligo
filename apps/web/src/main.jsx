@@ -2894,7 +2894,6 @@ function IDE({ projectId }) {
                           <div className="panel-empty">問題はありません。</div>
                         )}
                     </div>
-                  )}
                 </div>
               </div>
             </div>
