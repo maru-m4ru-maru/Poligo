@@ -1371,7 +1371,7 @@ function IDE({ projectId }) {
                     onClick={() => switchProject(project.id)}
                   >
                     <span>{project.name}</span>
-                    <small>{project.id === currentProjectId ? 'current' : ''}</small>
+                    <small>{project.id === currentProjectId ?  '現在' : ''}</small>
                   </button>
                 ))}
               </div>
@@ -1393,7 +1393,7 @@ function IDE({ projectId }) {
             ダッシュボード
           </button>
           <button className="signout-button" onClick={handleSignOut}>
-            Sign out
+            サインアウト
           </button>
           <span className="connection-status">
             <span className={'status-dot ' + apiStatus} />
@@ -1408,8 +1408,8 @@ function IDE({ projectId }) {
         <aside className="activity-bar">
           <div className="activity-top">
             {[
-              ['files', 'Files'],
-              ['search', 'Search'],
+              ['files', 'ファイル'],
+              ['search', '検索'],
               ['source', 'ソース管理']
             ].map(([type, label]) => (
               <button
@@ -1436,8 +1436,8 @@ function IDE({ projectId }) {
             <span>{activeView === 'files' ? 'EXPLORER' : activeView.toUpperCase()}</span>
             {activeView === 'files' && (
               <div className="explorer-actions">
-                <button className="more-button" onClick={() => void createFile()} title="New file">＋</button>
-                <button className="more-button" onClick={() => void deleteFile()} title="Delete file">−</button>
+                <button className="more-button" onClick={() => void createFile()} title="新しいファイル">＋</button>
+                <button className="more-button" onClick={() => void deleteFile()} title="ファイルを削除">−</button>
               </div>
             )}
           </div>
