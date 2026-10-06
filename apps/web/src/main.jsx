@@ -14,14 +14,14 @@ import {
   listProjects,
   saveProject,
   claimWorkspace,
-  listコミットs,
-  getコミットDiff,
-  createコミット,
-  restoreコミット
+  listCommits,
+  getCommitDiff,
+  createCommit,
+  restoreCommit
 } from './projectStore'
 import { authClient } from './auth-client'
 import AuthPage from './AuthPage'
-import ダッシュボード from './ダッシュボード'
+import Dashboard from './Dashboard'
 import HomePage from './HomePage'
 import TermsPage from './TermsPage'
 
@@ -265,10 +265,10 @@ function IDE({ projectId }) {
     result: null,
     error: ''
   })
-  const [sourceコミットs, setSourceコミットs] = useState([])
+  const [sourceCommits, setSourceCommits] = useState([])
   const [sourceDiff, setSourceDiff] = useState([])
-  const [sourceコミットMessage, setSourceコミットMessage] = useState('')
-  const [sourceSelectedコミット, setSourceSelectedコミット] = useState('')
+  const [sourceCommitMessage, setSourceCommitMessage] = useState('')
+  const [sourceSelectedCommit, setSourceSelectedCommit] = useState('')
   const [sourceLoading, setSourceLoading] = useState(false)
   const [sourceError, setSourceError] = useState('')
   const [dialog, setDialog] = useState(null)
@@ -494,21 +494,21 @@ function IDE({ projectId }) {
       setSourceError('')
 
       try {
-        const result = await listコミットs(currentProjectId)
+        const result = await listCommits(currentProjectId)
         const commits = Array.isArray(result.commits) ? result.commits : []
 
         if (cancelled) return
 
-        setSourceコミットs(commits)
+        setSourceCommits(commits)
 
-        const selectedId = commits.some(commit => commit.id === sourceSelectedコミット)
-          ? sourceSelectedコミット
+        const selectedId = commits.some(commit => commit.id === sourceSelectedCommit)
+          ? sourceSelectedCommit
           : commits[0]?.id || ''
 
-        setSourceSelectedコミット(selectedId)
+        setSourceSelectedCommit(selectedId)
 
         if (selectedId) {
-          const diff = await getコミットDiff(currentProjectId, selectedId)
+          const diff = await getCommitDiff(currentProjectId, selectedId)
 
           if (!cancelled) {
             setSourceDiff(diff.files || [])
@@ -637,26 +637,26 @@ function IDE({ projectId }) {
     window.location.assign('/signin')
   }
 
-  async function refreshSourceControl(selectedコミットId = '') {
+  async function refreshSourceControl(selectedCommitId = '') {
     if (!currentProjectId) return
 
     setSourceLoading(true)
     setSourceError('')
 
     try {
-      const result = await listコミットs(currentProjectId)
+      const result = await listCommits(currentProjectId)
       const commits = Array.isArray(result.commits) ? result.commits : []
       const selectedId =
-        commits.find(commit => commit.id === selectedコミットId)?.id ||
-        commits.find(commit => commit.id === sourceSelectedコミット)?.id ||
+        commits.find(commit => commit.id === selectedCommitId)?.id ||
+        commits.find(commit => commit.id === sourceSelectedCommit)?.id ||
         commits[0]?.id ||
         ''
 
-      setSourceコミットs(commits)
-      setSourceSelectedコミット(selectedId)
+      setSourceCommits(commits)
+      setSourceSelectedCommit(selectedId)
 
       if (selectedId) {
-        const diff = await getコミットDiff(currentProjectId, selectedId)
+        const diff = await getCommitDiff(currentProjectId, selectedId)
         setSourceDiff(diff.files || [])
       } else {
         setSourceDiff([])
@@ -669,7 +669,7 @@ function IDE({ projectId }) {
   }
 
   async function commitChanges() {
-    const message = sourceコミットMessage.trim()
+    const message = sourceCommitMessage.trim()
 
     if (!message || !currentProjectId) return
 
@@ -678,12 +678,12 @@ function IDE({ projectId }) {
 
     try {
       await saveCurrentProject()
-      const commit = await createコミット(currentProjectId, message)
+      const commit = await createCommit(currentProjectId, message)
 
-      setSourceコミットMessage('')
+      setSourceCommitMessage('')
       await refreshSourceControl(commit.id)
     } catch (error) {
-      setSourceError(error instanceof Error ? error.message : 'コミット failed')
+      setSourceError(error instanceof Error ? error.message : 'コミットに失敗しました')
       setSourceLoading(false)
     }
   }
@@ -749,8 +749,8 @@ function IDE({ projectId }) {
     }
   }
 
-  async function restoreSelectedコミット(commitId) {
-    const commit = sourceコミットs.find(item => item.id === commitId)
+  async function restoreSelectedCommit(commitId) {
+    const commit = sourceCommits.find(item => item.id === commitId)
 
     if (!commit) return
 
@@ -764,7 +764,7 @@ function IDE({ projectId }) {
         setSourceError('')
 
         try {
-          const restored = await restoreコミット(currentProjectId, commitId)
+          const restored = await restoreCommit(currentProjectId, commitId)
           const nextFiles = restored.files
 
           setFiles(nextFiles)
@@ -1505,10 +1505,10 @@ function IDE({ projectId }) {
             <div className="source-control-view">
               <div className="source-control-commit">
                 <input
-                  value={sourceコミットMessage}
-                  onChange={event => setSourceコミットMessage(event.target.value)}
+                  value={sourceCommitMessage}
+                  onChange={event => setSourceCommitMessage(event.target.value)}
                   onKeyDown={event => {
-                    if (event.key === 'Enter' && sourceコミットMessage.trim()) {
+                    if (event.key === 'Enter' && sourceCommitMessage.trim()) {
                       void commitChanges()
                     }
                   }}
@@ -1518,7 +1518,7 @@ function IDE({ projectId }) {
                 <button
                   className="source-commit-button"
                   onClick={() => void commitChanges()}
-                  disabled={sourceLoading || !sourceコミットMessage.trim()}
+                  disabled={sourceLoading || !sourceCommitMessage.trim()}
                 >
                   コミット
                 </button>
@@ -1559,26 +1559,26 @@ function IDE({ projectId }) {
               <div className="source-control-section">
                 <div className="source-control-section-title">
                   <span>履歴</span>
-                  <span>{sourceコミットs.length}</span>
+                  <span>{sourceCommits.length}</span>
                 </div>
 
-                {!sourceコミットs.length && !sourceLoading && (
+                {!sourceCommits.length && !sourceLoading && (
                   <div className="source-control-empty">コミットはありません。</div>
                 )}
 
-                {sourceコミットs.map(commit => (
+                {sourceCommits.map(commit => (
                   <div
                     key={commit.id}
                     className={'source-commit-row ' + (
-                      sourceSelectedコミット === commit.id ? 'active' : ''
+                      sourceSelectedCommit === commit.id ? 'active' : ''
                     )}
                   >
                     <button
                       className="source-commit-select"
                       onClick={async () => {
-                        setSourceSelectedコミット(commit.id)
+                        setSourceSelectedCommit(commit.id)
                         try {
-                          const diff = await getコミットDiff(currentProjectId, commit.id)
+                          const diff = await getCommitDiff(currentProjectId, commit.id)
                           setSourceDiff(diff.files || [])
                         } catch (error) {
                           setSourceError(
@@ -1600,7 +1600,7 @@ function IDE({ projectId }) {
                     <button
                       className="source-restore-button"
                       title="Restore this commit"
-                      onClick={() => void restoreSelectedコミット(commit.id)}
+                      onClick={() => void restoreSelectedCommit(commit.id)}
                     >
                       ↶
                     </button>
@@ -1855,7 +1855,7 @@ function AppRouter() {
   }
 
   if (pathname === '/dashboard') {
-    return <ダッシュボード session={session} />
+    return <Dashboard session={session} />
   }
 
   if (idePath) {
