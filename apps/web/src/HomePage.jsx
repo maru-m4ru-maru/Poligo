@@ -1,4 +1,5 @@
 import { authClient } from './auth-client'
+import { DemoPreview } from './DemoPage'
 
 function navigate(path) {
   if (path === '/dashboard' || path === '/ide') {
@@ -69,11 +70,11 @@ export default function HomePage({ session }) {
       <main className="home-main">
         <section className="home-hero">
           <div className="home-hero-copy">
-            <span className="home-eyebrow">POLIGO CLOUD IDE</span>
-            <h1>縛られずに<br />コードを作る。</h1>
+            <span className="home-eyebrow">POLIGO</span>
+            <h1>ブラウザで、<br />コードを書く。</h1>
             <p>
-              コードの作成、実行、保存をブラウザだけで完結できるクラウドIDE。
-              プロジェクトをひとつの場所にまとめて、自由なペースで開発できます。
+              コードの作成、実行、保存までをブラウザで完結。
+              プロジェクトをクラウドにまとめて、すぐに開発を始められます。
             </p>
 
             <div className="home-hero-actions">
@@ -96,7 +97,7 @@ export default function HomePage({ session }) {
                   navigate('/signin')
                 }
               }}>
-                ダッシュボードを見る
+                ダッシュボード
               </button>
               <button className="home-secondary-button" onClick={() => navigate('/demo')}>
                 デモを試す
@@ -113,13 +114,9 @@ export default function HomePage({ session }) {
             <div className="home-demo-frame-wrap">
               <div className="home-demo-label">
                 <span>DEMO</span>
-                <strong>アカウント不要で試せます</strong>
+                <strong>アカウント不要</strong>
               </div>
-              <iframe
-                className="home-demo-frame"
-                title="Poligo Demo"
-                src="/#/demo"
-              />
+              <DemoPreview />
               <button className="home-demo-open" onClick={() => navigate('/demo')}>
                 デモを開く
                 <span>→</span>
