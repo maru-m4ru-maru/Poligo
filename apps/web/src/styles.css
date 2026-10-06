@@ -3243,6 +3243,38 @@ body {
   overflow: auto;
 }
 
+.output-execution-target {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #202a38;
+  background: #111721;
+}
+
+.output-execution-target span {
+  color: #66778d;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.output-execution-target strong {
+  overflow: hidden;
+  color: #dbe5f2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.output-execution-target small {
+  color: #708197;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 8px;
+}
+
 .output-stdin {
   padding: 10px;
   border-bottom: 1px solid #202a38;
