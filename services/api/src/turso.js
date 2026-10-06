@@ -1,6 +1,5 @@
 import { connect } from '@tursodatabase/serverless'
 import {
-  decryptSecret,
   encryptSecret,
   isEncryptedSecret
 } from './secretStore.js'
