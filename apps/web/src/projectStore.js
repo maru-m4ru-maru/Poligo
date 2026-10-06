@@ -114,7 +114,7 @@ export async function duplicateProject(project) {
   )
 }
 
-export async function initializeWorkspace(defaultFiles) {
+export async function initializeWorkspace(defaultFiles, requestedProjectId = '') {
   let projects = await listProjects()
 
   if (!projects.length) {
@@ -145,6 +145,7 @@ export async function initializeWorkspace(defaultFiles) {
 
   const savedCurrentId = localStorage.getItem(CURRENT_PROJECT_KEY)
   const currentProject =
+    projects.find(project => project.id === requestedProjectId) ||
     projects.find(project => project.id === savedCurrentId) ||
     projects[0]
 
