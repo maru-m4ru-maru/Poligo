@@ -270,11 +270,11 @@ function createTextDataUrl(source, mime) {
 }
 
 function escapeInlineScript(source) {
-  return source.replace(/<\\/script/gi, '<\\\\/script')
+  return source.replace(/<\/script/gi, '<\\/script')
 }
 
 function escapeInlineStyle(source) {
-  return source.replace(/<\\/style/gi, '<\\\\/style')
+  return source.replace(/<\/style/gi, '<\\/style')
 }
 
 function inlineCssReferences(source, filePath, files, seen = new Set()) {
