@@ -1332,14 +1332,14 @@ async function handleAiAssist(request, response) {
     return
   }
 
+  const currentFile = typeof payload.currentFile === 'string'
+    ? payload.currentFile.slice(0, 240)
+    : ''
   const selected = currentFile && isSecretEnvFile(currentFile)
     ? ''
     : typeof payload.selectedText === 'string'
       ? payload.selectedText.slice(0, 20_000)
       : ''
-  const currentFile = typeof payload.currentFile === 'string'
-    ? payload.currentFile.slice(0, 240)
-    : ''
   const language = typeof payload.language === 'string'
     ? payload.language.slice(0, 80)
     : 'plaintext'
