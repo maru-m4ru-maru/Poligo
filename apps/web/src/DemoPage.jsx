@@ -53,7 +53,7 @@ export default function DemoPage() {
         </button>
 
         <div className="demo-nav-actions">
-          <span className="demo-badge">DEMO</span>
+          <span className="demo-badge">デモ</span>
           <button onClick={() => navigate('/')}>ホームへ戻る</button>
           <button className="demo-primary" onClick={() => navigate('/createaccount')}>
             アカウントを作成
@@ -64,7 +64,7 @@ export default function DemoPage() {
       <main className="demo-main">
         <div className="demo-notice">
           <div>
-            <strong>Poligo Demo</strong>
+            <strong>Poligo デモ</strong>
             <span>アカウントなしで試せます。ここでの編集内容はクラウドに保存されません。</span>
           </div>
           <span>保存なし · 公開なし · アカウント不要</span>
@@ -85,7 +85,7 @@ export default function DemoPage() {
             ))}
 
             <div className="demo-sidebar-note">
-              <strong>Demo制限</strong>
+              <strong>デモの制限</strong>
               <span>このページではクラウド保存、共有、公開機能を利用できません。</span>
             </div>
           </aside>
@@ -93,7 +93,7 @@ export default function DemoPage() {
           <section className="demo-editor-panel">
             <div className="demo-panel-header">
               <div>
-                <span className="demo-eyebrow">ローカルDemo</span>
+                <span className="demo-eyebrow">ローカルデモ</span>
                 <strong>{activeFile}</strong>
               </div>
               <span className="demo-local-status">ブラウザ内のみ</span>
@@ -111,7 +111,7 @@ export default function DemoPage() {
             <div className="demo-panel-header">
               <div>
                 <span className="demo-eyebrow">ライブプレビュー</span>
-                <strong>preview</strong>
+                <strong>プレビュー</strong>
               </div>
               <button
                 className="demo-refresh"
