@@ -20,7 +20,7 @@ It must not execute untrusted user code.
 
 The runner is intentionally outside the Render deployment.
 
-It accepts execution jobs from the API and is responsible for language-specific sandboxing.
+It accepts execution jobs from the API and is responsible for language-specific sandboxing. When a configured runner does not support a language, the API falls back to Judge0 instead of failing the execution request.
 
 ## Execution model
 
@@ -38,6 +38,8 @@ Web
 
 The browser never talks directly to Turso or the runner.
 
+Java execution uses the Judge0 Java environment. Single-file projects use the predefined Java compiler where possible. Projects that require multiple Java source files, Java packages, or nested project files use Judge0's multi-file program profile with generated compile and run scripts.
+
 ## Planned language layers
 
 - JavaScript and TypeScript: browser or WebContainer
@@ -46,7 +48,7 @@ The browser never talks directly to Turso or the runner.
 - C and C++: isolated worker
 - Rust: isolated worker
 - Go: isolated worker
-- Java and Kotlin: isolated worker
+- Java and Kotlin: isolated execution backend
 - Additional languages through runner profiles
 
 ## Security
