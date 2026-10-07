@@ -1537,7 +1537,12 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
 
   if (payload.language === 'c' || payload.language === 'cpp') {
     const sourcePaths = getCFamilySourcePaths(files, payload.language)
-    const multiFile = sourcePaths.length > 1
+    const multiFile =
+      sourcePaths.length > 1 ||
+      (
+        entrypoint.includes('/') &&
+        Object.keys(files).length > 1
+      )
 
     if (multiFile) {
       const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
