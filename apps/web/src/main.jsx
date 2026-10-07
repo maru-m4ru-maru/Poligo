@@ -143,6 +143,29 @@ function FileIcon({ kind, size = 16 }) {
   )
 }
 
+
+function FolderIcon({ size = 15 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M3.5 6.5h6l2 2H20.5v10h-17z"
+        fill="#565650"
+      />
+      <path
+        d="M3.5 8.5h17"
+        stroke="#8A8A82"
+        strokeWidth="1"
+      />
+    </svg>
+  )
+}
+
 function ActivityIcon({ type }) {
   const common = {
     width: 19,
@@ -384,6 +407,52 @@ function rewriteModuleImports(source, filePath, files, seen = new Set()) {
       return prefix + quote + dataUrl + quote
     }
   )
+}
+
+
+function buildFileTree(files) {
+  const root = {
+    type: 'folder',
+    name: '',
+    path: '',
+    children: new Map()
+  }
+
+  for (const filePath of Object.keys(files)) {
+    const parts = filePath
+      .split('/')
+      .filter(Boolean)
+
+    let current = root
+    let path = ''
+
+    parts.forEach((part, index) => {
+      path = path ? path + '/' + part : part
+
+      if (!current.children.has(part)) {
+        current.children.set(part, {
+          type: index === parts.length - 1 ? 'file' : 'folder',
+          name: part,
+          path,
+          children: index === parts.length - 1 ? null : new Map()
+        })
+      }
+
+      current = current.children.get(part)
+    })
+  }
+
+  return root.children
+}
+
+function sortFileTreeNodes(nodes) {
+  return [...nodes].sort((left, right) => {
+    if (left.type !== right.type) {
+      return left.type === 'folder' ? -1 : 1
+    }
+
+    return left.name.localeCompare(right.name, 'ja')
+  })
 }
 
 function getPreviewEntryFile(files, requestedFile) {
@@ -668,6 +737,7 @@ function IDE({ projectId }) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [newFileOpen, setNewFileOpen] = useState(false)
+  const [collapsedFolders, setCollapsedFolders] = useState(new Set())
   const [editorMarkers, setEditorMarkers] = useState([])
   const [newFileName, setNewFileName] = useState('')
   const [previewKey, setPreviewKey] = useState(0)
@@ -705,6 +775,8 @@ function IDE({ projectId }) {
   const { data: session } = authClient.useSession()
   const currentLanguage = getFileMeta(activeFile).language
   const currentValue = files[activeFile] ?? ''
+
+  const fileTree = useMemo(() => buildFileTree(files), [files])
 
   useEffect(() => {
     activeFileRef.current = activeFile
@@ -1200,6 +1272,66 @@ function IDE({ projectId }) {
       ...previous,
       [activeFile]: value ?? ''
     }))
+  }
+
+
+  function toggleFolder(path) {
+    setCollapsedFolders(current => {
+      const next = new Set(current)
+
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+
+      return next
+    })
+  }
+
+  function renderFileTree(nodes, depth = 0) {
+    return sortFileTreeNodes(nodes).map(node => {
+      if (node.type === 'folder') {
+        const collapsed = collapsedFolders.has(node.path)
+        const children = Array.from(node.children.values())
+
+        return (
+          <div key={node.path}>
+            <button
+              className="explorer-folder"
+              style={{ paddingLeft: 10 + depth * 16 }}
+              onClick={() => toggleFolder(node.path)}
+              title={node.path}
+            >
+              <span className="explorer-folder-arrow">
+                {collapsed ? '›' : '⌄'}
+              </span>
+              <FolderIcon />
+              <span>{node.name}</span>
+            </button>
+
+            {!collapsed && (
+              <div className="explorer-folder-children">
+                {renderFileTree(children, depth + 1)}
+              </div>
+            )}
+          </div>
+        )
+      }
+
+      return (
+        <button
+          key={node.path}
+          className={'explorer-file ' + (activeFile === node.path ? 'active' : '')}
+          style={{ paddingLeft: 28 + depth * 16 }}
+          onClick={() => openFile(node.path)}
+          title={node.path}
+        >
+          <FileIcon kind={getFileMeta(node.name).kind} />
+          <span>{node.name}</span>
+        </button>
+      )
+    })
   }
 
   function openFile(name) {
@@ -2126,6 +2258,7 @@ function IDE({ projectId }) {
       exitCode: null,
       error: ''
     })
+    setCollapsedFolders(new Set())
     setFiles(DEFAULT_FILES)
     setOpenFiles(['index.html'])
     setActiveFile('index.html')
@@ -2561,22 +2694,12 @@ function IDE({ projectId }) {
                           cancelCreateFile()
                         }
                       }}
-                      placeholder="ファイル名"
+                      placeholder="ファイル名 または フォルダ/ファイル名"
                       aria-label="新しいファイル名"
                     />
                   </div>
                 )}
-
-                {Object.keys(files).map(name => (
-                  <button
-                    key={name}
-                    className={'explorer-file ' + (activeFile === name ? 'active' : '')}
-                    onClick={() => openFile(name)}
-                  >
-                    <FileIcon kind={getFileMeta(name).kind} />
-                    <span>{name}</span>
-                  </button>
-                ))}
+                {renderFileTree(Array.from(fileTree.values()))}
               </div>
             </>
           )}
