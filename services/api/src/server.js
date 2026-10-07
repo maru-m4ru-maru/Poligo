@@ -857,8 +857,6 @@ async function updateProject(projectId, ownerId, payload) {
     }
   ]
 
-  const storedFiles = encryptProjectSecrets(payload.files)
-
   for (const [path, content] of Object.entries(storedFiles)) {
     statements.push({
       sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
