@@ -518,7 +518,9 @@ function buildJavaAdditionalFiles(
   files,
   entrypoint,
   mainClass,
-  multiFile
+  multiFile,
+  environment,
+  args
 ) {
   const archiveFiles = []
 
@@ -567,14 +569,21 @@ function buildJavaAdditionalFiles(
       ].join('\n') + '\n')
     })
 
+    const environmentLines = Object.entries(environment || {}).map(
+      ([key, value]) => 'export ' + key + '=' + shellQuote(value)
+    )
+    const argumentLine = formatExecutionArguments(args || [])
+
     archiveFiles.push({
       path: 'run',
       mode: 0o100755,
       data: Buffer.from([
         '#!/bin/bash',
         'set -e',
+        ...environmentLines,
         'exec /usr/local/openjdk13/bin/java -Dfile.encoding=UTF-8 -cp out ' +
-          shellQuote(mainClass)
+          shellQuote(mainClass) +
+          (argumentLine ? ' ' + argumentLine : '')
       ].join('\n') + '\n')
     })
   }
