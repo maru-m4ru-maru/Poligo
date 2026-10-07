@@ -387,7 +387,6 @@ public class Foo {
             ]:
                 wait_for_output(page, output)
 
-            select_file(page, "Foo.java")
             create_file(page, "Foo.java", foo_java)
             select_file(page, "Foo.java")
             page.get_by_label("実行引数").fill("")
