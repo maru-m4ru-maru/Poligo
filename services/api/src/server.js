@@ -354,7 +354,7 @@ function buildCFamilyAdditionalFiles(files, entrypoint, language, multiFile) {
   if (multiFile) {
     const sourceName = language === 'cpp' ? 'cpp' : 'c'
     const findSources = sourceName === 'cpp'
-      ? "find . -type f \\( -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' -o -name '*.C' \\) -print0"
+      ? "find . -type f \\( -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' \\) -print0"
       : "find . -type f -name '*.c' -print0"
 
     archiveFiles.push({
