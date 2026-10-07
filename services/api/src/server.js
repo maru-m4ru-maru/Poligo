@@ -146,7 +146,7 @@ function zipStore(files) {
     const name = Buffer.from(file.path, 'utf8')
     const data = Buffer.from(file.data)
     const checksum = crc32(data)
-    const mode = Number.isInteger(file.mode) ? file.mode : 0o644
+    const mode = Number.isInteger(file.mode) ? file.mode : 0o100644
     const local = Buffer.alloc(30 + name.length)
 
     local.writeUInt32LE(0x04034b50, 0)
@@ -349,15 +349,17 @@ function buildCFamilyAdditionalFiles(files, entrypoint, language, multiFile) {
 
   if (multiFile) {
     const sourceName = language === 'cpp' ? 'cpp' : 'c'
-    const sourcePattern = sourceName === 'cpp' ? '*.cpp' : '*.c'
+    const findSources = sourceName === 'cpp'
+      ? "find . -type f \\( -name '*.cpp' -o -name '*.cc' -o -name '*.cxx' \\) -print0"
+      : "find . -type f -name '*.c' -print0"
 
     archiveFiles.push({
       path: 'compile',
-      mode: 0o755,
+      mode: 0o100755,
       data: Buffer.from([
         '#!/bin/bash',
         'set -e',
-        'mapfile -d "" sources < <(find . -type f -name ' + JSON.stringify(sourcePattern) + ' -print0)',
+        'mapfile -d "" sources < <(' + findSources + ')',
         'if [ "${#sources[@]}" -eq 0 ]; then',
         '  echo "No C/C++ source files found." >&2',
         '  exit 1',
@@ -370,7 +372,7 @@ function buildCFamilyAdditionalFiles(files, entrypoint, language, multiFile) {
 
     archiveFiles.push({
       path: 'run',
-      mode: 0o755,
+      mode: 0o100755,
       data: Buffer.from([
         '#!/bin/bash',
         'set -e',
