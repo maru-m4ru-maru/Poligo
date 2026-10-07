@@ -3606,6 +3606,7 @@ function IDE({ projectId }) {
                         onChange={event => setExecutionArgs(event.target.value)}
                         placeholder='例: foo "hello world"'
                         aria-label="実行引数"
+                        maxLength={512}
                         spellCheck={false}
                       />
                     </label>
