@@ -389,12 +389,27 @@ public class Foo {
                 timeout=5_000
             )
             terminal.click()
-            page.keyboard.type("日本語入力")
-            page.keyboard.press("Enter")
-            page.wait_for_timeout(500)
+            terminal.dispatch_event(
+                "keydown",
+                {
+                    "key": "日本語入力",
+                    "code": "KeyJ",
+                    "bubbles": True,
+                    "cancelable": True
+                }
+            )
             expect(terminal).to_contain_text(
                 "stdin> 日本語入力",
                 timeout=5_000
+            )
+            terminal.dispatch_event(
+                "keydown",
+                {
+                    "key": "Enter",
+                    "code": "Enter",
+                    "bubbles": True,
+                    "cancelable": True
+                }
             )
 
             open_debug(page)
