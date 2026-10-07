@@ -369,7 +369,7 @@ function buildCFamilyAdditionalFiles(files, entrypoint, language, multiFile) {
         '  exit 1',
         'fi',
         sourceName === 'cpp'
-          ? 'g++ -O2 -std=c++23 "${sources[@]}" -o /tmp/poligo'
+          ? 'g++ -x c++ -O2 -std=c++23 "${sources[@]}" -o /tmp/poligo'
           : 'gcc -O2 -std=c23 "${sources[@]}" -o /tmp/poligo'
       ].join('\n') + '\n')
     })
@@ -1536,6 +1536,19 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   const options = {}
 
   if (payload.language === 'c' || payload.language === 'cpp') {
+    const cSources = getCFamilySourcePaths(files, 'c')
+    const cppSources = getCFamilySourcePaths(files, 'cpp')
+
+    if (
+      (payload.language === 'c' && cppSources.length > 0) ||
+      (payload.language === 'cpp' && cSources.length > 0)
+    ) {
+      send(response, 400, {
+        error: 'mixed C and C++ source files are not supported'
+      })
+      return
+    }
+
     const sourcePaths = getCFamilySourcePaths(files, payload.language)
     const multiFile =
       sourcePaths.length > 1 ||
