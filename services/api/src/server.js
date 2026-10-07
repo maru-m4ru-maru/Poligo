@@ -274,10 +274,7 @@ function buildPythonAdditionalFiles(files, entrypoint) {
   const archiveFiles = []
 
   for (const [path, content] of Object.entries(files)) {
-    if (
-      path === entrypoint ||
-      isSecretEnvFile(path)
-    ) {
+    if (isSecretEnvFile(path)) {
       continue
     }
 
@@ -301,13 +298,12 @@ function buildPythonAdditionalFiles(files, entrypoint) {
 }
 
 function preparePythonSource(source, entrypoint, environment) {
-  if (!Object.keys(environment).length) {
-    return source
-  }
-
   const encodedSource = Buffer.from(source, 'utf8').toString('base64')
   const entrypointLiteral = JSON.stringify(entrypoint)
   const environmentLiteral = JSON.stringify(environment)
+  const entrypointDirectory = entrypoint.includes('/')
+    ? entrypoint.slice(0, entrypoint.lastIndexOf('/'))
+    : ''
 
   return [
     'import base64',
@@ -315,6 +311,9 @@ function preparePythonSource(source, entrypoint, environment) {
     'import sys',
     'os.environ.update(' + environmentLiteral + ')',
     'sys.path.insert(0, os.getcwd())',
+    entrypointDirectory
+      ? 'sys.path.insert(0, ' + JSON.stringify(entrypointDirectory) + ')'
+      : '',
     '_poligo_source = base64.b64decode(' + JSON.stringify(encodedSource) + ').decode("utf-8")',
     '_poligo_globals = {',
     '    "__name__": "__main__",',
@@ -322,7 +321,7 @@ function preparePythonSource(source, entrypoint, environment) {
     '    "__package__": None,',
     '}',
     'exec(compile(_poligo_source, ' + entrypointLiteral + ', "exec"), _poligo_globals)'
-  ].join('\n')
+  ].filter(Boolean).join('\n')
 }
 
 function consumeExecutionQuota(userId) {
