@@ -1,0 +1,42 @@
+name: Poligo Production Java E2E
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  production-java-e2e:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[production-e2e]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run production Java E2E
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+        run: python tests/e2e/test_java_production.py
+
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: poligo-java-production-e2e-failure
+          path: poligo-java-production-e2e-failure.png
+          if-no-files-found: ignore
