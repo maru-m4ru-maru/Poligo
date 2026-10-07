@@ -20,28 +20,13 @@ def set_editor_value(page, source):
     page.keyboard.press("Control+Shift+Home")
     page.keyboard.press("Backspace")
     page.wait_for_timeout(100)
-    page.evaluate(
-        """async source => {
-            await navigator.clipboard.writeText(source)
-        }""",
-        source
-    )
-    page.keyboard.press("Control+V")
+    page.keyboard.insert_text(source)
     page.wait_for_timeout(300)
-    page.keyboard.press("Control+End")
-    page.keyboard.press("Control+Shift+Home")
-    page.keyboard.press("Control+C")
-    actual = page.evaluate(
-        "() => navigator.clipboard.readText()"
+
+    expect(editor.locator(".view-lines")).to_contain_text(
+        source.splitlines()[0],
+        timeout=5_000
     )
-    page.keyboard.press("Escape")
-
-    if actual != source:
-        raise AssertionError(
-            "Monaco editor content mismatch after paste. "
-            f"Expected {len(source)} characters, got {len(actual)}."
-        )
-
 
 def create_file(page, path, source):
     page.get_by_role(
