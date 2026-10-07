@@ -426,6 +426,10 @@ function preparePhpSource(entrypoint, environment) {
   ].join('\n')
 }
 
+function shellQuote(value) {
+  return "'" + value.replaceAll("'", "'\\''") + "'"
+}
+
 function getJavaPackageName(source) {
   if (typeof source !== 'string') {
     return ''
