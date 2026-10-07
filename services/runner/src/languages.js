@@ -32,7 +32,11 @@ function getSourceArguments(files, extensions, entrypoint) {
   const sourceFiles = Object.keys(files || {})
     .filter(file => {
       const lower = file.toLowerCase()
-      return extensions.some(extension => lower.endsWith(extension))
+
+      return extensions.some(extension =>
+        lower.endsWith(extension) ||
+        file.endsWith(extension.toUpperCase())
+      )
     })
     .sort()
 
