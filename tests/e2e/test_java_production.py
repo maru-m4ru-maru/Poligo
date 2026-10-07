@@ -40,7 +40,7 @@ def create_file(page, path, source):
 
 def select_file(page, name):
     page.get_by_text(name, exact=True).last.click()
-    page.wait_for_timeout(300)
+    page.wait_for_timeout(500)
 
 
 def open_debug(page):
@@ -60,6 +60,8 @@ def run_and_wait(page, expected_status):
         name="実行",
         exact=True
     ).click()
+
+    page.wait_for_timeout(250)
 
     status = page.locator(".debug-status")
 
