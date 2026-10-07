@@ -34,6 +34,7 @@ const EXECUTION_MEMORY_LIMIT = 128_000
 const EXECUTION_STACK_LIMIT = 64_000
 const EXECUTION_MAX_PROCESSES = 60
 const EXECUTION_MAX_FILE_SIZE = 1_024
+const JUDGE0_MULTI_FILE_LANGUAGE_ID = 89
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
 const executionRateState = new Map()
@@ -319,7 +320,7 @@ function getCFamilySourcePaths(files, language) {
 function findMultiFileJudge0LanguageId(languages) {
   const candidate = languages.find(item =>
     item?.is_archived !== true &&
-    item?.id === 89 &&
+    item?.id === JUDGE0_MULTI_FILE_LANGUAGE_ID &&
     typeof item?.name === 'string' &&
     item.name.toLowerCase() === 'multi-file program'
   )
@@ -425,17 +426,111 @@ function preparePhpSource(entrypoint, environment) {
   ].join('\n')
 }
 
-function buildJavaAdditionalFiles(files, entrypoint) {
+function getJavaPackageName(source) {
+  if (typeof source !== 'string') {
+    return ''
+  }
+
+  const match = source.match(
+    /^[ \t]*package[ \t]+([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)[ \t]*;/m
+  )
+
+  return match?.[1] || ''
+}
+
+function getJavaMainClass(source, entrypoint) {
+  const fileName = entrypoint.split('/').pop() || ''
+  const lowerFileName = fileName.toLowerCase()
+
+  if (!lowerFileName.endsWith('.java')) {
+    throw new Error('Java entrypoint must be a .java file')
+  }
+
+  const className = fileName.slice(0, -5)
+
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(className)) {
+    throw new Error('Java entrypoint class name is invalid')
+  }
+
+  if (className === 'module-info' || className === 'package-info') {
+    throw new Error('Java entrypoint must be an executable class')
+  }
+
+  const packageName = getJavaPackageName(source)
+
+  return packageName
+    ? packageName + '.' + className
+    : className
+}
+
+function getJavaSourcePaths(files) {
+  return Object.keys(files)
+    .filter(filePath => filePath.toLowerCase().endsWith('.java'))
+    .sort()
+}
+
+function buildJavaAdditionalFiles(
+  files,
+  entrypoint,
+  mainClass,
+  multiFile
+) {
   const archiveFiles = []
 
   for (const [path, content] of Object.entries(files)) {
-    if (isSecretEnvFile(path) || path === entrypoint) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    if (
+      multiFile &&
+      (path === 'compile' || path === 'run')
+    ) {
+      throw new Error(
+        'compile and run are reserved filenames for Java multi-file execution'
+      )
+    }
+
+    if (!multiFile && path === entrypoint) {
       continue
     }
 
     archiveFiles.push({
       path,
       data: decodeExecutionFile(content)
+    })
+  }
+
+  if (multiFile) {
+    if (!mainClass) {
+      throw new Error('Java main class is required')
+    }
+
+    archiveFiles.push({
+      path: 'compile',
+      mode: 0o100755,
+      data: Buffer.from([
+        '#!/bin/bash',
+        'set -e',
+        'mapfile -d "" sources < <(find . -type f -iname "*.java" -print0)',
+        'if [ "${#sources[@]}" -eq 0 ]; then',
+        '  echo "No Java source files found." >&2',
+        '  exit 1',
+        'fi',
+        'mkdir -p out',
+        '/usr/local/openjdk13/bin/javac -encoding UTF-8 -d out "${sources[@]}"'
+      ].join('\\n') + '\\n')
+    })
+
+    archiveFiles.push({
+      path: 'run',
+      mode: 0o100755,
+      data: Buffer.from([
+        '#!/bin/bash',
+        'set -e',
+        'exec /usr/local/openjdk13/bin/java -Dfile.encoding=UTF-8 -cp out ' +
+          shellQuote(mainClass)
+      ].join('\\n') + '\\n')
     })
   }
 
@@ -1679,10 +1774,47 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       options.additional_files = additionalFiles
     }
   } else if (payload.language === 'java') {
-    const additionalFiles = buildJavaAdditionalFiles(files, entrypoint)
+    const javaSourcePaths = getJavaSourcePaths(files)
+    const packageName = getJavaPackageName(source)
+    const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
+      filePath !== entrypoint &&
+      !isSecretEnvFile(filePath)
+    )
+    const mainClass = getJavaMainClass(source, entrypoint)
+    const multiFile =
+      javaSourcePaths.length > 1 ||
+      Boolean(packageName) ||
+      (entrypoint.includes('/') && hasAdditionalProjectFiles)
 
-    if (additionalFiles) {
-      options.additional_files = additionalFiles
+    if (multiFile) {
+      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!multiFileLanguageId) {
+        send(response, 503, {
+          error: 'Java multi-file execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      languageId = multiFileLanguageId
+      preparedSource = null
+      options.additional_files = buildJavaAdditionalFiles(
+        files,
+        entrypoint,
+        mainClass,
+        true
+      )
+    } else {
+      const additionalFiles = buildJavaAdditionalFiles(
+        files,
+        entrypoint,
+        mainClass,
+        false
+      )
+
+      if (additionalFiles) {
+        options.additional_files = additionalFiles
+      }
     }
   } else if (payload.language === 'php') {
     const environment = getExecutionEnvironment(files)
@@ -1823,7 +1955,7 @@ function runnerHeaders() {
   return headers
 }
 
-async function handleRunnerExecution(response, payload, id) {
+async function handleRunnerExecution(response, payload, id, ownerId) {
   const runnerResponse = await fetch(
     runnerUrl.replace(/\/$/, '') + '/v1/run',
     {
@@ -1847,6 +1979,14 @@ async function handleRunnerExecution(response, payload, id) {
     result = {
       error: 'runner returned invalid JSON'
     }
+  }
+
+  if (
+    runnerResponse.status === 400 &&
+    result?.error === 'unsupported language'
+  ) {
+    await handleJudge0Execution(response, payload, id, ownerId)
+    return
   }
 
   if (!runnerResponse.ok) {
@@ -1925,7 +2065,7 @@ async function handleExecution(request, response) {
     return
   }
 
-  await handleRunnerExecution(response, payload, id)
+  await handleRunnerExecution(response, payload, id, session.user.id)
 }
 
 async function handleExecutionStatus(request, response, id) {
