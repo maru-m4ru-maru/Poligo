@@ -411,20 +411,14 @@ public class Foo {
             set_editor_value(page, compile_error_java)
             run_and_wait(page, "失敗")
             expect(
-                page.locator(".debug-panel")
-            ).to_contain_text(
-                "error",
-                timeout=5_000
-            )
+                page.locator(".debug-block-stderr pre").last
+            ).to_be_visible(timeout=5_000)
 
             set_editor_value(page, preview_syntax_java)
             run_and_wait(page, "失敗")
             expect(
-                page.locator(".debug-panel")
-            ).to_contain_text(
-                "error",
-                timeout=5_000
-            )
+                page.locator(".debug-block-stderr pre").last
+            ).to_be_visible(timeout=5_000)
 
             page.get_by_role(
                 "button",
@@ -460,8 +454,8 @@ public class Foo {
             expect(actions).to_have_count(1, timeout=10_000)
             actions.click()
 
-            page.get_by_role(
-                "menuitem",
+            page.locator('[role="menu"]').get_by_role(
+                "button",
                 name="プロジェクトを削除"
             ).click()
 
