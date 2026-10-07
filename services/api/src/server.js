@@ -565,7 +565,15 @@ function buildJavaAdditionalFiles(
         '  exit 1',
         'fi',
         'mkdir -p out',
-        '/usr/local/openjdk13/bin/javac -encoding UTF-8 -d out "${sources[@]}"'
+        '/usr/local/openjdk13/bin/javac -encoding UTF-8 -d out "${sources[@]}"',
+        'while IFS= read -r -d "" resource; do',
+        '  case "$resource" in',
+        '    ./compile|./run|*.java) continue ;;',
+        '  esac',
+        '  target="out/\${resource#./}"',
+        '  mkdir -p "$(dirname "$target")"',
+        '  cp -- "$resource" "$target"',
+        'done < <(find . -type f -not -path "./out/*" -print0)'
       ].join('\n') + '\n')
     })
 
