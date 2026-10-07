@@ -640,11 +640,20 @@ function consumeExecutionQuota(userId) {
   return 0
 }
 
-function registerExecution(id, userId) {
+function registerExecution(id, userId, backend = 'judge0') {
   executionOwners.set(id, {
     userId,
+    backend,
     expiresAt: Date.now() + EXECUTION_RECORD_TTL_MS
   })
+}
+
+function setExecutionBackend(id, backend) {
+  const record = executionOwners.get(id)
+
+  if (record) {
+    record.backend = backend
+  }
 }
 
 function getExecutionOwner(id) {
@@ -1991,9 +2000,16 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
 
   if (!runnerResponse.ok) {
     executionOwners.delete(id)
+    send(response, 502, {
+      id,
+      ...result
+    })
+    return
   }
 
-  send(response, runnerResponse.ok ? 202 : 502, {
+  setExecutionBackend(id, 'runner')
+
+  send(response, 202, {
     id,
     ...result
   })
@@ -2094,7 +2110,7 @@ async function handleExecutionStatus(request, response, id) {
     return
   }
 
-  if (!runnerUrl) {
+  if (!runnerUrl || owner.backend !== 'runner') {
     await handleJudge0ExecutionStatus(response, id)
     return
   }
