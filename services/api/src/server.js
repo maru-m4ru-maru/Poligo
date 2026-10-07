@@ -1904,7 +1904,13 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     }
   }
 
-  if (payload.args.length > 0) {
+  if (
+    payload.args.length > 0 &&
+    !(
+      payload.language === 'java' &&
+      languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID
+    )
+  ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
 
