@@ -937,6 +937,60 @@ function isServerLanguage(language) {
   return SERVER_LANGUAGES.has(language)
 }
 
+function parseExecutionArguments(value) {
+  const args = []
+  let current = ''
+  let quote = ''
+  let escaped = false
+
+  for (const character of value) {
+    if (escaped) {
+      current += character
+      escaped = false
+      continue
+    }
+
+    if (character === '\\' && quote !== "'") {
+      escaped = true
+      continue
+    }
+
+    if (quote) {
+      if (character === quote) {
+        quote = ''
+      } else {
+        current += character
+      }
+      continue
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character
+      continue
+    }
+
+    if (/\s/.test(character)) {
+      if (current) {
+        args.push(current)
+        current = ''
+      }
+      continue
+    }
+
+    current += character
+  }
+
+  if (escaped || quote) {
+    throw new Error('実行引数の引用符が閉じられていません。')
+  }
+
+  if (current) {
+    args.push(current)
+  }
+
+  return args
+}
+
 function IDE({ projectId }) {
   const [workspaceReady, setWorkspaceReady] = useState(false)
   const [projects, setProjects] = useState([])
@@ -984,6 +1038,7 @@ function IDE({ projectId }) {
     error: ''
   })
   const [executionStdin, setExecutionStdin] = useState('')
+  const [executionArgs, setExecutionArgs] = useState('')
   const [runtimeProblems, setRuntimeProblems] = useState([])
   const [sourceCommits, setSourceCommits] = useState([])
   const [sourceDiff, setSourceDiff] = useState([])
@@ -2613,6 +2668,35 @@ function IDE({ projectId }) {
       error: ''
     })
 
+    let parsedArgs
+
+    try {
+      parsedArgs = parseExecutionArguments(executionArgs)
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : '実行引数を解析できません。'
+
+      setExecution({
+        id: '',
+        status: 'failed',
+        result: null,
+        error: message
+      })
+
+      setDebugOutput({
+        status: 'failed',
+        file: activeFile,
+        language: currentLanguage,
+        stdout: '',
+        stderr: '',
+        exitCode: null,
+        error: message
+      })
+
+      return
+    }
+
     try {
       const result = await request('/api/executions', {
         method: 'POST',
@@ -2621,6 +2705,7 @@ function IDE({ projectId }) {
           language: currentLanguage,
           entrypoint: activeFile,
           stdin: executionStdin,
+          args: parsedArgs,
           files
         })
       })
@@ -2736,6 +2821,7 @@ function IDE({ projectId }) {
 
   function resetProject() {
     setExecutionStdin('')
+    setExecutionArgs('')
     terminalInputBuffer.current = ''
     setTerminalLines([])
     setDebugOutput({
@@ -3512,6 +3598,19 @@ function IDE({ projectId }) {
                       <span className="debug-exit">
                         exit {debugOutput.exitCode}
                       </span>
+                    )}
+                    <label className="debug-args">
+                      <span>引数</span>
+                      <input
+                        value={executionArgs}
+                        onChange={event => setExecutionArgs(event.target.value)}
+                        placeholder='例: foo "hello world"'
+                        aria-label="実行引数"
+                        spellCheck={false}
+                      />
+                    </label>
+                    {files['.env'] && (
+                      <span className="debug-env-indicator">.env</span>
                     )}
                   </div>
 
