@@ -300,7 +300,7 @@ function buildPhpAdditionalFiles(files) {
 
 function getCFamilySourcePaths(files, language) {
   const extensions = language === 'cpp'
-    ? ['.cpp', '.cc', '.cxx']
+    ? ['.cpp', '.cc', '.cxx', '.C']
     : ['.c']
 
   return Object.keys(files)
