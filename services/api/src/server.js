@@ -34,6 +34,8 @@ const EXECUTION_MEMORY_LIMIT = 128_000
 const EXECUTION_STACK_LIMIT = 64_000
 const EXECUTION_MAX_PROCESSES = 60
 const EXECUTION_MAX_FILE_SIZE = 1_024
+const MAX_EXECUTION_ARGUMENTS = 32
+const MAX_EXECUTION_ARGUMENT_BYTES = 512
 const JUDGE0_MULTI_FILE_LANGUAGE_ID = 89
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
@@ -428,6 +430,45 @@ function preparePhpSource(entrypoint, environment) {
 
 function shellQuote(value) {
   return "'" + value.replaceAll("'", "'\\''") + "'"
+}
+
+function normalizeExecutionArguments(args) {
+  if (args === undefined || args === null) {
+    return []
+  }
+
+  if (!Array.isArray(args)) {
+    throw new Error('execution arguments must be an array')
+  }
+
+  if (args.length > MAX_EXECUTION_ARGUMENTS) {
+    throw new Error('too many execution arguments')
+  }
+
+  const normalized = []
+
+  for (const value of args) {
+    if (
+      typeof value !== 'string' ||
+      value.includes('\0')
+    ) {
+      throw new Error('execution arguments must be strings without NUL bytes')
+    }
+
+    normalized.push(value)
+  }
+
+  const encoded = formatExecutionArguments(normalized)
+
+  if (Buffer.byteLength(encoded, 'utf8') > MAX_EXECUTION_ARGUMENT_BYTES) {
+    throw new Error('execution arguments are too long')
+  }
+
+  return normalized
+}
+
+function formatExecutionArguments(args) {
+  return args.map(shellQuote).join(' ')
 }
 
 function getJavaPackageName(source) {
