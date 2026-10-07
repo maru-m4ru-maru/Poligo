@@ -384,7 +384,7 @@ function buildCFamilyAdditionalFiles(files, entrypoint, language, multiFile) {
       data: Buffer.from([
         '#!/bin/bash',
         'set -e',
-        'exec /tmp/poligo'
+        'exec /tmp/poligo "$@"'
       ].join('\n') + '\n')
     })
   }
