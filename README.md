@@ -36,7 +36,7 @@ Each project has a project ID, anonymous workspace owner ID, name, timestamps, a
 
 The browser does not connect directly to Turso.
 
-The anonymous workspace identifier is temporary. Authentication will replace it with an account-backed owner ID so projects can move between devices and users can sign in.
+Projects are owned by the authenticated account ID. A temporary browser workspace ID is used only during sign-in migration so legacy projects can be claimed by the account.
 
 ## Development
 
@@ -56,6 +56,11 @@ Set these API environment variables in Render:
 - CORS_ORIGIN
 - TURSO_DATABASE_URL
 - TURSO_AUTH_TOKEN
+- POLIGO_ENCRYPTION_KEY
+- BETTER_AUTH_URL
+- BETTER_AUTH_SECRET
 - RUNNER_URL
+- RUNNER_TOKEN
+- OPENROUTER_API_KEY
 
 The runner can be hosted independently and replaced without changing the IDE frontend.

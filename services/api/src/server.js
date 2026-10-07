@@ -22,6 +22,7 @@ const openRouterModels = {
 }
 const MAX_FILES = 200
 const MAX_PROJECT_BYTES = 5_000_000
+const STORAGE_LIMIT_BYTES = 15 * 1024 * 1024
 const MAX_REQUEST_BYTES = 8_000_000
 const MAX_EXECUTION_ARCHIVE_BYTES = 3_000_000
 const EXECUTION_WINDOW_MS = 5 * 60 * 1000
@@ -354,7 +355,7 @@ function buildCFamilyAdditionalFiles(files, entrypoint, language, multiFile) {
   if (multiFile) {
     const sourceName = language === 'cpp' ? 'cpp' : 'c'
     const findSources = sourceName === 'cpp'
-      ? "find . -type f \\( -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' \\) -print0"
+      ? "find . -type f \\( -iname '*.cpp' -o -iname '*.cc' -o -iname '*.cxx' -o -name '*.C' \\) -print0"
       : "find . -type f -name '*.c' -print0"
 
     archiveFiles.push({
@@ -596,11 +597,11 @@ async function getSession(request) {
 async function getOwnerId(request) {
   const session = await getSession(request)
 
-  if (session?.user?.id) {
-    return session.user.id
+  if (!session?.user?.id) {
+    throw new Error('authentication required')
   }
 
-  return getWorkspaceId(request)
+  return session.user.id
 }
 
 async function claimWorkspace(request, response) {
@@ -635,6 +636,37 @@ async function claimWorkspace(request, response) {
     ok: true,
     claimed: count
   })
+}
+
+async function getOwnerStorageBytes(ownerId) {
+  const database = getDatabase()
+  const storageStatement = await database.prepare(
+    'SELECT COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes ' +
+      'FROM projects p LEFT JOIN project_files pf ON pf.project_id = p.id ' +
+      'WHERE p.owner_id = ?'
+  )
+  const rows = await storageStatement.all([ownerId])
+
+  return Number(rows[0]?.storage_bytes || 0)
+}
+
+async function getProjectStorageBytes(projectId, ownerId) {
+  const database = getDatabase()
+  const storageStatement = await database.prepare(
+    'SELECT COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes ' +
+      'FROM projects p LEFT JOIN project_files pf ON pf.project_id = p.id ' +
+      'WHERE p.id = ? AND p.owner_id = ?'
+  )
+  const rows = await storageStatement.all([projectId, ownerId])
+
+  return Number(rows[0]?.storage_bytes || 0)
+}
+
+function getStoredFileBytes(files) {
+  return Object.values(files).reduce(
+    (total, content) => total + Buffer.byteLength(content, 'utf8'),
+    0
+  )
 }
 
 function normalizeProjectPayload(payload) {
@@ -756,6 +788,14 @@ async function listProjects(ownerId) {
 
 async function createProject(ownerId, payload) {
   const database = getDatabase()
+  const storedFiles = encryptProjectSecrets(payload.files)
+  const newStorageBytes = getStoredFileBytes(storedFiles)
+  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
+
+  if (currentStorageBytes + newStorageBytes > STORAGE_LIMIT_BYTES) {
+    throw new Error('storage limit exceeded')
+  }
+
   const id = randomUUID()
   const now = Date.now()
   const statements = [
@@ -791,6 +831,20 @@ async function updateProject(projectId, ownerId, payload) {
 
   if (!current) {
     return null
+  }
+
+  const storedFiles = encryptProjectSecrets(payload.files)
+  const currentProjectStorageBytes = await getProjectStorageBytes(projectId, ownerId)
+  const currentOwnerStorageBytes = await getOwnerStorageBytes(ownerId)
+  const newStorageBytes = getStoredFileBytes(storedFiles)
+
+  if (
+    currentOwnerStorageBytes -
+      currentProjectStorageBytes +
+      newStorageBytes >
+    STORAGE_LIMIT_BYTES
+  ) {
+    throw new Error('storage limit exceeded')
   }
 
   const now = Date.now()
@@ -2198,7 +2252,12 @@ const server = http.createServer(async (request, response) => {
     try {
       await claimWorkspace(request, response)
     } catch (error) {
-      const status = error.message === 'invalid workspace id' ? 400 : 500
+      const status =
+        error.message === 'invalid workspace id'
+          ? 400
+          : error.message === 'authentication required'
+            ? 401
+            : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'workspace claim failed'
@@ -2255,7 +2314,9 @@ const server = http.createServer(async (request, response) => {
         message === 'invalid workspace id' ||
         message === 'commit message is required'
           ? 400
-          : 500
+          : message === 'authentication required'
+            ? 401
+            : 500
 
       send(response, status, {
         error: message
@@ -2290,9 +2351,12 @@ const server = http.createServer(async (request, response) => {
         error.message.includes('invalid project') ||
         error.message.includes('project files') ||
         error.message.includes('project is too large') ||
-        error.message.includes('too many project files')
+        error.message.includes('too many project files') ||
+        error.message.includes('storage limit exceeded')
           ? 400
-          : 500
+          : error.message === 'authentication required'
+            ? 401
+            : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
@@ -2308,7 +2372,14 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
-      send(response, 500, {
+      const status =
+        error.message === 'authentication required'
+          ? 401
+          : error.message === 'storage limit exceeded'
+            ? 400
+            : 500
+
+      send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
       })
     }

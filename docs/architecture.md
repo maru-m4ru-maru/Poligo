@@ -6,7 +6,7 @@
 
 The browser IDE owns the editor, file tree, project state, preview, terminal presentation, and client-side execution.
 
-Project metadata and source files are stored in Turso through the Poligo API. The browser keeps only a small anonymous workspace identifier and the active project identifier in localStorage.
+Project metadata and source files are stored in Turso through the Poligo API. Project access is authenticated by account ID. The browser also keeps a temporary workspace identifier in localStorage for migrating legacy projects after sign-in.
 
 ### API
 
@@ -63,7 +63,7 @@ The runner must provide:
 - restricted network access
 - disposable workspaces
 
-Project APIs currently use an anonymous browser-generated workspace identifier as the owner key. This is a persistence boundary, not an authentication boundary. Account authentication will replace the anonymous identifier before Poligo exposes private cloud projects to multiple users.
+Project APIs require an authenticated account and use the account ID as the owner key. The temporary browser-generated workspace identifier is only used by the authenticated workspace-claim endpoint to migrate legacy projects. It is not accepted as an authorization credential for project access.
 
 ## Render role
 
@@ -93,6 +93,4 @@ Turso
 
 Project create and update operations write metadata and all files atomically.
 
-The browser sends the workspace identifier in the API request. The API validates project ownership against that identifier before reading or mutating a project.
-
-Authentication can later replace this anonymous owner key with a verified account identifier without changing the project schema.
+The browser sends the workspace identifier when claiming legacy projects. Normal project requests use the authenticated account ID, and the API validates ownership against that ID before reading or mutating a project.
