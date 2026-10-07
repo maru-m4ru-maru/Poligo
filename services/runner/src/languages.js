@@ -21,7 +21,7 @@ const languages = {
     command: (file, files) => [
       'sh',
       '-lc',
-      'g++ -O2 -std=c++23 ' +
+      'g++ -x c++ -O2 -std=c++23 ' +
         getSourceArguments(files, ['.cpp', '.cc', '.cxx', '.C'], file) +
         ' -o /tmp/poligo && /tmp/poligo'
     ]
