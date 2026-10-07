@@ -282,6 +282,10 @@ button {
   color: #e6f0ff;
 }
 
+.project-folder > span:first-child {
+  transform: translateY(-1px);
+}
+
 .file-list {
   min-height: 0;
   overflow: auto;
@@ -580,6 +584,11 @@ button {
 .bottom-collapse:hover {
   background: #22221e;
   color: #d0d0c8;
+}
+
+.bottom-collapse-icon {
+  display: inline-block;
+  transform: translateY(-2px);
 }
 
 .bottom-content {
