@@ -641,7 +641,7 @@ async function claimWorkspace(request, response) {
 async function getOwnerStorageBytes(ownerId) {
   const database = getDatabase()
   const storageStatement = await database.prepare(
-    'SELECT COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes ' +
+    'SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes ' +
       'FROM projects p LEFT JOIN project_files pf ON pf.project_id = p.id ' +
       'WHERE p.owner_id = ?'
   )
@@ -653,7 +653,7 @@ async function getOwnerStorageBytes(ownerId) {
 async function getProjectStorageBytes(projectId, ownerId) {
   const database = getDatabase()
   const storageStatement = await database.prepare(
-    'SELECT COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes ' +
+    'SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes ' +
       'FROM projects p LEFT JOIN project_files pf ON pf.project_id = p.id ' +
       'WHERE p.id = ? AND p.owner_id = ?'
   )
@@ -766,7 +766,7 @@ async function listProjects(ownerId) {
       p.created_at,
       p.updated_at,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id = ?
@@ -1224,7 +1224,7 @@ async function handleDashboardRequest(request, response) {
     `SELECT
       COUNT(DISTINCT p.id) AS project_count,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes,
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes,
       MAX(p.updated_at) AS last_updated
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
@@ -1246,7 +1246,7 @@ async function handleDashboardRequest(request, response) {
       p.created_at,
       p.updated_at,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id IN (${ownerPlaceholders})
