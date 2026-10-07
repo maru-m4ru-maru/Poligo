@@ -260,12 +260,26 @@ button {
 .project-folder {
   display: flex;
   align-items: center;
-  gap: 6px;
+  width: 100%;
   min-height: 34px;
+  gap: 6px;
   padding: 0 11px;
+  border: 0;
+  background: transparent;
   color: #c2c2bb;
+  text-align: left;
+  cursor: default;
   font-size: 11px;
   font-weight: 700;
+}
+
+.project-folder:hover {
+  background: #20201c;
+}
+
+.project-folder.drop-target {
+  background: #243a57;
+  color: #e6f0ff;
 }
 
 .file-list {
@@ -280,7 +294,7 @@ button {
   min-height: 30px;
   gap: 6px;
   padding-top: 0;
-  padding-right: 10px;
+  padding-right: 8px;
   padding-bottom: 0;
   border: 0;
   background: transparent;
@@ -293,6 +307,11 @@ button {
 .explorer-folder:hover {
   background: #20201c;
   color: #d7d7d0;
+}
+
+.explorer-folder.drop-target {
+  background: #243a57;
+  color: #e6f0ff;
 }
 
 .explorer-folder-arrow {
@@ -313,15 +332,19 @@ button {
   align-items: center;
   width: 100%;
   min-height: 30px;
-  gap: 9px;
-  padding: 0 12px;
+  gap: 4px;
+  padding: 0 8px 0 0;
   border: 0;
   border-left: 2px solid transparent;
   background: transparent;
   color: #aeadA6;
   text-align: left;
-  cursor: pointer;
+  cursor: grab;
   font-size: 12px;
+}
+
+.explorer-file:active {
+  cursor: grabbing;
 }
 
 .explorer-file:hover {
@@ -333,6 +356,83 @@ button {
   border-left-color: #bdbdb5;
   background: #292923;
   color: #efefe8;
+}
+
+.explorer-file-main {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  gap: 9px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.explorer-file-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-file-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity .12s ease;
+}
+
+.explorer-file:hover .explorer-file-actions,
+.explorer-file.active .explorer-file-actions,
+.explorer-file:focus-within .explorer-file-actions {
+  opacity: 1;
+}
+
+.explorer-file-action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #7e7e77;
+  cursor: pointer;
+}
+
+.explorer-file-action:hover {
+  background: #30302b;
+  color: #deded7;
+}
+
+.explorer-file-action.delete:hover {
+  background: #402524;
+  color: #ffb0aa;
+}
+
+.explorer-file-rename {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  margin: 4px 8px 4px 10px;
+  padding: 0 6px;
+  border: 1px solid #4b8bea;
+  border-radius: 3px;
+  outline: none;
+  background: #0d141e;
+  color: #edf4fb;
+  font: inherit;
+  font-size: 11px;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, .16);
 }
 
 .empty-view {
@@ -3177,20 +3277,23 @@ body {
 .explorer-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
 }
 
-.explorer-actions .more-button {
+.explorer-action-button {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
   border-radius: 4px;
-  font-size: 16px;
-  line-height: 1;
+  background: transparent;
+  color: #777770;
+  cursor: pointer;
 }
 
-.explorer-actions .more-button:hover {
+.explorer-action-button:hover {
   background: #202a38;
   color: #dce7f4;
 }
