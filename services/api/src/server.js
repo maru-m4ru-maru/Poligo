@@ -297,7 +297,31 @@ function buildPythonAdditionalFiles(files, entrypoint) {
   return archive.toString('base64')
 }
 
-function preparePythonSource(source, entrypoint, environment) {
+function getPythonPackageName(files, entrypoint) {
+  const parts = entrypoint.split('/')
+
+  parts.pop()
+
+  if (!parts.length) {
+    return ''
+  }
+
+  const packageParts = []
+
+  for (const part of parts) {
+    packageParts.push(part)
+
+    if (files[packageParts.join('/') + '/__init__.py'] !== undefined) {
+      continue
+    }
+
+    return ''
+  }
+
+  return packageParts.join('.')
+}
+
+function preparePythonSource(source, entrypoint, environment, packageName) {
   const encodedSource = Buffer.from(source, 'utf8').toString('base64')
   const entrypointLiteral = JSON.stringify(entrypoint)
   const environmentLiteral = JSON.stringify(environment)
@@ -318,7 +342,7 @@ function preparePythonSource(source, entrypoint, environment) {
     '_poligo_globals = {',
     '    "__name__": "__main__",',
     '    "__file__": ' + entrypointLiteral + ',',
-    '    "__package__": None,',
+    '    "__package__": ' + JSON.stringify(packageName || '') + ',',
     '}',
     'exec(compile(_poligo_source, ' + entrypointLiteral + ', "exec"), _poligo_globals)'
   ].filter(Boolean).join('\n')
@@ -1341,7 +1365,13 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
 
   if (payload.language === 'python') {
     const environment = getExecutionEnvironment(files)
-    preparedSource = preparePythonSource(source, entrypoint, environment)
+    const packageName = getPythonPackageName(files, entrypoint)
+    preparedSource = preparePythonSource(
+      source,
+      entrypoint,
+      environment,
+      packageName
+    )
     const additionalFiles = buildPythonAdditionalFiles(files, entrypoint)
 
     if (additionalFiles) {
