@@ -361,6 +361,13 @@ public class Foo {
                 "Hello from Poligo E2E"
             )
 
+            select_file(page, "Main.java")
+            set_editor_value(page, main_java)
+            create_file(page, "Helper.java", helper_java)
+            create_file(page, ".env", "E2E_VALUE=env-$(not-executed)")
+            create_file(page, "config/message.txt", "resource-ok")
+            select_file(page, "Main.java")
+
             page.get_by_role(
                 "button",
                 name="ターミナル",
@@ -371,16 +378,18 @@ public class Foo {
                 ".terminal:visible"
             )
             expect(terminal).to_be_visible(timeout=5_000)
+            expect(terminal).to_contain_text(
+                "stdin> ",
+                timeout=5_000
+            )
             terminal.click()
             page.keyboard.type("日本語入力")
             page.keyboard.press("Enter")
-
-            select_file(page, "Main.java")
-            set_editor_value(page, main_java)
-            create_file(page, "Helper.java", helper_java)
-            create_file(page, ".env", "E2E_VALUE=env-$(not-executed)")
-            create_file(page, "config/message.txt", "resource-ok")
-            select_file(page, "Main.java")
+            page.wait_for_timeout(500)
+            expect(terminal).to_contain_text(
+                "stdin> 日本語入力",
+                timeout=5_000
+            )
 
             open_debug(page)
 
