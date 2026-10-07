@@ -55,9 +55,14 @@ const FILE_META = {
   cc: { language: 'cpp', kind: 'cpp' },
   cxx: { language: 'cpp', kind: 'cpp' },
   hpp: { language: 'cpp', kind: 'cpp' },
-  json: { language: 'json', kind: 'text' },
-  md: { language: 'markdown', kind: 'text' },
-  txt: { language: 'plaintext', kind: 'text' }
+  json: { language: 'json', kind: 'json' },
+  md: { language: 'markdown', kind: 'markdown' },
+  txt: { language: 'plaintext', kind: 'text' },
+  xml: { language: 'xml', kind: 'text' },
+  svg: { language: 'xml', kind: 'text' },
+  yaml: { language: 'yaml', kind: 'text' },
+  yml: { language: 'yaml', kind: 'text' },
+  toml: { language: 'ini', kind: 'text' }
 }
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -104,6 +109,13 @@ function getFileMeta(name) {
     }
   }
 
+  if (name === '.gitignore' || name === '.dockerignore') {
+    return {
+      language: 'plaintext',
+      kind: 'config'
+    }
+  }
+
   const extension = name.includes('.')
     ? name.split('.').pop().toLowerCase()
     : ''
@@ -130,6 +142,108 @@ function FileIcon({ kind, size = 16 }) {
     )
   }
 
+  if (kind === 'env') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"
+          fill="#8B6FD7"
+        />
+        <path
+          d="M8 12h8M9.5 9.5h5v5h-5z"
+          stroke="#F1ECFF"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
+  if (kind === 'json') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M5 3.5h9l5 5v12H5z"
+          fill="#D8A537"
+        />
+        <path
+          d="M14 3.5v5h5"
+          fill="#F3D889"
+        />
+        <path
+          d="M9 11c-1 0-1.5.7-1.5 1.5S8 14 9 14h1.5M15 11h-1.5c-1 0-1.5.7-1.5 1.5s.5 1.5 1.5 1.5H15"
+          stroke="#FFF8E7"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
+  if (kind === 'markdown') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M4 4h16v16H4z"
+          fill="#5B83B7"
+        />
+        <path
+          d="M7.5 16V8l2.5 3 2.5-3v8M16 13l-2-2 2-2M14 11h3"
+          stroke="#F2F6FC"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
+  if (kind === 'config') {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M5 3.5h9l5 5v12H5z"
+          fill="#666A70"
+        />
+        <path
+          d="M14 3.5v5h5"
+          fill="#92979E"
+        />
+        <path
+          d="M9 11h6M9 14h4M9 17h5"
+          stroke="#E8EBEF"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
   return (
     <svg
       width={size}
@@ -145,6 +259,12 @@ function FileIcon({ kind, size = 16 }) {
       <path
         d="M14 3.5v5h5"
         fill="#94A3B8"
+      />
+      <path
+        d="M8.5 12h7M8.5 15h5"
+        stroke="#E6E9EE"
+        strokeWidth="1.2"
+        strokeLinecap="round"
       />
     </svg>
   )
