@@ -3505,6 +3505,14 @@ function IDE({ projectId }) {
                 onValidate={markers => setEditorMarkers(markers)}
                 onMount={editor => {
                   editorRef.current = editor
+
+                  if (
+                    new URLSearchParams(window.location.search).get('e2e') === '1'
+                  ) {
+                    window.__POLIGO_E2E_SET_EDITOR__ = source => {
+                      editor.setValue(source)
+                    }
+                  }
                 }}
                 theme="poligo-neutral"
                 beforeMount={setupEditor}
