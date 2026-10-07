@@ -321,7 +321,7 @@ public class Foo {
             java_card = page.locator(
                 ".stack-template-card"
             ).filter(
-                has_text="Java"
+                has=page.get_by_text("Java", exact=True)
             ).first
             expect(java_card).to_be_visible(timeout=10_000)
             java_card.click()
