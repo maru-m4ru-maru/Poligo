@@ -1,3 +1,4 @@
+# Production E2E runs against the currently live Render deployment.
 import os
 import time
 import uuid
