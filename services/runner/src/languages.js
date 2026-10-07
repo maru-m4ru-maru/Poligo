@@ -22,7 +22,7 @@ const languages = {
       'sh',
       '-lc',
       'g++ -O2 -std=c++23 ' +
-        getSourceArguments(files, ['.cpp', '.cc', '.cxx'], file) +
+        getSourceArguments(files, ['.cpp', '.cc', '.cxx', '.C'], file) +
         ' -o /tmp/poligo && /tmp/poligo'
     ]
   }
