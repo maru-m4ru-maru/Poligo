@@ -649,6 +649,15 @@ function IDE({ projectId }) {
   const [bottomTab, setBottomTab] = useState('terminal')
   const [bottomOpen, setBottomOpen] = useState(true)
   const [terminalLines, setTerminalLines] = useState([])
+  const [debugOutput, setDebugOutput] = useState({
+    status: 'idle',
+    file: '',
+    language: '',
+    stdout: '',
+    stderr: '',
+    exitCode: null,
+    error: ''
+  })
   const [preview, setPreview] = useState('')
   const [apiStatus, setApiStatus] = useState('checking')
   const [saveStatus, setSaveStatus] = useState('saved')
@@ -774,6 +783,15 @@ function IDE({ projectId }) {
       hint: 'ターミナルを開く',
       run: () => {
         setBottomTab('terminal')
+        setBottomOpen(true)
+      }
+    },
+    {
+      id: 'debug',
+      title: 'デバッグ出力を開く',
+      hint: 'Python Debug / 実行結果',
+      run: () => {
+        setBottomTab('debug')
         setBottomOpen(true)
       }
     },
@@ -1939,38 +1957,159 @@ function IDE({ projectId }) {
     }
   }
 
-  function writeExecutionToTerminal({
-    activeFileName,
-    language,
-    stdin,
-    result,
-    error,
-    status
-  }) {
-    writeTerminalLines('')
-    writeTerminalLines('> run ' + activeFileName + ' [' + language + ']')
+  async function runProject() {
+    const serverExecution = SERVER_LANGUAGES.has(currentLanguage)
 
-    if (status === 'timeout') {
-      writeTerminalLines('Execution timed out.')
+    setBottomOpen(true)
+    setBottomTab(serverExecution ? 'debug' : 'terminal')
+
+    setExecution({
+      id: '',
+      status: serverExecution ? 'queued' : 'succeeded',
+      result: serverExecution
+        ? null
+        : {
+            stdout: 'ブラウザプレビューを更新しました。',
+            stderr: '',
+            exitCode: 0
+          },
+      error: ''
+    })
+
+    if (!serverExecution) {
+      refreshPreview()
+      writeTerminalLines('ブラウザプレビューを更新しました。')
       return
     }
 
-    if (error) {
-      writeTerminalLines(error)
-      return
-    }
+    setDebugOutput({
+      status: 'queued',
+      file: activeFile,
+      language: currentLanguage,
+      stdout: '',
+      stderr: '',
+      exitCode: null,
+      error: ''
+    })
 
-    if (result?.stdout) {
-      writeTerminalLines(result.stdout)
-    }
+    try {
+      const result = await request('/api/executions', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: currentProjectId,
+          language: currentLanguage,
+          entrypoint: activeFile,
+          stdin: executionStdin,
+          files
+        })
+      })
 
-    if (result?.stderr) {
-      writeTerminalLines(result.stderr)
-    }
+      setExecution({
+        id: result.id,
+        status: result.status || 'queued',
+        result: null,
+        error: ''
+      })
 
-    if (result?.exitCode !== null && result?.exitCode !== undefined) {
-      writeTerminalLines('')
-      writeTerminalLines('Process exited with code ' + result.exitCode + '.')
+      setDebugOutput(current => ({
+        ...current,
+        status: result.status || 'queued'
+      }))
+
+      setExecutionStdin('')
+      terminalInputBuffer.current = ''
+
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const status = await request(
+          '/api/executions/' + encodeURIComponent(result.id)
+        )
+
+        if (
+          status.status === 'succeeded' ||
+          status.status === 'failed' ||
+          status.status === 'timeout'
+        ) {
+          const nextResult = status.result || {
+            stdout: '',
+            stderr: '',
+            exitCode: null
+          }
+
+          setExecution({
+            id: result.id,
+            status: status.status,
+            result: nextResult,
+            error: ''
+          })
+
+          setDebugOutput({
+            status: status.status,
+            file: activeFile,
+            language: currentLanguage,
+            stdout: nextResult.stdout || '',
+            stderr: nextResult.stderr || '',
+            exitCode: nextResult.exitCode ?? null,
+            error: ''
+          })
+
+          return
+        }
+
+        setExecution(current => ({
+          ...current,
+          status: status.status === 'running' ? 'running' : 'queued'
+        }))
+
+        setDebugOutput(current => ({
+          ...current,
+          status: status.status === 'running' ? 'running' : 'queued'
+        }))
+
+        await new Promise(resolve => {
+          window.setTimeout(resolve, attempt < 8 ? 150 : 300)
+        })
+      }
+
+      const timeoutResult = {
+        stdout: '',
+        stderr: 'Execution polling timed out.',
+        exitCode: null
+      }
+
+      setExecution(current => ({
+        ...current,
+        status: 'timeout',
+        result: timeoutResult
+      }))
+
+      setDebugOutput({
+        status: 'timeout',
+        file: activeFile,
+        language: currentLanguage,
+        stdout: '',
+        stderr: timeoutResult.stderr,
+        exitCode: null,
+        error: ''
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Execution failed'
+
+      setExecution({
+        id: '',
+        status: 'failed',
+        result: null,
+        error: message
+      })
+
+      setDebugOutput({
+        status: 'failed',
+        file: activeFile,
+        language: currentLanguage,
+        stdout: '',
+        stderr: '',
+        exitCode: null,
+        error: message
+      })
     }
   }
 
@@ -1978,6 +2117,15 @@ function IDE({ projectId }) {
     setExecutionStdin('')
     terminalInputBuffer.current = ''
     setTerminalLines([])
+    setDebugOutput({
+      status: 'idle',
+      file: '',
+      language: '',
+      stdout: '',
+      stderr: '',
+      exitCode: null,
+      error: ''
+    })
     setFiles(DEFAULT_FILES)
     setOpenFiles(['index.html'])
     setActiveFile('index.html')
@@ -2653,6 +2801,9 @@ function IDE({ projectId }) {
               <div className="bottom-tabs">
                 {[
                   ['terminal', 'ターミナル'],
+                  ...(SERVER_LANGUAGES.has(currentLanguage)
+                    ? [['debug', currentLanguage === 'python' ? 'Python Debug' : 'Debug']]
+                    : []),
                   ['problems', '問題']
                 ].map(([id, label]) => (
                   <button
@@ -2694,6 +2845,74 @@ function IDE({ projectId }) {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                <div
+                  className={
+                    'debug-panel ' +
+                    (bottomTab === 'debug' ? '' : 'panel-hidden')
+                  }
+                >
+                  <div className="debug-toolbar">
+                    <span className="debug-title">
+                      {currentLanguage === 'python' ? 'Python Debug' : 'Debug'}
+                    </span>
+                    <span className={'debug-status debug-status-' + debugOutput.status}>
+                      {debugOutput.status === 'running' && '実行中'}
+                      {debugOutput.status === 'queued' && '待機中'}
+                      {debugOutput.status === 'succeeded' && '成功'}
+                      {debugOutput.status === 'failed' && '失敗'}
+                      {debugOutput.status === 'timeout' && 'タイムアウト'}
+                      {debugOutput.status === 'idle' && '待機'}
+                    </span>
+                    {debugOutput.file && (
+                      <span className="debug-file">{debugOutput.file}</span>
+                    )}
+                    {debugOutput.exitCode !== null && (
+                      <span className="debug-exit">
+                        exit {debugOutput.exitCode}
+                      </span>
+                    )}
+                  </div>
+
+                  {!debugOutput.stdout &&
+                    !debugOutput.stderr &&
+                    !debugOutput.error &&
+                    ['idle', 'queued', 'running'].includes(debugOutput.status) && (
+                      <div className="debug-empty">
+                        {debugOutput.status === 'idle'
+                          ? '実行すると、ここにプログラムの出力が表示されます。'
+                          : '実行結果を待っています...'}
+                      </div>
+                    )}
+
+                  {debugOutput.error && (
+                    <section className="debug-block debug-block-error">
+                      <div className="debug-block-title">Execution Error</div>
+                      <pre>{debugOutput.error}</pre>
+                    </section>
+                  )}
+
+                  {debugOutput.stdout && (
+                    <section className="debug-block">
+                      <div className="debug-block-title">stdout</div>
+                      <pre>{debugOutput.stdout}</pre>
+                    </section>
+                  )}
+
+                  {debugOutput.stderr && (
+                    <section className="debug-block debug-block-stderr">
+                      <div className="debug-block-title">stderr</div>
+                      <pre>{debugOutput.stderr}</pre>
+                    </section>
+                  )}
+
+                  {debugOutput.status === 'succeeded' &&
+                    !debugOutput.stdout &&
+                    !debugOutput.stderr &&
+                    !debugOutput.error && (
+                      <div className="debug-empty">出力はありません。</div>
+                    )}
                 </div>
 
                 <div
