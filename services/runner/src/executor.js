@@ -10,8 +10,8 @@ const docker = new Docker({
 })
 
 const workRoot = process.env.WORK_ROOT || path.join(os.tmpdir(), 'poligo-runner')
-const maxFiles = Number(process.env.MAX_FILES || 50)
-const maxBytes = Number(process.env.MAX_PROJECT_BYTES || 2_000_000)
+const maxFiles = Number(process.env.MAX_FILES || 200)
+const maxBytes = Number(process.env.MAX_PROJECT_BYTES || 5_000_000)
 const timeoutMs = Number(process.env.EXECUTION_TIMEOUT_MS || 10_000)
 const memoryBytes = Number(process.env.EXECUTION_MEMORY_BYTES || 268_435_456)
 const nanoCpus = Number(process.env.EXECUTION_NANO_CPUS || 500_000_000)
@@ -21,7 +21,24 @@ const concurrency = Number(process.env.EXECUTION_CONCURRENCY || 1)
 
 const jobs = new Map()
 const queue = []
+const jobTtlMs = Number(process.env.JOB_TTL_MS || 10 * 60 * 1000)
+
 let running = 0
+
+const jobCleanupTimer = setInterval(() => {
+  const cutoff = Date.now() - jobTtlMs
+
+  for (const [id, job] of jobs) {
+    if (
+      job.finishedAt &&
+      Date.parse(job.finishedAt) <= cutoff
+    ) {
+      jobs.delete(id)
+    }
+  }
+}, 60_000)
+
+jobCleanupTimer.unref?.()
 
 function normalizeFilePath(value) {
   if (

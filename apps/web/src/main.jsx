@@ -1821,9 +1821,34 @@ function IDE({ projectId }) {
     setPreviewKey(value => value + 1)
   }
 
+  function escapeHtmlAttribute(value) {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+  }
+
   function openPreviewWindow() {
     const html = buildPreview(files, activeFile)
-    const blob = new Blob([html], {
+    const wrapped = [
+      '<!doctype html>',
+      '<html lang="ja">',
+      '<head>',
+      '<meta charset="UTF-8">',
+      '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      '<title>Poligo Preview</title>',
+      '</head>',
+      '<body style="margin:0;overflow:hidden">',
+      '<iframe',
+      ' sandbox="allow-scripts allow-forms allow-modals allow-downloads"',
+      ' style="width:100vw;height:100vh;border:0;display:block"',
+      ' srcdoc="' + escapeHtmlAttribute(html) + '">',
+      '</iframe>',
+      '</body>',
+      '</html>'
+    ].join('')
+    const blob = new Blob([wrapped], {
       type: 'text/html;charset=utf-8'
     })
     const url = URL.createObjectURL(blob)

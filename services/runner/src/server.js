@@ -3,6 +3,7 @@ import { enqueueJob, getJob, listExecutionLanguages } from './executor.js'
 
 const port = Number(process.env.PORT || 10001)
 const runnerToken = process.env.RUNNER_TOKEN || ''
+const maxRequestBytes = Number(process.env.MAX_REQUEST_BYTES || 8_000_000)
 
 function send(response, status, body) {
   response.writeHead(status, {
@@ -13,13 +14,16 @@ function send(response, status, body) {
 
 async function readJson(request) {
   let body = ''
+  let size = 0
 
   for await (const chunk of request) {
-    body += chunk
+    size += Buffer.byteLength(chunk)
 
-    if (body.length > 2_000_000) {
+    if (size > maxRequestBytes) {
       throw new Error('request too large')
     }
+
+    body += chunk
   }
 
   return body ? JSON.parse(body) : {}

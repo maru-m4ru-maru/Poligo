@@ -247,7 +247,7 @@ function normalizeExecutionFiles(files) {
       path.includes('\\') ||
       path.includes('\0') ||
       path.startsWith('/') ||
-      path.split('/').includes('..')
+      path.split('/').some(part => part === '..' || part === '.')
     ) {
       throw new Error('invalid project file path')
     }
@@ -692,7 +692,7 @@ function normalizeProjectPayload(payload) {
       path.length > 240 ||
       path.includes('\\') ||
       path.startsWith('/') ||
-      path.split('/').includes('..')
+      path.split('/').some(part => part === '..' || part === '.')
     ) {
       throw new Error('invalid project file path')
     }
@@ -2291,7 +2291,14 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleDashboardRequest(request, response)
     } catch (error) {
-      send(response, error.message === 'authentication required' ? 401 : 500, {
+      const status =
+        error.message === 'invalid workspace id'
+          ? 400
+          : error.message === 'authentication required'
+            ? 401
+            : 500
+
+      send(response, status, {
         error: error instanceof Error ? error.message : 'dashboard request failed'
       })
     }
@@ -2328,7 +2335,12 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
-      const status = error.message === 'invalid workspace id' ? 400 : 500
+      const status =
+        error.message === 'invalid workspace id'
+          ? 400
+          : error.message === 'authentication required'
+            ? 401
+            : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
@@ -2389,7 +2401,12 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
-      send(response, 500, {
+      const status =
+        error.message === 'authentication required'
+          ? 401
+          : 500
+
+      send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
       })
     }
