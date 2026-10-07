@@ -122,7 +122,7 @@ const TEMPLATES = [
     type: 'C#',
     categories: ['人気', 'バックエンド', 'ネイティブ言語'],
     files: {
-      'main.cs': 'using System;\n\nConsole.WriteLine("Hello from Poligo");'
+      'main.cs': 'using System;\n\nclass Program {\n    static void Main() {\n        Console.WriteLine("Hello from Poligo");\n    }\n}'
     }
   }
 ]
