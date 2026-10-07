@@ -131,7 +131,7 @@ async function executeJob(job) {
 
     container = await docker.createContainer({
       Image: language.image,
-      Cmd: language.command(entrypoint),
+      Cmd: language.command(entrypoint, files),
       WorkingDir: '/workspace',
       User: '65532:65532',
       Env: [
