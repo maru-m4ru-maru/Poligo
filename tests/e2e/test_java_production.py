@@ -17,7 +17,16 @@ def set_editor_value(page, source):
     ).last
     editor.click(force=True)
     page.keyboard.press("Control+A")
+    page.keyboard.press("Backspace")
     page.keyboard.insert_text(source)
+    page.wait_for_timeout(300)
+
+    expect(
+        editor.locator(".view-lines")
+    ).to_contain_text(
+        source.splitlines()[0],
+        timeout=5_000
+    )
 
 
 def create_file(page, path, source):
