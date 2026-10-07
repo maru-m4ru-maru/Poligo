@@ -215,15 +215,14 @@ function TemplateIcon({ type }) {
     HTML: '/icons/html5.svg',
     Python: '/icons/python.svg',
     'C++': '/icons/cplusplus.svg',
-    C: '/icons/c.svg'
-  }
-
-  if (type === 'C#' || type === 'Java' || type === 'Go' || type === 'Rust' || type === 'PHP' || type === 'Ruby' || type === 'Kotlin') {
-    return (
-      <span className="stack-template-text-icon" aria-hidden="true">
-        {type}
-      </span>
-    )
+    C: '/icons/c.svg',
+    Java: '/icons/java.svg',
+    Go: '/icons/go.svg',
+    Rust: '/icons/rust.svg',
+    PHP: '/icons/php.svg',
+    Ruby: '/icons/ruby.svg',
+    Kotlin: '/icons/kotlin.svg',
+    'C#': '/icons/csharp.svg'
   }
 
   if (type === 'Web') {
