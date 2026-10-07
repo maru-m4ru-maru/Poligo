@@ -15,9 +15,12 @@ def set_editor_value(page, source):
     editor = page.locator(
         ".monaco-editor:visible"
     ).last
-    editor.click(force=True)
-    page.keyboard.press("Control+A")
+    input_area = editor.locator("textarea.inputarea")
+    input_area.click(force=True)
+    page.keyboard.press("Control+End")
+    page.keyboard.press("Control+Shift+Home")
     page.keyboard.press("Backspace")
+    page.wait_for_timeout(100)
     page.evaluate(
         """async source => {
             await navigator.clipboard.writeText(source)
@@ -26,13 +29,19 @@ def set_editor_value(page, source):
     )
     page.keyboard.press("Control+V")
     page.wait_for_timeout(300)
-
-    expect(
-        editor.locator(".view-lines")
-    ).to_contain_text(
-        source.splitlines()[0],
-        timeout=5_000
+    page.keyboard.press("Control+End")
+    page.keyboard.press("Control+Shift+Home")
+    page.keyboard.press("Control+C")
+    actual = page.evaluate(
+        "() => navigator.clipboard.readText()"
     )
+    page.keyboard.press("Escape")
+
+    if actual != source:
+        raise AssertionError(
+            "Monaco editor content mismatch after paste. "
+            f"Expected {len(source)} characters, got {len(actual)}."
+        )
 
 
 def create_file(page, path, source):
@@ -295,12 +304,17 @@ public class Foo {
         browser = playwright.chromium.launch(
             headless=True
         )
-        page = browser.new_page(
+        context = browser.new_context(
             viewport={
                 "width": 1440,
                 "height": 1000
             }
         )
+        context.grant_permissions(
+            ["clipboard-read", "clipboard-write"],
+            origin=BASE_URL
+        )
+        page = context.new_page()
 
         try:
             print("E2E account:", email)
@@ -495,6 +509,7 @@ public class Foo {
             )
             raise
         finally:
+            context.close()
             browser.close()
 
 
