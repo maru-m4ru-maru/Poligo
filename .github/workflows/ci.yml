@@ -28,6 +28,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          package-manager-cache: false
       - run: node --check services/api/src/server.js
       - run: node --check services/runner/src/languages.js
       - run: node --check services/runner/src/executor.js
