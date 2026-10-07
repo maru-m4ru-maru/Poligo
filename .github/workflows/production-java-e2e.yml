@@ -28,6 +28,24 @@ jobs:
       - name: Install Chromium
         run: python -m playwright install --with-deps chromium
 
+      - name: Wait for production services
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+        run: |
+          set -e
+          for attempt in $(seq 1 60); do
+            if curl -fsS "$POLIGO_API_URL/api/health" >/tmp/poligo-api-health.json &&
+              curl -fsS "$POLIGO_WEB_URL/" >/tmp/poligo-web-health.html; then
+              cat /tmp/poligo-api-health.json
+              echo "Production services are reachable."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Production services did not become reachable in time." >&2
+          exit 1
+
       - name: Run production Java E2E
         env:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
