@@ -57,7 +57,7 @@ def open_debug(page):
 def run_and_wait(page, expected_status):
     page.get_by_role(
         "button",
-        name="実行",
+        name="▶ 実行",
         exact=True
     ).click()
 
