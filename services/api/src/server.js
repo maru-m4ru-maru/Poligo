@@ -2051,6 +2051,7 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
         language: payload.language || 'plaintext',
         entrypoint: payload.entrypoint || null,
         files: payload.files,
+        args: payload.args,
         env: getExecutionEnvironment(payload.files)
       })
     }
