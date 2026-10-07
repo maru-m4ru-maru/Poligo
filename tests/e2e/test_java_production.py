@@ -18,7 +18,13 @@ def set_editor_value(page, source):
     editor.click(force=True)
     page.keyboard.press("Control+A")
     page.keyboard.press("Backspace")
-    page.keyboard.insert_text(source)
+    page.evaluate(
+        """async source => {
+            await navigator.clipboard.writeText(source)
+        }""",
+        source
+    )
+    page.keyboard.press("Control+V")
     page.wait_for_timeout(300)
 
     expect(
