@@ -15,8 +15,7 @@ def set_editor_value(page, source):
     editor = page.locator(
         ".monaco-editor:visible"
     ).last
-    input_area = editor.locator("textarea.inputarea")
-    input_area.click(force=True)
+    editor.click(force=True)
     page.keyboard.press("Control+End")
     page.keyboard.press("Control+Shift+Home")
     page.keyboard.press("Backspace")
