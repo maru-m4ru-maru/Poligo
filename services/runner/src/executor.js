@@ -17,6 +17,10 @@ const memoryBytes = Number(process.env.EXECUTION_MEMORY_BYTES || 268_435_456)
 const nanoCpus = Number(process.env.EXECUTION_NANO_CPUS || 500_000_000)
 const pidsLimit = Number(process.env.EXECUTION_PIDS_LIMIT || 128)
 const maxOutputBytes = Number(process.env.MAX_OUTPUT_BYTES || 65_536)
+const maxArguments = Number(process.env.MAX_EXECUTION_ARGUMENTS || 32)
+const maxArgumentBytes = Number(process.env.MAX_EXECUTION_ARGUMENT_BYTES || 512)
+const maxEnvironmentVariables = Number(process.env.MAX_ENVIRONMENT_VARIABLES || 64)
+const maxEnvironmentBytes = Number(process.env.MAX_ENVIRONMENT_BYTES || 16_384)
 const concurrency = Number(process.env.EXECUTION_CONCURRENCY || 1)
 
 const jobs = new Map()
@@ -61,6 +65,83 @@ function truncate(value) {
   }
 
   return value.slice(0, maxOutputBytes) + '\n[output truncated]'
+}
+
+function normalizeArguments(args) {
+  if (args === undefined || args === null) {
+    return []
+  }
+
+  if (!Array.isArray(args)) {
+    throw new Error('execution arguments must be an array')
+  }
+
+  if (args.length > maxArguments) {
+    throw new Error('too many execution arguments')
+  }
+
+  let totalBytes = 0
+  const normalized = []
+
+  for (const value of args) {
+    if (
+      typeof value !== 'string' ||
+      value.includes('\0')
+    ) {
+      throw new Error('execution arguments must be strings without NUL bytes')
+    }
+
+    totalBytes += Buffer.byteLength(value, 'utf8')
+
+    if (totalBytes > maxArgumentBytes) {
+      throw new Error('execution arguments are too long')
+    }
+
+    normalized.push(value)
+  }
+
+  return normalized
+}
+
+function normalizeEnvironment(env) {
+  if (env === undefined || env === null) {
+    return {}
+  }
+
+  if (typeof env !== 'object' || Array.isArray(env)) {
+    throw new Error('execution environment must be an object')
+  }
+
+  const entries = Object.entries(env)
+
+  if (entries.length > maxEnvironmentVariables) {
+    throw new Error('too many environment variables')
+  }
+
+  let totalBytes = 0
+  const normalized = {}
+
+  for (const [key, value] of entries) {
+    if (
+      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
+      typeof value !== 'string' ||
+      value.includes('\0')
+    ) {
+      throw new Error('invalid execution environment')
+    }
+
+    totalBytes +=
+      Buffer.byteLength(key, 'utf8') +
+      Buffer.byteLength(value, 'utf8')
+
+    if (totalBytes > maxEnvironmentBytes) {
+      throw new Error('execution environment is too large')
+    }
+
+    normalized[key] = value
+  }
+
+  return normalized
 }
 
 async function prepareWorkspace(files) {
@@ -134,6 +215,8 @@ async function executeJob(job) {
   }
 
   const files = job.files || {}
+  const args = normalizeArguments(job.args)
+  const environment = normalizeEnvironment(job.env)
   const entrypoint = normalizeFilePath(job.entrypoint || language.entrypoint)
 
   if (!Object.prototype.hasOwnProperty.call(files, entrypoint)) {
@@ -148,12 +231,15 @@ async function executeJob(job) {
 
     container = await docker.createContainer({
       Image: language.image,
-      Cmd: language.command(entrypoint, files),
+      Cmd: language.command(entrypoint, files, args),
       WorkingDir: '/workspace',
       User: '65532:65532',
       Env: [
         'HOME=/tmp',
-        'PYTHONDONTWRITEBYTECODE=1'
+        'PYTHONDONTWRITEBYTECODE=1',
+        ...Object.entries(environment).map(([key, value]) =>
+          key + '=' + value
+        )
       ],
       HostConfig: {
         AutoRemove: true,
@@ -278,7 +364,9 @@ export function enqueueJob({
   id = randomUUID(),
   language,
   entrypoint,
-  files
+  files,
+  args,
+  env
 }) {
   if (!id) {
     throw new Error('execution id is required')
@@ -293,6 +381,8 @@ export function enqueueJob({
     language,
     entrypoint,
     files,
+    args,
+    env,
     status: 'queued',
     createdAt: new Date().toISOString(),
     startedAt: null,
