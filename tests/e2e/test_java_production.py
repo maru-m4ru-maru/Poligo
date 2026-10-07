@@ -12,11 +12,12 @@ BASE_URL = os.getenv(
 
 
 def set_editor_value(page, source):
-    editor = page.get_by_role(
-        "textbox",
-        name="Editor content"
-    )
-    editor.fill(source, force=True)
+    editor = page.locator(
+        ".monaco-editor:visible"
+    ).last
+    editor.click(force=True)
+    page.keyboard.press("Control+A")
+    page.keyboard.insert_text(source)
 
 
 def create_file(page, path, source):
