@@ -70,20 +70,37 @@ def open_debug(page):
 
 
 def run_and_wait(page, expected_status):
-    page.get_by_role(
-        "button",
-        name="▶ 実行",
-        exact=True
-    ).click()
-
-    page.wait_for_timeout(250)
-
     status = page.locator(".debug-status")
+    panel = page.locator(".debug-panel")
 
-    expect(status).to_contain_text(
-        expected_status,
-        timeout=30_000
-    )
+    for attempt in range(3):
+        page.get_by_role(
+            "button",
+            name="▶ 実行",
+            exact=True
+        ).click()
+
+        page.wait_for_timeout(250)
+
+        expect(status).to_contain_text(
+            expected_status,
+            timeout=30_000
+        )
+
+        panel_text = panel.inner_text()
+
+        if (
+            "Execution Error 502" not in panel_text and
+            "Execution Error502" not in panel_text and
+            "Execution Error 503" not in panel_text and
+            "Execution Error503" not in panel_text
+        ):
+            return status
+
+        if attempt == 2:
+            return status
+
+        page.wait_for_timeout(2_000)
 
     return status
 
