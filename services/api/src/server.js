@@ -177,7 +177,7 @@ function zipStore(files) {
     central.writeUInt16LE(0, 32)
     central.writeUInt16LE(0, 34)
     central.writeUInt16LE(0, 36)
-    central.writeUInt32LE(mode << 16, 38)
+    central.writeUInt32LE(mode * 0x10000, 38)
     central.writeUInt32LE(offset, 42)
     name.copy(central, 46)
 
