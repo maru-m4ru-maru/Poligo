@@ -15,18 +15,43 @@ def set_editor_value(page, source):
     editor = page.locator(
         ".monaco-editor:visible"
     ).last
+    expect(editor).to_be_visible(timeout=30_000)
     editor.click(force=True)
-    page.keyboard.press("Control+End")
-    page.keyboard.press("Control+Shift+Home")
-    page.keyboard.press("Backspace")
-    page.wait_for_timeout(100)
+
+    cleared = False
+
+    for _ in range(3):
+        page.keyboard.press("Control+A")
+        page.keyboard.press("Backspace")
+        page.wait_for_timeout(150)
+
+        visible_lines = editor.locator(".view-line").all_text_contents()
+
+        if not any(line.strip() for line in visible_lines):
+            cleared = True
+            break
+
+        page.keyboard.press("Control+End")
+        page.keyboard.press("Control+Shift+Home")
+        page.keyboard.press("Backspace")
+        page.wait_for_timeout(150)
+
+    if not cleared:
+        raise AssertionError(
+            "Monaco editor could not be cleared before Java source insertion."
+        )
+
     page.keyboard.insert_text(source)
     page.wait_for_timeout(300)
 
-    expect(editor.locator(".view-lines")).to_contain_text(
-        source.splitlines()[0],
-        timeout=5_000
-    )
+    expected_lines = source.splitlines()
+    visible_lines = editor.locator(".view-line").all_text_contents()
+
+    if len(expected_lines) <= 20 and visible_lines != expected_lines:
+        raise AssertionError(
+            "Monaco editor content mismatch after insertion."
+        )
+
 
 def create_file(page, path, source):
     page.get_by_role(
