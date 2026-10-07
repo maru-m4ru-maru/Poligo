@@ -2,28 +2,36 @@ const languages = {
   python: {
     image: process.env.PYTHON_IMAGE || 'python:3.13.15-slim-bookworm',
     entrypoint: 'main.py',
-    command: file => ['python', '/workspace/' + file]
+    command: (file, files, args) => [
+      'python',
+      '/workspace/' + file,
+      ...(args || [])
+    ]
   },
   c: {
     image: process.env.GCC_IMAGE || 'gcc:16.2.0-trixie',
     entrypoint: 'main.c',
-    command: (file, files) => [
+    command: (file, files, args) => [
       'sh',
       '-lc',
       'gcc -O2 -std=c23 ' +
         getSourceArguments(files, ['.c'], file) +
-        ' -o /tmp/poligo && /tmp/poligo'
+        ' -o /tmp/poligo && exec /tmp/poligo "$@"',
+      'poligo',
+      ...(args || [])
     ]
   },
   cpp: {
     image: process.env.GCC_IMAGE || 'gcc:16.2.0-trixie',
     entrypoint: 'main.cpp',
-    command: (file, files) => [
+    command: (file, files, args) => [
       'sh',
       '-lc',
       'g++ -x c++ -O2 -std=c++23 ' +
         getSourceArguments(files, ['.cpp', '.cc', '.cxx', '.C'], file) +
-        ' -o /tmp/poligo && /tmp/poligo'
+        ' -o /tmp/poligo && exec /tmp/poligo "$@"',
+      'poligo',
+      ...(args || [])
     ]
   }
 }
