@@ -292,7 +292,7 @@ public class Foo {
             print("E2E account:", email)
 
             page.goto(
-                BASE_URL + "/#/createaccount",
+                BASE_URL + "/createaccount",
                 wait_until="domcontentloaded",
                 timeout=60_000
             )
