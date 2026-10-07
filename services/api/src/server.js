@@ -627,7 +627,18 @@ async function getProjectById(projectId, ownerId) {
 async function listProjects(ownerId) {
   const database = getDatabase()
   const projectListStatement = await database.prepare(
-    'SELECT id, name, created_at, updated_at FROM projects WHERE owner_id = ? ORDER BY updated_at DESC'
+    `SELECT
+      p.id,
+      p.name,
+      p.created_at,
+      p.updated_at,
+      COUNT(pf.path) AS file_count,
+      COALESCE(SUM(LENGTH(pf.content)), 0) AS storage_bytes
+    FROM projects p
+    LEFT JOIN project_files pf ON pf.project_id = p.id
+    WHERE p.owner_id = ?
+    GROUP BY p.id, p.name, p.created_at, p.updated_at
+    ORDER BY p.updated_at DESC`
   )
   const result = await projectListStatement.all([ownerId])
 
@@ -636,7 +647,9 @@ async function listProjects(ownerId) {
     name: row.name,
     files: {},
     createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at)
+    updatedAt: Number(row.updated_at),
+    fileCount: Number(row.file_count || 0),
+    storageBytes: Number(row.storage_bytes || 0)
   }))
 }
 
