@@ -3507,7 +3507,8 @@ function IDE({ projectId }) {
                   editorRef.current = editor
 
                   if (
-                    new URLSearchParams(window.location.search).get('e2e') === '1'
+                    new URLSearchParams(window.location.search).get('e2e') === '1' ||
+                    sessionStorage.getItem('poligo-e2e') === '1'
                   ) {
                     window.__POLIGO_E2E_SET_EDITOR__ = source => {
                       editor.setValue(source)
