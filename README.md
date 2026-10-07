@@ -65,4 +65,4 @@ Set these API environment variables in Render:
 
 The runner can be hosted independently and replaced without changing the IDE frontend. If the configured runner does not support a language, the API falls back to Judge0.
 
-Java execution supports single-file programs as well as multi-file projects, package declarations, command-line arguments, and `.env` environment variables. Java projects that need the extended execution path use Judge0's multi-file program profile with generated UTF-8 compile and run scripts.
+Java execution supports single-file programs as well as multi-file projects, package declarations, project resources, command-line arguments, and `.env` environment variables. Java projects that need the extended execution path use Judge0's multi-file program profile with generated UTF-8 compile and run scripts.
