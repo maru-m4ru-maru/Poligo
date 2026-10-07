@@ -6311,6 +6311,43 @@ body {
   color: #d6aaaa;
 }
 
+.debug-input-hint {
+  display: grid;
+  gap: 7px;
+  margin: 4px 14px 14px;
+  padding: 11px 12px;
+  border: 1px solid #3a3427;
+  border-radius: 6px;
+  background: #15130f;
+}
+
+.debug-input-hint strong {
+  color: #d9d1bd;
+  font-size: 11px;
+}
+
+.debug-input-hint span {
+  color: #8f8a7c;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.debug-input-hint button {
+  justify-self: start;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #4a4334;
+  border-radius: 4px;
+  background: #211e17;
+  color: #d8d0bd;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.debug-input-hint button:hover {
+  background: #2a261d;
+}
+
 .terminal-panel {
   display: flex;
   flex-direction: column;
