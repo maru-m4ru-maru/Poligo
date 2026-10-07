@@ -126,6 +126,98 @@ function getFileMeta(name) {
   }
 }
 
+function RenameIcon({ size = 13 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M4 16.8V20h3.2L18.5 8.7a2.3 2.3 0 0 0 0-3.3l-.9-.9a2.3 2.3 0 0 0-3.3 0z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m13.2 6.2 4.6 4.6"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function TrashIcon({ size = 13 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M5 7h14M9 7V4.5h6V7M8 10v7M12 10v7M16 10v7M7 7l.7 13h8.6L17 7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function NewFileIcon({ size = 14 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M6 3.5h8l4 4V20H6z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14 3.5V8h4M12 11v5M9.5 13.5h5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function UploadIcon({ size = 14 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 15V5M8.5 8.5 12 5l3.5 3.5M5 13v5.5h14V13"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function FileIcon({ kind, size = 16 }) {
   const src = FILE_ICONS[kind]
 
@@ -867,6 +959,10 @@ function IDE({ projectId }) {
   const [collapsedFolders, setCollapsedFolders] = useState(new Set())
   const [editorMarkers, setEditorMarkers] = useState([])
   const [newFileName, setNewFileName] = useState('')
+  const [renamingFile, setRenamingFile] = useState('')
+  const [renameValue, setRenameValue] = useState('')
+  const [draggedPath, setDraggedPath] = useState('')
+  const [dragOverFolder, setDragOverFolder] = useState('')
   const [previewKey, setPreviewKey] = useState(0)
   const [execution, setExecution] = useState({
     id: '',
@@ -1416,18 +1512,194 @@ function IDE({ projectId }) {
     })
   }
 
+  function startRenameFile(path) {
+    setRenamingFile(path)
+    setRenameValue(path.split('/').pop() || path)
+  }
+
+  function cancelRenameFile() {
+    setRenamingFile('')
+    setRenameValue('')
+  }
+
+  function commitRenameFile() {
+    if (!renamingFile) return
+
+    const nextName = renameValue.trim()
+
+    if (
+      !nextName ||
+      nextName.includes('/') ||
+      nextName === '.' ||
+      nextName === '..'
+    ) {
+      cancelRenameFile()
+      return
+    }
+
+    const directory = renamingFile.includes('/')
+      ? renamingFile.slice(0, renamingFile.lastIndexOf('/'))
+      : ''
+
+    const nextPath = directory
+      ? directory + '/' + nextName
+      : nextName
+
+    if (
+      nextPath !== renamingFile &&
+      Object.prototype.hasOwnProperty.call(files, nextPath)
+    ) {
+      cancelRenameFile()
+      return
+    }
+
+    setFiles(current => {
+      const next = { ...current }
+      next[nextPath] = next[renamingFile]
+      delete next[renamingFile]
+      return next
+    })
+
+    setOpenFiles(current =>
+      current.map(file => file === renamingFile ? nextPath : file)
+    )
+    setActiveFile(current =>
+      current === renamingFile ? nextPath : current
+    )
+    setSaveStatus('saving')
+    cancelRenameFile()
+  }
+
+  function handleFileDragStart(event, path) {
+    event.stopPropagation()
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', path)
+    setDraggedPath(path)
+  }
+
+  function handleFileDragEnd() {
+    setDraggedPath('')
+    setDragOverFolder('')
+  }
+
+  function handleFolderDragOver(event, path) {
+    const source = draggedPath || event.dataTransfer.getData('text/plain')
+
+    if (!source || source === path || path.startsWith(source + '/')) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverFolder(path)
+  }
+
+  function handleRootDragOver(event) {
+    const source = draggedPath || event.dataTransfer.getData('text/plain')
+
+    if (!source || !source.includes('/')) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverFolder('')
+  }
+
+  function movePath(sourcePath, targetFolderPath) {
+    if (!sourcePath) return
+
+    const sourceName = sourcePath.split('/').pop() || sourcePath
+
+    if (sourcePath === targetFolderPath || targetFolderPath.startsWith(sourcePath + '/')) {
+      return
+    }
+
+    const newPrefix = targetFolderPath
+      ? targetFolderPath + '/' + sourceName
+      : sourceName
+
+    const movingEntries = Object.entries(files).filter(([path]) =>
+      path === sourcePath || path.startsWith(sourcePath + '/')
+    )
+
+    if (!movingEntries.length) {
+      return
+    }
+
+    const movingPaths = new Set(movingEntries.map(([path]) => path))
+    const updates = movingEntries.map(([path, value]) => [
+      newPrefix + path.slice(sourcePath.length),
+      value
+    ])
+
+    if (updates.some(([path]) =>
+      Object.prototype.hasOwnProperty.call(files, path) &&
+      !movingPaths.has(path)
+    )) {
+      return
+    }
+
+    const nextFiles = {}
+
+    for (const [path, value] of Object.entries(files)) {
+      if (!movingPaths.has(path)) {
+        nextFiles[path] = value
+      }
+    }
+
+    for (const [path, value] of updates) {
+      nextFiles[path] = value
+    }
+
+    const mapMovedPath = path => {
+      if (path === sourcePath || path.startsWith(sourcePath + '/')) {
+        return newPrefix + path.slice(sourcePath.length)
+      }
+
+      return path
+    }
+
+    setFiles(nextFiles)
+    setOpenFiles(current => current.map(mapMovedPath))
+    setActiveFile(current => mapMovedPath(current))
+    setSaveStatus('saving')
+  }
+
+  function handleFolderDrop(event, path) {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const source = draggedPath || event.dataTransfer.getData('text/plain')
+
+    setDraggedPath('')
+    setDragOverFolder('')
+
+    if (source) {
+      movePath(source, path)
+    }
+  }
+
   function renderFileTree(nodes, depth = 0) {
     return sortFileTreeNodes(nodes).map(node => {
       if (node.type === 'folder') {
         const collapsed = collapsedFolders.has(node.path)
         const children = Array.from(node.children.values())
+        const dropActive = dragOverFolder === node.path
 
         return (
           <div key={node.path}>
             <button
-              className="explorer-folder"
+              className={'explorer-folder ' + (dropActive ? 'drop-target' : '')}
               style={{ paddingLeft: 10 + depth * 16 }}
               onClick={() => toggleFolder(node.path)}
+              onDragOver={event => handleFolderDragOver(event, node.path)}
+              onDragLeave={() => {
+                if (dragOverFolder === node.path) {
+                  setDragOverFolder('')
+                }
+              }}
+              onDrop={event => handleFolderDrop(event, node.path)}
               title={node.path}
             >
               <span className="explorer-folder-arrow">
@@ -1446,17 +1718,67 @@ function IDE({ projectId }) {
         )
       }
 
+      const isRenaming = renamingFile === node.path
+
       return (
-        <button
+        <div
           key={node.path}
           className={'explorer-file ' + (activeFile === node.path ? 'active' : '')}
           style={{ paddingLeft: 28 + depth * 16 }}
-          onClick={() => openFile(node.path)}
+          draggable={!isRenaming}
+          onDragStart={event => handleFileDragStart(event, node.path)}
+          onDragEnd={handleFileDragEnd}
           title={node.path}
         >
-          <FileIcon kind={getFileMeta(node.name).kind} />
-          <span>{node.name}</span>
-        </button>
+          {isRenaming ? (
+            <input
+              className="explorer-file-rename"
+              value={renameValue}
+              autoFocus
+              onChange={event => setRenameValue(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  commitRenameFile()
+                }
+
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  cancelRenameFile()
+                }
+              }}
+              onBlur={commitRenameFile}
+            />
+          ) : (
+            <>
+              <button
+                className="explorer-file-main"
+                onClick={() => openFile(node.path)}
+              >
+                <FileIcon kind={getFileMeta(node.name).kind} />
+                <span>{node.name}</span>
+              </button>
+              <div className="explorer-file-actions">
+                <button
+                  className="explorer-file-action"
+                  onClick={() => startRenameFile(node.path)}
+                  title="名前を変更"
+                  aria-label="名前を変更"
+                >
+                  <RenameIcon />
+                </button>
+                <button
+                  className="explorer-file-action delete"
+                  onClick={() => void deleteFile(node.path)}
+                  title="ファイルを削除"
+                  aria-label="ファイルを削除"
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       )
     })
   }
@@ -2777,12 +3099,25 @@ function IDE({ projectId }) {
 
         <aside className="explorer">
           <div className="explorer-head">
-            <span>{activeView === 'files' ? 'EXPLORER' : activeView.toUpperCase()}</span>
+            <span>{activeView === 'files' ? 'FILES' : activeView.toUpperCase()}</span>
             {activeView === 'files' && (
               <div className="explorer-actions">
-                <button className="more-button" onClick={() => void createFile()} title="新しいファイル">＋</button>
-                <button className="more-button" onClick={openFileUpload} title="ファイルをアップロード">↑</button>
-                <button className="more-button" onClick={() => void deleteFile()} title="ファイルを削除">−</button>
+                <button
+                  className="explorer-action-button"
+                  onClick={() => void createFile()}
+                  title="新しいファイル"
+                  aria-label="新しいファイル"
+                >
+                  <NewFileIcon />
+                </button>
+                <button
+                  className="explorer-action-button"
+                  onClick={openFileUpload}
+                  title="ファイルをアップロード"
+                  aria-label="ファイルをアップロード"
+                >
+                  <UploadIcon />
+                </button>
                 <input
                   ref={fileUploadRef}
                   type="file"
@@ -2796,7 +3131,20 @@ function IDE({ projectId }) {
 
           {activeView === 'files' && (
             <>
-              <div className="project-folder"><span>⌄</span><span>POLIGO</span></div>
+              <button
+                className={'project-folder ' + (dragOverFolder === '' && draggedPath ? 'drop-target' : '')}
+                onDragOver={handleRootDragOver}
+                onDragLeave={() => {
+                  if (dragOverFolder === '') {
+                    setDragOverFolder('')
+                  }
+                }}
+                onDrop={event => handleFolderDrop(event, '')}
+                title="プロジェクトのルート"
+              >
+                <span>⌄</span>
+                <span>POLIGO</span>
+              </button>
               <div className="file-list">
                 {newFileOpen && (
                   <div className="explorer-new-file">
