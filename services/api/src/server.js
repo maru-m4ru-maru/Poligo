@@ -570,7 +570,7 @@ function buildJavaAdditionalFiles(
         '  case "$resource" in',
         '    ./compile|./run|*.java) continue ;;',
         '  esac',
-        '  target="out/\${resource#./}"',
+        '  target="out/${resource#./}"',
         '  mkdir -p "$(dirname "$target")"',
         '  cp -- "$resource" "$target"',
         'done < <(find . -type f -not -path "./out/*" -print0)'
