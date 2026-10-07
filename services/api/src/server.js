@@ -1414,10 +1414,18 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   })
 }
 
+function decodeJudge0Text(value) {
+  if (typeof value !== 'string' || !value) {
+    return ''
+  }
+
+  return Buffer.from(value, 'base64').toString('utf8')
+}
+
 async function handleJudge0ExecutionStatus(response, id) {
   const judge0Response = await fetch(
     judge0Url + '/submissions/' + encodeURIComponent(id) +
-      '?base64_encoded=false&fields=stdout,stderr,compile_output,status_id,status,message,time,wall_time,memory,exit_code,exit_signal',
+      '?base64_encoded=true&fields=stdout,stderr,compile_output,status_id,status,message,time,wall_time,memory,exit_code,exit_signal',
     {
       method: 'GET'
     }
@@ -1452,12 +1460,15 @@ async function handleJudge0ExecutionStatus(response, id) {
 
   const successful = statusId === 3
   const timedOut = statusId === 5
-  const output = result.stdout || ''
+  const output = decodeJudge0Text(result.stdout)
   const errorOutput = [
     result.compile_output,
     result.stderr,
     result.message
-  ].filter(value => typeof value === 'string' && value).join('\n')
+  ]
+    .map(value => decodeJudge0Text(value))
+    .filter(Boolean)
+    .join('\n')
 
   retainExecution(id)
 
