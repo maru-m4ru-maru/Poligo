@@ -12,10 +12,9 @@ BASE_URL = os.getenv(
 
 
 def set_editor_value(page, source):
-    editor = page.locator(
-        ".monaco-editor:visible"
-    ).last.locator(
-        "textarea.inputarea"
+    editor = page.get_by_role(
+        "textbox",
+        name="Editor content"
     )
     editor.fill(source, force=True)
 
