@@ -146,6 +146,7 @@ function zipStore(files) {
     const name = Buffer.from(file.path, 'utf8')
     const data = Buffer.from(file.data)
     const checksum = crc32(data)
+    const mode = Number.isInteger(file.mode) ? file.mode : 0o644
     const local = Buffer.alloc(30 + name.length)
 
     local.writeUInt32LE(0x04034b50, 0)
@@ -163,7 +164,7 @@ function zipStore(files) {
     const central = Buffer.alloc(46 + name.length)
 
     central.writeUInt32LE(0x02014b50, 0)
-    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE((3 << 8) | 20, 4)
     central.writeUInt16LE(20, 6)
     central.writeUInt16LE(0x0800, 8)
     central.writeUInt16LE(0, 10)
@@ -176,7 +177,7 @@ function zipStore(files) {
     central.writeUInt16LE(0, 32)
     central.writeUInt16LE(0, 34)
     central.writeUInt16LE(0, 36)
-    central.writeUInt32LE(0, 38)
+    central.writeUInt32LE(mode << 16, 38)
     central.writeUInt32LE(offset, 42)
     name.copy(central, 46)
 
@@ -292,6 +293,100 @@ function buildPhpAdditionalFiles(files) {
 
   if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
     throw new Error('PHP execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
+function getCFamilySourcePaths(files, language) {
+  const extensions = language === 'cpp'
+    ? ['.cpp', '.cc', '.cxx']
+    : ['.c']
+
+  return Object.keys(files)
+    .filter(filePath => {
+      const lower = filePath.toLowerCase()
+      return extensions.some(extension => lower.endsWith(extension))
+    })
+    .sort()
+}
+
+function findMultiFileJudge0LanguageId(languages) {
+  const candidate = languages.find(item =>
+    item?.is_archived !== true &&
+    item?.id === 89 &&
+    typeof item?.name === 'string' &&
+    item.name.toLowerCase() === 'multi-file program'
+  )
+
+  return candidate?.id || null
+}
+
+function buildCFamilyAdditionalFiles(files, entrypoint, language, multiFile) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    if (
+      multiFile &&
+      (path === 'compile' || path === 'run')
+    ) {
+      throw new Error("compile and run are reserved filenames for C/C++ multi-file execution")
+    }
+
+    if (!multiFile && path === entrypoint) {
+      continue
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (multiFile) {
+    const sourceName = language === 'cpp' ? 'cpp' : 'c'
+    const sourcePattern = sourceName === 'cpp' ? '*.cpp' : '*.c'
+
+    archiveFiles.push({
+      path: 'compile',
+      mode: 0o755,
+      data: Buffer.from([
+        '#!/bin/bash',
+        'set -e',
+        'mapfile -d "" sources < <(find . -type f -name ' + JSON.stringify(sourcePattern) + ' -print0)',
+        'if [ "${#sources[@]}" -eq 0 ]; then',
+        '  echo "No C/C++ source files found." >&2',
+        '  exit 1',
+        'fi',
+        sourceName === 'cpp'
+          ? 'g++ -O2 -std=c++23 "${sources[@]}" -o /tmp/poligo'
+          : 'gcc -O2 -std=c23 "${sources[@]}" -o /tmp/poligo'
+      ].join('\n') + '\n')
+    })
+
+    archiveFiles.push({
+      path: 'run',
+      mode: 0o755,
+      data: Buffer.from([
+        '#!/bin/bash',
+        'set -e',
+        'exec /tmp/poligo'
+      ].join('\n') + '\n')
+    })
+  }
+
+  if (!archiveFiles.length) {
+    return ''
+  }
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error("C/C++ execution files are too large")
   }
 
   return archive.toString('base64')
@@ -1337,12 +1432,13 @@ function findJudge0LanguageId(languages, language) {
 async function submitJudge0(source, languageId, stdin, options = {}) {
   let lastResponse = null
   let lastResult = null
-  const sourceCode = Buffer.from(source, 'utf8').toString('base64')
+  const sourceCode = typeof source === 'string'
+    ? Buffer.from(source, 'utf8').toString('base64')
+    : ''
   const input = typeof stdin === 'string'
     ? Buffer.from(stdin.slice(0, 32_000), 'utf8').toString('base64')
     : ''
   const submission = {
-    source_code: sourceCode,
     language_id: languageId,
     stdin: input,
     cpu_time_limit: EXECUTION_CPU_TIME_LIMIT,
@@ -1354,6 +1450,10 @@ async function submitJudge0(source, languageId, stdin, options = {}) {
     enable_network: false,
     number_of_runs: 1,
     ...options
+  }
+
+  if (sourceCode) {
+    submission.source_code = sourceCode
   }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -1417,7 +1517,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   }
 
   const languages = await getJudge0Languages()
-  const languageId = findJudge0LanguageId(languages, payload.language)
+  let languageId = findJudge0LanguageId(languages, payload.language)
 
   if (!languageId) {
     send(response, 400, {
@@ -1429,7 +1529,41 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   let preparedSource = source
   const options = {}
 
-  if (payload.language === 'python') {
+  if (payload.language === 'c' || payload.language === 'cpp') {
+    const sourcePaths = getCFamilySourcePaths(files, payload.language)
+    const multiFile = sourcePaths.length > 1
+
+    if (multiFile) {
+      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!multiFileLanguageId) {
+        send(response, 503, {
+          error: 'C/C++ multi-file execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      languageId = multiFileLanguageId
+      preparedSource = null
+      options.additional_files = buildCFamilyAdditionalFiles(
+        files,
+        entrypoint,
+        payload.language,
+        true
+      )
+    } else {
+      const additionalFiles = buildCFamilyAdditionalFiles(
+        files,
+        entrypoint,
+        payload.language,
+        false
+      )
+
+      if (additionalFiles) {
+        options.additional_files = additionalFiles
+      }
+    }
+  } else if (payload.language === 'python') {
     const environment = getExecutionEnvironment(files)
     const packageName = getPythonPackageName(files, entrypoint)
     preparedSource = preparePythonSource(
