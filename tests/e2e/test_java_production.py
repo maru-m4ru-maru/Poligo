@@ -389,15 +389,17 @@ public class Foo {
                 timeout=5_000
             )
             terminal.click()
-            terminal.dispatch_event(
-                "keydown",
-                {
-                    "key": "日本語入力",
-                    "code": "KeyJ",
-                    "bubbles": True,
-                    "cancelable": True
-                }
-            )
+            for character in "日本語入力":
+                terminal.dispatch_event(
+                    "keydown",
+                    {
+                        "key": character,
+                        "code": "Key",
+                        "bubbles": True,
+                        "cancelable": True
+                    }
+                )
+
             expect(terminal).to_contain_text(
                 "stdin> 日本語入力",
                 timeout=5_000
