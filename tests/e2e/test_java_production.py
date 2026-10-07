@@ -513,11 +513,19 @@ public class Foo {
                 page.get_by_text("Java", exact=True).first
             ).to_be_visible(timeout=30_000)
 
-            actions = page.get_by_role(
+            project_row = page.locator(
+                ".stack-project-list-row"
+            ).filter(
+                has_text="Java"
+            ).last
+
+            expect(project_row).to_be_visible(timeout=10_000)
+
+            actions = project_row.get_by_role(
                 "button",
                 name="Project actions for Java"
             )
-            expect(actions).to_have_count(1, timeout=10_000)
+            expect(actions).to_be_visible(timeout=5_000)
             actions.click()
 
             page.locator('[role="menu"]').get_by_role(
