@@ -6577,6 +6577,29 @@ body {
 }
 
 
+
+@media (max-width: 760px) {
+  .debug-toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .debug-args {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .debug-args input {
+    width: 100%;
+  }
+
+  .debug-env-indicator {
+    margin-left: auto;
+  }
+}
+
 .preview-section.ai-mode {
   grid-template-rows: minmax(0, 1fr);
   background: #0d1118;
