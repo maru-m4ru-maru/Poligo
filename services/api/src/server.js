@@ -270,6 +270,59 @@ function normalizeExecutionFiles(files) {
   return normalized
 }
 
+function buildPhpAdditionalFiles(files) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (!archiveFiles.length) {
+    return ''
+  }
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('PHP execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
+function preparePhpSource(entrypoint, environment) {
+  const entrypointEncoded = Buffer.from(entrypoint, 'utf8').toString('base64')
+  const environmentEncoded = Buffer.from(
+    JSON.stringify(environment),
+    'utf8'
+  ).toString('base64')
+
+  return [
+    '<?php',
+    '$_poligo_env = json_decode(base64_decode(' +
+      JSON.stringify(environmentEncoded) +
+      '), true) ?: [];',
+    'foreach ($_poligo_env as $_poligo_key => $_poligo_value) {',
+    '    putenv($_poligo_key . "=" . $_poligo_value);',
+    '    $_ENV[$_poligo_key] = $_poligo_value;',
+    '    $_SERVER[$_poligo_key] = $_poligo_value;',
+    '}',
+    '$_poligo_entrypoint = base64_decode(' +
+      JSON.stringify(entrypointEncoded) +
+      ');',
+    '$_SERVER["SCRIPT_FILENAME"] = __DIR__ . DIRECTORY_SEPARATOR . $_poligo_entrypoint;',
+    '$_SERVER["SCRIPT_NAME"] = "/" . str_replace(DIRECTORY_SEPARATOR, "/", $_poligo_entrypoint);',
+    'require __DIR__ . DIRECTORY_SEPARATOR . $_poligo_entrypoint;'
+  ].join('\n')
+}
+
 function buildPythonAdditionalFiles(files, entrypoint) {
   const archiveFiles = []
 
@@ -1373,6 +1426,14 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       packageName
     )
     const additionalFiles = buildPythonAdditionalFiles(files, entrypoint)
+
+    if (additionalFiles) {
+      options.additional_files = additionalFiles
+    }
+  } else if (payload.language === 'php') {
+    const environment = getExecutionEnvironment(files)
+    preparedSource = preparePhpSource(entrypoint, environment)
+    const additionalFiles = buildPhpAdditionalFiles(files)
 
     if (additionalFiles) {
       options.additional_files = additionalFiles
