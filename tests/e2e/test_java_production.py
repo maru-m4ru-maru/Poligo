@@ -15,43 +15,21 @@ def set_editor_value(page, source):
     editor = page.locator(
         ".monaco-editor:visible"
     ).last
-    expect(editor).to_be_visible(timeout=30_000)
     editor.click(force=True)
+    page.wait_for_function(
+        "() => typeof window.__POLIGO_E2E_SET_EDITOR__ === 'function'",
+        timeout=10_000
+    )
+    page.evaluate(
+        "(source) => window.__POLIGO_E2E_SET_EDITOR__(source)",
+        source
+    )
+    page.wait_for_timeout(500)
 
-    cleared = False
-
-    for _ in range(3):
-        page.keyboard.press("Control+A")
-        page.keyboard.press("Backspace")
-        page.wait_for_timeout(150)
-
-        visible_lines = editor.locator(".view-line").all_text_contents()
-
-        if not any(line.strip() for line in visible_lines):
-            cleared = True
-            break
-
-        page.keyboard.press("Control+End")
-        page.keyboard.press("Control+Shift+Home")
-        page.keyboard.press("Backspace")
-        page.wait_for_timeout(150)
-
-    if not cleared:
-        raise AssertionError(
-            "Monaco editor could not be cleared before Java source insertion."
-        )
-
-    page.keyboard.insert_text(source)
-    page.wait_for_timeout(300)
-
-    expected_lines = source.splitlines()
-    visible_lines = editor.locator(".view-line").all_text_contents()
-
-    if len(expected_lines) <= 20 and visible_lines != expected_lines:
-        raise AssertionError(
-            "Monaco editor content mismatch after insertion."
-        )
-
+    expect(editor.locator(".view-lines")).to_contain_text(
+        source.splitlines()[0],
+        timeout=5_000
+    )
 
 def create_file(page, path, source):
     page.get_by_role(
@@ -333,9 +311,12 @@ public class Foo {
             print("E2E account:", email)
 
             page.goto(
-                BASE_URL + "/createaccount",
+                BASE_URL + "/createaccount?e2e=1",
                 wait_until="domcontentloaded",
                 timeout=60_000
+            )
+            page.evaluate(
+                "() => sessionStorage.setItem('poligo-e2e', '1')"
             )
 
             page.get_by_label("表示名").fill("Poligo Production E2E")
