@@ -1793,9 +1793,14 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       filePath !== entrypoint &&
       !isSecretEnvFile(filePath)
     )
+    const fileName = entrypoint.split('/').pop() || ''
+    const canUsePredefinedJava =
+      fileName.toLowerCase() === 'main.java' &&
+      javaSourcePaths.length === 1 &&
+      !packageName
     const mainClass = getJavaMainClass(source, entrypoint)
     const multiFile =
-      javaSourcePaths.length > 1 ||
+      !canUsePredefinedJava ||
       Boolean(packageName) ||
       (entrypoint.includes('/') && hasAdditionalProjectFiles)
 
