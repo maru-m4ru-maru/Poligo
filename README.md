@@ -63,4 +63,6 @@ Set these API environment variables in Render:
 - RUNNER_TOKEN
 - OPENROUTER_API_KEY
 
-The runner can be hosted independently and replaced without changing the IDE frontend.
+The runner can be hosted independently and replaced without changing the IDE frontend. If the configured runner does not support a language, the API falls back to Judge0.
+
+Java execution supports single-file programs as well as multi-file projects and package declarations. Java multi-file execution uses Judge0's multi-file program profile with generated UTF-8 compile and run scripts.
