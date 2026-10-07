@@ -425,6 +425,33 @@ function preparePhpSource(entrypoint, environment) {
   ].join('\n')
 }
 
+function buildJavaAdditionalFiles(files, entrypoint) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path) || path === entrypoint) {
+      continue
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (!archiveFiles.length) {
+    return ''
+  }
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('Java execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
 function buildPythonAdditionalFiles(files, entrypoint) {
   const archiveFiles = []
 
@@ -1647,6 +1674,12 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       packageName
     )
     const additionalFiles = buildPythonAdditionalFiles(files, entrypoint)
+
+    if (additionalFiles) {
+      options.additional_files = additionalFiles
+    }
+  } else if (payload.language === 'java') {
+    const additionalFiles = buildJavaAdditionalFiles(files, entrypoint)
 
     if (additionalFiles) {
       options.additional_files = additionalFiles
