@@ -42,13 +42,13 @@ const FILE_META = {
   ts: { language: 'typescript', kind: 'js' },
   tsx: { language: 'typescript', kind: 'js' },
   py: { language: 'python', kind: 'python' },
-  java: { language: 'java', kind: 'text' },
-  go: { language: 'go', kind: 'text' },
-  rs: { language: 'rust', kind: 'text' },
-  php: { language: 'php', kind: 'text' },
-  rb: { language: 'ruby', kind: 'text' },
-  kt: { language: 'kotlin', kind: 'text' },
-  cs: { language: 'csharp', kind: 'text' },
+  java: { language: 'java', kind: 'java' },
+  go: { language: 'go', kind: 'go' },
+  rs: { language: 'rust', kind: 'rust' },
+  php: { language: 'php', kind: 'php' },
+  rb: { language: 'ruby', kind: 'ruby' },
+  kt: { language: 'kotlin', kind: 'kotlin' },
+  cs: { language: 'csharp', kind: 'csharp' },
   c: { language: 'c', kind: 'c' },
   h: { language: 'c', kind: 'c' },
   cpp: { language: 'cpp', kind: 'cpp' },
@@ -85,8 +85,15 @@ const FILE_ICONS = {
   css: '/icons/css.svg',
   js: '/icons/javascript.svg',
   python: '/icons/python.svg',
+  java: '/icons/java.svg',
+  go: '/icons/go.svg',
+  rust: '/icons/rust.svg',
+  php: '/icons/php.svg',
+  ruby: '/icons/ruby.svg',
+  kotlin: '/icons/kotlin.svg',
   c: '/icons/c.svg',
-  cpp: '/icons/cplusplus.svg'
+  cpp: '/icons/cplusplus.svg',
+  csharp: '/icons/csharp.svg'
 }
 
 function getFileMeta(name) {
