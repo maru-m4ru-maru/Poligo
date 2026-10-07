@@ -55,6 +55,8 @@ const FILE_META = {
   cc: { language: 'cpp', kind: 'cpp' },
   cxx: { language: 'cpp', kind: 'cpp' },
   hpp: { language: 'cpp', kind: 'cpp' },
+  hh: { language: 'cpp', kind: 'cpp' },
+  hxx: { language: 'cpp', kind: 'cpp' },
   json: { language: 'json', kind: 'json' },
   md: { language: 'markdown', kind: 'markdown' },
   txt: { language: 'plaintext', kind: 'text' },
@@ -116,8 +118,19 @@ function getFileMeta(name) {
     }
   }
 
-  const extension = name.includes('.')
-    ? name.split('.').pop().toLowerCase()
+  const rawExtension = name.includes('.')
+    ? name.slice(name.lastIndexOf('.'))
+    : ''
+
+  if (rawExtension === '.C') {
+    return {
+      language: 'cpp',
+      kind: 'cpp'
+    }
+  }
+
+  const extension = rawExtension
+    ? rawExtension.slice(1).toLowerCase()
     : ''
 
   return FILE_META[extension] || {
