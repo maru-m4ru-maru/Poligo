@@ -7,21 +7,42 @@ const languages = {
   c: {
     image: process.env.GCC_IMAGE || 'gcc:16.2.0-trixie',
     entrypoint: 'main.c',
-    command: file => [
+    command: (file, files) => [
       'sh',
       '-lc',
-      'gcc -O2 -std=c23 /workspace/' + shellQuote(file) + ' -o /tmp/poligo && /tmp/poligo'
+      'gcc -O2 -std=c23 ' +
+        getSourceArguments(files, ['.c'], file) +
+        ' -o /tmp/poligo && /tmp/poligo'
     ]
   },
   cpp: {
     image: process.env.GCC_IMAGE || 'gcc:16.2.0-trixie',
     entrypoint: 'main.cpp',
-    command: file => [
+    command: (file, files) => [
       'sh',
       '-lc',
-      'g++ -O2 -std=c++23 /workspace/' + shellQuote(file) + ' -o /tmp/poligo && /tmp/poligo'
+      'g++ -O2 -std=c++23 ' +
+        getSourceArguments(files, ['.cpp', '.cc', '.cxx'], file) +
+        ' -o /tmp/poligo && /tmp/poligo'
     ]
   }
+}
+
+function getSourceArguments(files, extensions, entrypoint) {
+  const sourceFiles = Object.keys(files || {})
+    .filter(file => {
+      const lower = file.toLowerCase()
+      return extensions.some(extension => lower.endsWith(extension))
+    })
+    .sort()
+
+  if (!sourceFiles.length) {
+    return '/workspace/' + shellQuote(entrypoint)
+  }
+
+  return sourceFiles
+    .map(file => '/workspace/' + shellQuote(file))
+    .join(' ')
 }
 
 function shellQuote(value) {
