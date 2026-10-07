@@ -306,7 +306,11 @@ function getCFamilySourcePaths(files, language) {
   return Object.keys(files)
     .filter(filePath => {
       const lower = filePath.toLowerCase()
-      return extensions.some(extension => lower.endsWith(extension))
+
+      return extensions.some(extension =>
+        lower.endsWith(extension) ||
+        filePath.endsWith(extension.toUpperCase())
+      )
     })
     .sort()
 }
@@ -2311,8 +2315,19 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleExecution(request, response)
     } catch (error) {
-      send(response, 502, {
-        error: error instanceof Error ? error.message : 'runner request failed'
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'runner request failed'
+      const status =
+        message.includes('reserved filenames') ||
+        message.includes('execution files are too large') ||
+        message.includes('invalid data URL file content')
+          ? 400
+          : 502
+
+      send(response, status, {
+        error: message
       })
     }
     return
