@@ -1839,6 +1839,8 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   } else if (payload.language === 'java') {
     const javaSourcePaths = getJavaSourcePaths(files)
     const packageName = getJavaPackageName(source)
+    const environment = getExecutionEnvironment(files)
+    const hasEnvironment = Object.keys(environment).length > 0
     const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
       filePath !== entrypoint &&
       !isSecretEnvFile(filePath)
@@ -1847,12 +1849,16 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     const canUsePredefinedJava =
       fileName.toLowerCase() === 'main.java' &&
       javaSourcePaths.length === 1 &&
-      !packageName
+      !packageName &&
+      !hasEnvironment &&
+      payload.args.length === 0
     const mainClass = getJavaMainClass(source, entrypoint)
     const multiFile =
       !canUsePredefinedJava ||
       Boolean(packageName) ||
-      (entrypoint.includes('/') && hasAdditionalProjectFiles)
+      (entrypoint.includes('/') && hasAdditionalProjectFiles) ||
+      hasEnvironment ||
+      payload.args.length > 0
 
     if (multiFile) {
       const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
@@ -1870,14 +1876,18 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
         files,
         entrypoint,
         mainClass,
-        true
+        true,
+        environment,
+        payload.args
       )
     } else {
       const additionalFiles = buildJavaAdditionalFiles(
         files,
         entrypoint,
         mainClass,
-        false
+        false,
+        environment,
+        payload.args
       )
 
       if (additionalFiles) {
@@ -1892,6 +1902,13 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     if (additionalFiles) {
       options.additional_files = additionalFiles
     }
+  }
+
+  if (
+    payload.args.length > 0 &&
+    languageId !== JUDGE0_MULTI_FILE_LANGUAGE_ID
+  ) {
+    options.command_line_arguments = formatExecutionArguments(payload.args)
   }
 
   const submitted = await submitJudge0(
