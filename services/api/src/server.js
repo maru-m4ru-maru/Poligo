@@ -2613,7 +2613,8 @@ const server = http.createServer(async (request, response) => {
       const status =
         message.includes('reserved filenames') ||
         message.includes('execution files are too large') ||
-        message.includes('invalid data URL file content')
+        message.includes('invalid data URL file content') ||
+        message.startsWith('Java ')
           ? 400
           : 502
 
