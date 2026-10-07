@@ -2105,6 +2105,7 @@ async function handleExecution(request, response) {
 
   try {
     payload.files = normalizeExecutionFiles(payload.files)
+    payload.args = normalizeExecutionArguments(payload.args)
   } catch (error) {
     send(response, 400, {
       error: error instanceof Error ? error.message : 'invalid execution files'
@@ -2690,6 +2691,8 @@ const server = http.createServer(async (request, response) => {
         message.includes('reserved filenames') ||
         message.includes('execution files are too large') ||
         message.includes('invalid data URL file content') ||
+        message.includes('execution arguments') ||
+        message.includes('too many execution arguments') ||
         message.startsWith('Java ')
           ? 400
           : 502
