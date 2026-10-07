@@ -210,49 +210,61 @@ function getWorkspaceId() {
   return workspaceId
 }
 
-function TemplateIcon({ type }) {
-  const icons = {
-    HTML: '/icons/html5.svg',
-    Python: '/icons/python.svg',
-    'C++': '/icons/cplusplus.svg',
-    C: '/icons/c.svg',
-    Java: '/icons/java.svg',
-    Go: '/icons/go.svg',
-    Rust: '/icons/rust.svg',
-    PHP: '/icons/php.svg',
-    Ruby: '/icons/ruby.svg',
-    Kotlin: '/icons/kotlin.svg',
-    'C#': '/icons/csharp.svg'
-  }
+const TEMPLATE_ICONS = {
+  HTML: '/icons/html5.svg',
+  Python: '/icons/python.svg',
+  'C++': '/icons/cplusplus.svg',
+  C: '/icons/c.svg',
+  Java: '/icons/java.svg',
+  Go: '/icons/go.svg',
+  Rust: '/icons/rust.svg',
+  PHP: '/icons/php.svg',
+  Ruby: '/icons/ruby.svg',
+  Kotlin: '/icons/kotlin.svg',
+  'C#': '/icons/csharp.svg'
+}
 
+function TemplateIcon({ type }) {
   if (type === 'Web') {
     return (
-      <svg
-        width="28"
-        height="28"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <div className="stack-web-template-icons" aria-hidden="true">
+        <img src="/icons/html5.svg" alt="" />
+        <img src="/icons/css.svg" alt="" />
+        <img src="/icons/javascript.svg" alt="" />
+      </div>
+    )
+  }
+
+  const src = TEMPLATE_ICONS[type]
+
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className="stack-template-brand-icon"
         aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="9" />
-        <path d="M3 12h18" />
-        <path d="M12 3c2.5 2.5 3.7 5.5 3.7 9S14.5 18.5 12 21" />
-        <path d="M12 3c-2.5 2.5-3.7 5.5-3.7 9S9.5 18.5 12 21" />
-      </svg>
+      />
     )
   }
 
   return (
-    <img
-      src={icons[type] || '/icons/html5.svg'}
-      alt=""
-      className="stack-template-brand-icon"
+    <svg
+      width="28"
+      height="28"
+      viewBox="0 0 24 24"
+      fill="none"
       aria-hidden="true"
-    />
+    >
+      <rect x="4" y="4" width="16" height="16" rx="3" fill="#52647A" />
+      <path
+        d="m9 9 2.2 2.2L9 13.5M13 15h2"
+        stroke="#EAF0F7"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 export default function Dashboard({ session }) {
