@@ -1545,10 +1545,12 @@ function IDE({ projectId }) {
       ? directory + '/' + nextName
       : nextName
 
-    if (
-      nextPath !== renamingFile &&
-      Object.prototype.hasOwnProperty.call(files, nextPath)
-    ) {
+    if (nextPath === renamingFile) {
+      cancelRenameFile()
+      return
+    }
+
+    if (Object.prototype.hasOwnProperty.call(files, nextPath)) {
       cancelRenameFile()
       return
     }
@@ -3419,7 +3421,9 @@ function IDE({ projectId }) {
                   className="bottom-collapse"
                   onClick={() => setBottomOpen(value => !value)}
                 >
-                  {bottomOpen ? '⌄' : '⌃'}
+                  <span className="bottom-collapse-icon">
+                    {bottomOpen ? '⌄' : '⌃'}
+                  </span>
                 </button>
               </div>
 
