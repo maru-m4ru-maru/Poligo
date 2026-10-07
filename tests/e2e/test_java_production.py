@@ -13,12 +13,9 @@ BASE_URL = os.getenv(
 
 def set_editor_value(page, source):
     editor = page.locator(
-        ".monaco-editor:visible"
+        ".monaco-editor:visible textarea.inputarea"
     ).last
-    expect(editor).to_be_visible(timeout=30_000)
-    editor.click()
-    page.keyboard.press("Control+A")
-    page.keyboard.insert_text(source)
+    editor.fill(source, force=True)
 
 
 def create_file(page, path, source):
