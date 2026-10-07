@@ -330,16 +330,17 @@ export default function Dashboard({ session }) {
       )
 
       for (const project of apiプロジェクト) {
-        if (!merged.has(project.id)) {
-          merged.set(project.id, {
-            id: project.id,
-            name: project.name,
-            createdAt: project.createdAt,
-            updatedAt: project.updatedAt,
-            fileCount: 0,
-            storageBytes: 0
-          })
-        }
+        const existing = merged.get(project.id)
+
+        merged.set(project.id, {
+          ...(existing || {}),
+          id: project.id,
+          name: project.name,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+          fileCount: Number(project.fileCount ?? existing?.fileCount ?? 0),
+          storageBytes: Number(project.storageBytes ?? existing?.storageBytes ?? 0)
+        })
       }
 
       const mergedプロジェクト = [...merged.values()]
