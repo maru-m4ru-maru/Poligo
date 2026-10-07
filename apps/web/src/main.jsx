@@ -2893,6 +2893,24 @@ function IDE({ projectId }) {
                     </section>
                   )}
 
+                  {debugOutput.stderr.includes('EOFError: EOF when reading a line') && (
+                    <div className="debug-input-hint">
+                      <strong>標準入力が必要です</strong>
+                      <span>
+                        このプログラムは input() を使用しています。実行前にターミナルの「stdin&gt;」から入力してから、もう一度実行してください。
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBottomTab('terminal')
+                          setBottomOpen(true)
+                        }}
+                      >
+                        ターミナルで入力する
+                      </button>
+                    </div>
+                  )}
+
                   {debugOutput.stdout && (
                     <section className="debug-block">
                       <div className="debug-block-title">stdout</div>
