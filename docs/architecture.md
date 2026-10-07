@@ -38,9 +38,9 @@ Web
 
 The browser never talks directly to Turso or the runner.
 
-Java execution uses the Judge0 Java environment. Single-file projects without runtime options use the predefined Java compiler. Projects that require multiple Java source files, Java packages, nested project files, \`.env\` variables, or command-line arguments use Judge0's multi-file program profile with generated UTF-8 compile and run scripts.
+Java execution uses the Judge0 Java environment. Single-file projects without runtime options use the predefined Java compiler. Projects that require multiple Java source files, Java packages, nested project files, `.env` variables, or command-line arguments use Judge0's multi-file program profile with generated UTF-8 compile and run scripts.
 
-Server-side execution exposes a bounded command-line argument list to supported runtimes. The API validates arguments before dispatching them to Judge0 or the external runner. Java \`.env\` variables are exported only inside the disposable execution environment and secret environment files are never added as project archive files.
+Server-side execution exposes a bounded command-line argument list to supported runtimes. The API validates arguments before dispatching them to Judge0 or the external runner. Java `.env` variables are exported only inside the disposable execution environment and secret environment files are never added as project archive files.
 
 ## Planned language layers
 
