@@ -6386,6 +6386,51 @@ body {
   font-weight: 650;
 }
 
+.debug-args {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-left: 4px;
+  color: #687486;
+}
+
+.debug-args span {
+  flex: 0 0 auto;
+  color: #7f8b9b;
+}
+
+.debug-args input {
+  width: min(280px, 26vw);
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid #252e3a;
+  border-radius: 4px;
+  outline: none;
+  background: #090c11;
+  color: #d9ddd5;
+  font: inherit;
+  font-size: 9px;
+}
+
+.debug-args input::placeholder {
+  color: #4f5a69;
+}
+
+.debug-args input:focus {
+  border-color: #3d536f;
+  box-shadow: 0 0 0 1px #253447;
+}
+
+.debug-env-indicator {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border: 1px solid #3b3427;
+  border-radius: 3px;
+  color: #a99f88;
+  font-size: 8px;
+}
+
 .debug-status {
   color: #8e99a8;
 }
