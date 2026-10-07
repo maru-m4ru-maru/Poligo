@@ -519,7 +519,7 @@ function buildJavaAdditionalFiles(
         'fi',
         'mkdir -p out',
         '/usr/local/openjdk13/bin/javac -encoding UTF-8 -d out "${sources[@]}"'
-      ].join('\\n') + '\\n')
+      ].join('\n') + '\n')
     })
 
     archiveFiles.push({
@@ -530,7 +530,7 @@ function buildJavaAdditionalFiles(
         'set -e',
         'exec /usr/local/openjdk13/bin/java -Dfile.encoding=UTF-8 -cp out ' +
           shellQuote(mainClass)
-      ].join('\\n') + '\\n')
+      ].join('\n') + '\n')
     })
   }
 
