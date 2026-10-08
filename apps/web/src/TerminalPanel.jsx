@@ -22,6 +22,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
   const socketRef = useRef(null)
   const sessionIdRef = useRef('')
   const connectingRef = useRef(false)
+  const activeRef = useRef(active)
 
   useImperativeHandle(ref, () => ({
     write(value) {
@@ -36,6 +37,10 @@ const TerminalPanel = forwardRef(function TerminalPanel(
       terminalRef.current?.clear()
     }
   }), [])
+
+  useEffect(() => {
+    activeRef.current = active
+  }, [active])
 
   useEffect(() => {
     const terminal = new XTerm({
@@ -79,7 +84,13 @@ const TerminalPanel = forwardRef(function TerminalPanel(
     fitRef.current = fit
 
     const resizeObserver = new ResizeObserver(() => {
-      if (!containerRef.current?.offsetWidth) {
+      if (!activeRef.current) {
+        return
+      }
+
+      const container = containerRef.current
+
+      if (!container?.offsetWidth || !container?.offsetHeight) {
         return
       }
 
@@ -131,6 +142,12 @@ const TerminalPanel = forwardRef(function TerminalPanel(
     }
 
     window.requestAnimationFrame(() => {
+      const container = containerRef.current
+
+      if (!container?.offsetWidth || !container?.offsetHeight) {
+        return
+      }
+
       try {
         fit.fit()
       } catch {}
