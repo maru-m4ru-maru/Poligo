@@ -892,7 +892,7 @@ function getKotlinMainClass(source, entrypoint) {
   let className = jvmName?.[1] || baseName + 'Kt'
 
   const objectMain = source.match(
-    /\bobject[ \t]+([A-Za-z_][A-Za-z0-9_]*)[\s\S]{0,2000}?\b@JvmStatic[ \t]+fun[ \t]+main[ \t]*\(/
+    /\bobject[ \t]+([A-Za-z_][A-Za-z0-9_]*)[\s\S]{0,2000}?\b@JvmStatic\s+fun[ \t]+main[ \t]*\(/
   )
 
   if (objectMain) {
