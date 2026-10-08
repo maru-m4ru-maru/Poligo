@@ -910,7 +910,8 @@ function buildKotlinAdditionalFiles(
   files,
   entrypoint,
   mainClass,
-  environment
+  environment,
+  args
 ) {
   const archiveFiles = []
 
@@ -964,6 +965,7 @@ function buildKotlinAdditionalFiles(
   const environmentLines = Object.entries(environment || {}).map(
     ([key, value]) => 'export ' + key + '=' + shellQuote(value)
   )
+  const argumentLine = formatExecutionArguments(args || [])
 
   archiveFiles.push({
     path: 'run',
@@ -979,7 +981,7 @@ function buildKotlinAdditionalFiles(
       'fi',
       'exec "$KOTLIN" -classpath /tmp/poligo-kotlin ' +
         shellQuote(mainClass) +
-        ' "$@"'
+        (argumentLine ? ' ' + argumentLine : '')
     ].join('\n') + '\n')
   })
 
@@ -2527,7 +2529,8 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
         files,
         entrypoint,
         mainClass,
-        environment
+        environment,
+        payload.args
       )
     }
   } else if (payload.language === 'php') {
@@ -2542,7 +2545,8 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
 
   if (
     payload.args.length > 0 &&
-    !(payload.language === 'java' && languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID)
+    !(payload.language === 'java' && languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID) &&
+    !(payload.language === 'kotlin' && languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
