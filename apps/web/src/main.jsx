@@ -932,11 +932,21 @@ async function request(path, options = {}) {
         ...(fetchOptions.headers || {})
       }
     })
+
+    const body = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      throw new Error(
+        body?.error ||
+        response.status + ' ' + response.statusText
+      )
+    }
+
+    return body
   } finally {
     window.clearTimeout(timer)
   }
 
-  const body = await response.json().catch(() => null)
 
   if (!response.ok) {
     throw new Error(
