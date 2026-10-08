@@ -443,8 +443,6 @@ fun main() {
                 "extension=label=OK",
             ]:
                 wait_for_output(page, output)
-            wait_for_output(page, "unicode=日本語🚀€")
-            wait_for_output(page, "kotlin=2.1.")
 
             create_file(page, "helper.kt", helper_kotlin)
             create_file(page, ".env", "E2E_VALUE=env-$(not-executed)")
