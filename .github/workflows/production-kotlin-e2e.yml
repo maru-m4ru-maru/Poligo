@@ -49,7 +49,6 @@ jobs:
       - name: Run production Kotlin E2E
         env:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
-          KOTLIN_E2E_FIX_SHA: d4885f029686523d9a65fe50bf0e0a65cb189a9b
         run: python tests/e2e/test_kotlin_production.py
 
       - name: Upload failure screenshot
