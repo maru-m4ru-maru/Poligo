@@ -1,4 +1,5 @@
 name: Poligo Production TypeScript E2E
+run-name: Poligo TypeScript production E2E
 
 on:
   push:
