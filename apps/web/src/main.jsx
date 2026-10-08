@@ -942,49 +942,57 @@ function parseExecutionArguments(value) {
   let current = ''
   let quote = ''
   let escaped = false
+  let tokenStarted = false
 
   for (const character of value) {
     if (escaped) {
       current += character
       escaped = false
+      tokenStarted = true
       continue
     }
 
     if (character === '\\' && quote !== "'") {
       escaped = true
+      tokenStarted = true
       continue
     }
 
     if (quote) {
       if (character === quote) {
         quote = ''
+        tokenStarted = true
       } else {
         current += character
+        tokenStarted = true
       }
       continue
     }
 
     if (character === '"' || character === "'") {
       quote = character
+      tokenStarted = true
       continue
     }
 
     if (/\s/.test(character)) {
-      if (current) {
+      if (tokenStarted) {
         args.push(current)
         current = ''
+        tokenStarted = false
       }
       continue
     }
 
     current += character
+    tokenStarted = true
   }
 
   if (escaped || quote) {
     throw new Error('実行引数の引用符が閉じられていません。')
   }
 
-  if (current) {
+  if (tokenStarted) {
     args.push(current)
   }
 
