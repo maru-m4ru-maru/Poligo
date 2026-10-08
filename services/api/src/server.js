@@ -3368,6 +3368,7 @@ const server = http.createServer(async (request, response) => {
     send(response, 200, {
       status: 'ok',
       service: 'api',
+      commit: process.env.RENDER_GIT_COMMIT || '',
       runner: Boolean(runnerUrl),
       executor: runnerUrl ? 'runner' : 'judge0',
       database: getDatabaseStatus()
