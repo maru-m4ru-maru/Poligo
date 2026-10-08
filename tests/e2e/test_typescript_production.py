@@ -292,7 +292,7 @@ def main():
             )
 
             expect(page.locator(".debug-panel")).to_contain_text(
-                'ARGS=["", "日本語 2"]',
+                'ARGS=["","日本語 2"]',
                 timeout=10_000
             )
             print("PASS: TypeScript arguments")
