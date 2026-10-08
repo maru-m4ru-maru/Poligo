@@ -16,8 +16,6 @@ BASE_URL = os.getenv(
 
 
 def set_editor_value(page, source):
-    editor = page.locator(".monaco-editor:visible").last
-    editor.click(force=True)
     page.wait_for_function(
         "() => typeof window.__POLIGO_E2E_SET_EDITOR__ === 'function'",
         timeout=10_000
@@ -279,33 +277,44 @@ def main():
             print("PASS: single-file TypeScript")
 
             print("STEP: multi-file setup", flush=True)
+            print("STEP: create helper.ts", flush=True)
             create_file(
                 page,
                 "lib/helper.ts",
                 'export function greet(name: string): string {\n    return name + " multi-file OK"\n}'
             )
+            print("STEP: helper.ts created", flush=True)
+            print("STEP: create data.txt", flush=True)
             create_file(
                 page,
                 "data.txt",
                 "resource-日本語-🚀"
             )
+            print("STEP: data.txt created", flush=True)
+            print("STEP: create .env", flush=True)
             create_file(
                 page,
                 ".env",
                 "POLIGO_TS_E2E=environment-日本語🚀"
             )
+            print("STEP: .env created", flush=True)
+            print("STEP: open main.ts", flush=True)
             open_file(page, "main.ts")
+            print("STEP: set multi-file main.ts", flush=True)
             set_editor_value(
                 page,
                 'declare const process: any\ndeclare const require: any\nimport { greet } from "./lib/helper"\n\nconst fs: any = require("fs")\nconst data = fs.readFileSync("data.txt", "utf8").trim()\nconst stdin = fs.readFileSync(0, "utf8").trim()\nconst args = process.argv.slice(2)\n\nconsole.log(greet("TypeScript"))\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)\nconsole.log("ARGS=" + JSON.stringify(args))\nconsole.log("DATA=" + data)\nconsole.log("STDIN=" + stdin)\nfs.writeFileSync("created.txt", "filesystem-ok")\nconsole.log("FILE=" + fs.readFileSync("created.txt", "utf8"))'
             )
+            print("STEP: set args", flush=True)
             page.get_by_label("実行引数").fill(
                 '"" "日本語 2"'
             )
+            print("STEP: set stdin", flush=True)
             enter_stdin(
                 page,
                 "stdin-日本語🚀"
             )
+            print("STEP: run multi-file", flush=True)
             run_and_expect_success(
                 page,
                 "TypeScript multi-file OK"
