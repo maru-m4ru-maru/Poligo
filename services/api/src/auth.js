@@ -35,6 +35,11 @@ export const auth = betterAuth({
   baseURL: betterAuthUrl || undefined,
   secret: betterAuthSecret,
   trustedOrigins,
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: ['cf-connecting-ip']
+    }
+  },
   database: kyselyAdapter(database, {
     type: 'sqlite'
   }),
