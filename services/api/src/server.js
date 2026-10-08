@@ -3608,6 +3608,415 @@ async function handleAdminUsersRequest(request, response) {
   })
 }
 
+function terminalRunnerWebSocketUrl(id) {
+  return runnerUrl.replace(/^http/, 'ws').replace(/\/$/, '') +
+    '/v1/terminals/' +
+    encodeURIComponent(id)
+}
+
+function terminalHeaders() {
+  const headers = {}
+
+  if (runnerToken) {
+    headers.Authorization = 'Bearer ' + runnerToken
+  }
+
+  return headers
+}
+
+function registerTerminal(id, userId, projectId, files) {
+  terminalOwners.set(id, {
+    userId,
+    projectId,
+    baseFiles: { ...files },
+    createdAt: Date.now(),
+    expiresAt: Date.now() + TERMINAL_RECORD_TTL_MS
+  })
+}
+
+function getTerminalOwner(id) {
+  const owner = terminalOwners.get(id)
+
+  if (!owner) {
+    return null
+  }
+
+  if (owner.expiresAt <= Date.now()) {
+    terminalOwners.delete(id)
+    return null
+  }
+
+  return owner
+}
+
+function retainTerminal(id) {
+  const owner = terminalOwners.get(id)
+
+  if (owner) {
+    owner.expiresAt = Date.now() + TERMINAL_RECORD_TTL_MS
+  }
+}
+
+async function runnerTerminalRequest(path, options = {}) {
+  if (!runnerUrl) {
+    throw new Error('terminal service is not configured')
+  }
+
+  const response = await fetch(
+    runnerUrl.replace(/\/$/, '') + path,
+    {
+      ...options,
+      headers: {
+        ...terminalHeaders(),
+        ...(options.headers || {})
+      }
+    }
+  )
+
+  let body = {}
+
+  try {
+    body = await response.json()
+  } catch {}
+
+  if (!response.ok) {
+    throw new Error(
+      body?.error ||
+      'terminal runner request failed'
+    )
+  }
+
+  return body
+}
+
+async function syncTerminal(id) {
+  const owner = getTerminalOwner(id)
+
+  if (!owner) {
+    return null
+  }
+
+  const project = await getProjectById(
+    owner.projectId,
+    owner.userId
+  )
+
+  if (!project) {
+    terminalOwners.delete(id)
+    return null
+  }
+
+  const result = await runnerTerminalRequest(
+    '/v1/terminals/' +
+      encodeURIComponent(id) +
+      '/files'
+  )
+
+  const runnerFiles = normalizeExecutionFiles(
+    result.files || {}
+  )
+  const baseFiles = owner.baseFiles || {}
+  const mergedFiles = { ...project.files }
+
+  for (const path of Object.keys(baseFiles)) {
+    const base = baseFiles[path]
+    const current = project.files[path]
+    const next = runnerFiles[path]
+
+    if (next === undefined) {
+      if (current === base) {
+        delete mergedFiles[path]
+      }
+      continue
+    }
+
+    if (next !== base) {
+      mergedFiles[path] = next
+    }
+  }
+
+  for (const [path, content] of Object.entries(runnerFiles)) {
+    if (!Object.prototype.hasOwnProperty.call(baseFiles, path)) {
+      mergedFiles[path] = content
+    }
+  }
+
+  const payload = normalizeProjectPayload({
+    name: project.name,
+    files: mergedFiles
+  })
+
+  await updateProject(
+    owner.projectId,
+    owner.userId,
+    payload
+  )
+
+  owner.baseFiles = runnerFiles
+  retainTerminal(id)
+
+  return {
+    projectId: owner.projectId,
+    files: runnerFiles
+  }
+}
+
+async function handleTerminalCreate(request, response) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  if (!runnerUrl) {
+    send(response, 503, {
+      error: 'terminal service is not configured'
+    })
+    return
+  }
+
+  const payload = await readJson(request)
+
+  if (
+    typeof payload.projectId !== 'string' ||
+    !payload.projectId
+  ) {
+    send(response, 400, {
+      error: 'project id is required'
+    })
+    return
+  }
+
+  const project = await getProjectById(
+    payload.projectId,
+    session.user.id
+  )
+
+  if (!project) {
+    send(response, 404, {
+      error: 'project not found'
+    })
+    return
+  }
+
+  const id = randomUUID()
+
+  try {
+    const result = await runnerTerminalRequest(
+      '/v1/terminals',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          id,
+          files: project.files
+        })
+      }
+    )
+
+    registerTerminal(
+      id,
+      session.user.id,
+      project.id,
+      project.files
+    )
+
+    send(response, 202, {
+      id,
+      status: result.status || 'ready'
+    })
+  } catch (error) {
+    send(response, 502, {
+      error: error instanceof Error
+        ? error.message
+        : 'terminal service failed'
+    })
+  }
+}
+
+async function handleTerminalSync(request, response, id) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  const owner = getTerminalOwner(id)
+
+  if (!owner) {
+    send(response, 404, {
+      error: 'terminal session not found'
+    })
+    return
+  }
+
+  if (owner.userId !== session.user.id) {
+    send(response, 403, {
+      error: 'terminal access denied'
+    })
+    return
+  }
+
+  try {
+    const result = await syncTerminal(id)
+
+    send(response, 200, {
+      ok: true,
+      ...(result || {})
+    })
+  } catch (error) {
+    send(response, 502, {
+      error: error instanceof Error
+        ? error.message
+        : 'terminal sync failed'
+    })
+  }
+}
+
+async function handleTerminalClose(request, response, id) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  const owner = getTerminalOwner(id)
+
+  if (!owner) {
+    send(response, 404, {
+      error: 'terminal session not found'
+    })
+    return
+  }
+
+  if (owner.userId !== session.user.id) {
+    send(response, 403, {
+      error: 'terminal access denied'
+    })
+    return
+  }
+
+  try {
+    await syncTerminal(id)
+  } finally {
+    terminalOwners.delete(id)
+
+    if (runnerUrl) {
+      try {
+        await runnerTerminalRequest(
+          '/v1/terminals/' + encodeURIComponent(id),
+          {
+            method: 'DELETE'
+          }
+        )
+      } catch {}
+    }
+  }
+
+  send(response, 200, {
+    ok: true
+  })
+}
+
+const terminalWebSocketServer = new WebSocketServer({
+  noServer: true
+})
+
+async function handleTerminalUpgrade(request, socket, head, id) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    socket.destroy()
+    return
+  }
+
+  const owner = getTerminalOwner(id)
+
+  if (!owner || owner.userId !== session.user.id || !runnerUrl) {
+    socket.destroy()
+    return
+  }
+
+  terminalWebSocketServer.handleUpgrade(
+    request,
+    socket,
+    head,
+    client => {
+      const runnerSocket = new WebSocket(
+        terminalRunnerWebSocketUrl(id),
+        {
+          headers: terminalHeaders()
+        }
+      )
+
+      const queue = []
+
+      client.on('message', data => {
+        retainTerminal(id)
+
+        if (runnerSocket.readyState === WebSocket.OPEN) {
+          runnerSocket.send(data)
+        } else {
+          queue.push(data)
+        }
+      })
+
+      runnerSocket.on('open', () => {
+        for (const data of queue.splice(0)) {
+          runnerSocket.send(data)
+        }
+      })
+
+      runnerSocket.on('message', data => {
+        retainTerminal(id)
+
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(data)
+        }
+      })
+
+      runnerSocket.on('error', error => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(
+            JSON.stringify({
+              type: 'error',
+              message: error instanceof Error
+                ? error.message
+                : 'terminal connection failed'
+            })
+          )
+          client.close()
+        }
+      })
+
+      runnerSocket.on('close', () => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.close()
+        }
+      })
+
+      client.on('close', () => {
+        if (runnerSocket.readyState === WebSocket.OPEN) {
+          runnerSocket.close()
+        }
+
+        void syncTerminal(id).catch(() => {})
+      })
+    }
+  )
+}
+
 async function handleAiAssist(request, response) {
   const session = await getSession(request)
 
