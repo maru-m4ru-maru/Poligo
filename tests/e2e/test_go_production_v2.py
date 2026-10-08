@@ -91,7 +91,9 @@ def run_and_wait(page, expected_status):
             return status
 
         if attempt == 2:
-            return status
+            raise AssertionError(
+                "Go execution failed: " + panel_text
+            )
 
         page.wait_for_timeout(2_000)
 
