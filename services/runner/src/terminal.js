@@ -116,6 +116,11 @@ async function writeWorkspace(files) {
   }
 
   let totalBytes = 0
+
+  await fs.mkdir(workRoot, {
+    recursive: true
+  })
+
   const workspace = await fs.mkdtemp(
     path.join(workRoot, 'terminal-')
   )
