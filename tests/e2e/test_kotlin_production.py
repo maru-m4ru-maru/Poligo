@@ -282,6 +282,12 @@ fun main() {
     println("nested-kotlin-ok")
 }"""
 
+    packaged_kotlin = """package e2e.packaged
+
+fun main() {
+    println("packaged-kotlin-ok")
+}"""
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
@@ -433,6 +439,12 @@ fun main() {
             page.get_by_label("実行引数").fill("")
             run_and_wait(page, "成功")
             wait_for_output(page, "nested-kotlin-ok")
+
+            create_file(page, "cmd/packaged/Packaged.kt", packaged_kotlin)
+            select_file(page, "cmd/packaged/Packaged.kt")
+            page.get_by_label("実行引数").fill("")
+            run_and_wait(page, "成功")
+            wait_for_output(page, "packaged-kotlin-ok")
 
             create_file(page, "cmd/injection/Injection.kt", injection_kotlin)
             select_file(page, ".env")
