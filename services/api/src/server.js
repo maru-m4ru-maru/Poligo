@@ -2678,7 +2678,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   if (
     payload.args.length > 0 &&
     !(payload.language === 'java' && findMultiFileJudge0LanguageId(languages) === languageId) &&
-    !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId)
+    !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId) &&
     !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
