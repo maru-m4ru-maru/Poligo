@@ -285,7 +285,7 @@ async function createTerminal({
       Image: terminalImage,
       Cmd: ['bash', '--login'],
       WorkingDir: '/workspace',
-      User: 'node',
+      User: '0:0',
       Env: [
         'HOME=/workspace',
         'TERM=xterm-256color',
