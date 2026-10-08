@@ -541,7 +541,22 @@ function getGoPackageName(source) {
 }
 
 function extractGoImports(source) {
-  const lines = source.replace(/\r\n?/g, '\n').split('\n')
+  let normalized = source.replace(/\r\n?/g, '\n')
+
+  while (true) {
+    const next = normalized.replace(
+      /^(?:[ \t]*(?:\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)[ \t\r\n]*)+/,
+      ''
+    )
+
+    if (next === normalized) {
+      break
+    }
+
+    normalized = next
+  }
+
+  const lines = normalized.split('\n')
   const imports = []
   let packageSeen = false
   let index = 0
@@ -654,6 +669,22 @@ function prepareGoSource(files, entrypoint, environment, args) {
   const needsRuntime =
     Object.keys(environment || {}).length > 0 ||
     (args || []).length > 0
+  const allSource = sourcePaths
+    .map(sourcePath => files[sourcePath])
+    .join('\n')
+
+  const makeInternalName = prefix => {
+    let value = prefix
+
+    while (allSource.includes(value)) {
+      value += '_'
+    }
+
+    return value
+  }
+
+  const userMainName = makeInternalName('_poligoUserMain')
+  const argsName = makeInternalName('_poligoArgs')
   const importEntries = []
   const parts = []
   let mainCount = 0
@@ -697,7 +728,7 @@ function prepareGoSource(files, entrypoint, environment, args) {
     if (sourcePath === entrypoint) {
       body = body.replace(
         /func[ \t]+main[ \t]*\(/,
-        'func _poligoUserMain('
+        'func ' + userMainName + '('
       )
     }
 
@@ -709,23 +740,6 @@ function prepareGoSource(files, entrypoint, environment, args) {
   if (mainCount !== 1 || mainFile !== entrypoint) {
     throw new Error('Go project must contain exactly one main function in the entrypoint file')
   }
-
-  const allSource = sourcePaths
-    .map(sourcePath => files[sourcePath])
-    .join('\n')
-
-  const makeInternalName = prefix => {
-    let value = prefix
-
-    while (allSource.includes(value)) {
-      value += '_'
-    }
-
-    return value
-  }
-
-  const userMainName = makeInternalName('_poligoUserMain')
-  const argsName = makeInternalName('_poligoArgs')
 
   if (needsRuntime && runtimeImport?.localName === '.') {
     throw new Error('Go source cannot use a dot import of os when execution arguments or environment are configured')
