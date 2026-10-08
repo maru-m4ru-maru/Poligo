@@ -87,6 +87,13 @@ def enter_stdin(page, value):
             }
         )
 
+    expect(
+        terminal
+    ).to_contain_text(
+        "stdin> " + value,
+        timeout=5_000
+    )
+
     terminal.dispatch_event(
         "keydown",
         {
