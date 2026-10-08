@@ -222,8 +222,16 @@ func main() {
 
     helper_go = """package main
 
+import "fmt"
+
+var helperInitialized = false
+
+func init() {
+    helperInitialized = true
+}
+
 func helperValue() string {
-    return "helper-ok"
+    return fmt.Sprintf("%s", "helper-ok")
 }"""
 
     nested_main_go = """package main
@@ -425,6 +433,7 @@ func main() {
                 "file=filesystem-ok",
                 "helper=helper-ok",
                 "goroutine=goroutine-ok",
+                "init=true",
                 "json={",
                 "args=alpha|hello world|single quote|$(not-executed)"
             ]:
