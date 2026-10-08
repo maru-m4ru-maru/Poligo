@@ -289,8 +289,13 @@ fun main() {
     }
 }"""
 
-    nested_kotlin = """fun main() {
-    println("nested-kotlin-ok")
+    nested_kotlin = """package e2e.objectmain
+
+object ObjectEntry {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        println("object-main-kotlin-ok")
+    }
 }"""
 
     packaged_kotlin = """package e2e.packaged
@@ -455,7 +460,7 @@ fun main() {
             select_file(page, "cmd/app/Nested.kt")
             page.get_by_label("実行引数").fill("")
             run_and_wait(page, "成功")
-            wait_for_output(page, "nested-kotlin-ok")
+            wait_for_output(page, "object-main-kotlin-ok")
 
             create_file(page, "cmd/packaged/Packaged.kt", packaged_kotlin)
             select_file(page, "cmd/packaged/Packaged.kt")
