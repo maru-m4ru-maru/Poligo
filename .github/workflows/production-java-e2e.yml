@@ -32,18 +32,37 @@ jobs:
         env:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
           POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+          EXPECTED_API_COMMIT: ${{ github.sha }}
         run: |
           set -e
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 90); do
             if curl -fsS "$POLIGO_API_URL/api/health" >/tmp/poligo-api-health.json &&
               curl -fsS "$POLIGO_WEB_URL/" >/tmp/poligo-web-health.html; then
               cat /tmp/poligo-api-health.json
-              echo "Production services are reachable."
-              exit 0
+
+              if python - "$EXPECTED_API_COMMIT" <<'PY'
+          import json
+          import sys
+
+          with open("/tmp/poligo-api-health.json", encoding="utf-8") as handle:
+              data = json.load(handle)
+
+          expected = sys.argv[1]
+          actual = data.get("commit", "")
+
+          raise SystemExit(0 if actual == expected else 1)
+          PY
+              then
+                echo "Production services for $EXPECTED_API_COMMIT are reachable."
+                exit 0
+              fi
             fi
+
             sleep 2
           done
-          echo "Production services did not become reachable in time." >&2
+
+          echo "Production services did not become reachable at the expected commit." >&2
+          cat /tmp/poligo-api-health.json 2>/dev/null || true
           exit 1
 
       - name: Run production Java E2E
