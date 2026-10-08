@@ -82,11 +82,11 @@ def run_and_wait(page, expected_status):
 
         panel_text = panel.inner_text()
 
-        if (
-            "Execution Error 502" not in panel_text and
-            "Execution Error502" not in panel_text and
-            "Execution Error 503" not in panel_text and
-            "Execution Error503" not in panel_text
+        normalized_panel = panel_text.lower()
+
+        if not (
+            "execution error" in normalized_panel and
+            ("502" in normalized_panel or "503" in normalized_panel)
         ):
             return status
 
