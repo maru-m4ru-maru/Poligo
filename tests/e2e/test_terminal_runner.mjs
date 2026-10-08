@@ -136,7 +136,7 @@ const initialFiles = await request(
 
 if (
   initialFiles.status !== 200 ||
-  initialFiles.body?.files?.['main.js'] !== 'console.log("terminal e2e")\\n'
+  initialFiles.body?.files?.['main.js'] !== 'console.log("terminal e2e")\n'
 ) {
   throw new Error(
     'terminal workspace was not initialized: ' +
