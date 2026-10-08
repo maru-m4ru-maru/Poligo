@@ -2459,6 +2459,13 @@ function findJudge0LanguageId(languages, language) {
     )
   }
 
+  if (language === 'typescript') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('typescript (')]
+    )
+  }
+
   return null
 }
 
