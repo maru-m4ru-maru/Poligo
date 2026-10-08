@@ -4518,6 +4518,33 @@ const server = http.createServer(async (request, response) => {
   })
 })
 
+server.on('upgrade', (request, socket, head) => {
+  const url = new URL(
+    request.url || '/',
+    'http://localhost'
+  )
+  const prefix = '/api/terminal/sessions/'
+
+  if (!url.pathname.startsWith(prefix)) {
+    socket.destroy()
+    return
+  }
+
+  const id = url.pathname.slice(prefix.length)
+
+  if (!id || id.includes('/')) {
+    socket.destroy()
+    return
+  }
+
+  void handleTerminalUpgrade(
+    request,
+    socket,
+    head,
+    id
+  )
+})
+
 server.listen(port, '0.0.0.0', () => {
   console.log('Poligo API listening on ' + port)
 
