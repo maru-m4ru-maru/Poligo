@@ -2901,9 +2901,14 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     options.cpu_time_limit = 5
     options.wall_time_limit = 15
 
-    if (!/^[^/]+\.tsx?$/i.test(entrypoint)) {
+    const entrypointLower = entrypoint.toLowerCase()
+
+    if (
+      !/^[^/]+\.tsx?$/i.test(entrypoint) ||
+      entrypointLower.endsWith('.d.ts')
+    ) {
       send(response, 400, {
-        error: 'TypeScript entrypoint must be a top-level .ts or .tsx file'
+        error: 'TypeScript entrypoint must be a top-level .ts or .tsx implementation file'
       })
       return
     }
