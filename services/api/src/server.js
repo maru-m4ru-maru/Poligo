@@ -540,6 +540,107 @@ function getGoPackageName(source) {
   return match?.[1] || ''
 }
 
+function extractGoImports(source) {
+  const lines = source.replace(/\r\n?/g, '\n').split('\n')
+  const imports = []
+  let packageSeen = false
+  let index = 0
+
+  while (index < lines.length) {
+    const trimmed = lines[index].trim()
+
+    if (!packageSeen) {
+      if (!trimmed || trimmed.startsWith('//')) {
+        index += 1
+        continue
+      }
+
+      if (!/^package[ \t]+main[ \t]*$/.test(trimmed)) {
+        throw new Error('Go source must declare package main')
+      }
+
+      packageSeen = true
+      index += 1
+      continue
+    }
+
+    if (!trimmed || trimmed.startsWith('//')) {
+      index += 1
+      continue
+    }
+
+    if (/^import[ \t]*\(/.test(trimmed)) {
+      index += 1
+
+      while (index < lines.length) {
+        const importLine = lines[index].trim()
+
+        if (importLine === ')') {
+          index += 1
+          break
+        }
+
+        if (importLine && !importLine.startsWith('//')) {
+          imports.push(importLine)
+        }
+
+        index += 1
+      }
+
+      if (index > lines.length) {
+        throw new Error('Go import block is not closed')
+      }
+
+      continue
+    }
+
+    if (/^import[ \t]+/.test(trimmed)) {
+      imports.push(trimmed.replace(/^import[ \t]+/, ''))
+      index += 1
+      continue
+    }
+
+    break
+  }
+
+  return {
+    imports: [...new Set(imports)],
+    body: lines.slice(index).join('\n').trim()
+  }
+}
+
+function parseGoImportSpec(spec) {
+  const match = spec.match(
+    /^(?:(\.|_|[A-Za-z_][A-Za-z0-9_]*)[ \t]+)?("(?:\\.|[^"])*"|`[^`]*`)[ \t]*$/
+  )
+
+  if (!match) {
+    throw new Error('Go import declaration is invalid')
+  }
+
+  let importPath
+
+  if (match[2].startsWith('`')) {
+    importPath = match[2].slice(1, -1)
+  } else {
+    try {
+      importPath = JSON.parse(match[2])
+    } catch {
+      throw new Error('Go import path is invalid')
+    }
+  }
+
+  const alias = match[1] || ''
+  const defaultName = importPath.split('/').pop() || ''
+  const localName = alias || defaultName
+
+  return {
+    spec,
+    path: importPath,
+    localName
+  }
+}
+
 function prepareGoSource(files, entrypoint, environment, args) {
   const entryDirectory = getGoSourceDirectory(entrypoint)
   const sourcePaths = getGoSourcePaths(files).filter(filePath =>
@@ -550,9 +651,14 @@ function prepareGoSource(files, entrypoint, environment, args) {
     throw new Error('Go entrypoint source is required')
   }
 
+  const needsRuntime =
+    Object.keys(environment || {}).length > 0 ||
+    (args || []).length > 0
+  const importSpecs = []
+  const parts = []
   let mainCount = 0
   let mainFile = ''
-  const parts = []
+  let runtimeImport = null
 
   for (const sourcePath of sourcePaths) {
     const source = files[sourcePath]
@@ -562,8 +668,21 @@ function prepareGoSource(files, entrypoint, environment, args) {
       throw new Error('Go source files in the entrypoint directory must use package main')
     }
 
-    if (source.includes('_poligoRuntime')) {
-      throw new Error('Go source uses reserved generated identifier _poligoRuntime')
+    const extracted = extractGoImports(source)
+    const parsedImports = extracted.imports.map(parseGoImportSpec)
+
+    for (const item of parsedImports) {
+      importSpecs.push(item.spec)
+
+      if (item.path === 'os' && item.localName !== '_') {
+        if (runtimeImport && runtimeImport.localName !== item.localName) {
+          runtimeImport = runtimeImport.localName === 'os'
+            ? runtimeImport
+            : item
+        } else if (!runtimeImport) {
+          runtimeImport = item
+        }
+      }
     }
 
     const mainMatches = source.match(/func[ \t]+main[ \t]*\(/g) || []
@@ -573,10 +692,7 @@ function prepareGoSource(files, entrypoint, environment, args) {
       mainFile = sourcePath
     }
 
-    let body = source.replace(
-      /^[ \t]*package[ \t]+main[ \t]*$/m,
-      ''
-    )
+    let body = extracted.body
 
     if (sourcePath === entrypoint) {
       body = body.replace(
@@ -594,37 +710,74 @@ function prepareGoSource(files, entrypoint, environment, args) {
     throw new Error('Go project must contain exactly one main function in the entrypoint file')
   }
 
+  if (needsRuntime) {
+    if (runtimeImport?.localName === '_') {
+      throw new Error('Go source cannot use a blank import of os when execution arguments or environment are configured')
+    }
+
+    if (!runtimeImport) {
+      importSpecs.push('_poligoRuntime "os"')
+      runtimeImport = {
+        localName: '_poligoRuntime'
+      }
+    }
+  }
+
+  const uniqueImports = [...new Set(importSpecs)]
   const argumentLines = (args || []).map(value =>
     '    ' + JSON.stringify(value) + ','
   )
+  const runtimeName = runtimeImport?.localName || ''
   const environmentLines = Object.entries(environment || {}).map(
     ([key, value]) =>
-      '    _poligoRuntime.Setenv(' +
+      '  ' + runtimeName + '.Setenv(' +
       JSON.stringify(key) +
       ', ' +
       JSON.stringify(value) +
       ')'
   )
-
-  const wrapper = [
+  const wrapperLines = [
     'package main',
-    '',
-    'import _poligoRuntime "os"',
-    '',
-    'func main() {',
-    '  _poligoArgs := []string{',
-    ...argumentLines,
-    '  }',
-    '  _poligoRuntime.Args = append([]string{_poligoRuntime.Args[0]}, _poligoArgs...)',
+    ''
+  ]
+
+  if (uniqueImports.length) {
+    wrapperLines.push(
+      'import (',
+      ...uniqueImports.map(spec => '  ' + spec),
+      ')',
+      ''
+    )
+  }
+
+  wrapperLines.push('func main() {')
+
+  if (needsRuntime) {
+    wrapperLines.push(
+      '  ' + runtimeName + '.Args = append([]string{' +
+        runtimeName + '.Args[0]}, _poligoArgs...)'
+    )
+  }
+
+  if (needsRuntime) {
+    wrapperLines.splice(
+      wrapperLines.length - 1,
+      0,
+      '  _poligoArgs := []string{',
+      ...argumentLines,
+      '  }'
+    )
+  }
+
+  wrapperLines.push(
     ...environmentLines,
     '  _poligoUserMain()',
     '}',
     ''
-  ].join('\n')
+  )
 
-  return wrapper + parts.join('\n\n') + '\n'
+  return wrapperLines.join('\n') + parts.join('\n\n') + '\n'
 }
-
 function buildGoAdditionalFiles(files, entrypoint) {
   const archiveFiles = []
 
