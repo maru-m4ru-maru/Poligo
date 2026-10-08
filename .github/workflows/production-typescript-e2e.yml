@@ -86,7 +86,7 @@ jobs:
           const required = [
             "'(globalThis as any).process = (globalThis as any).process || {};',",
             "'(globalThis as any).process.env = (globalThis as any).process.env || {};',",
-            "      ')';"
+            "    ');',"
           ]
           for (const value of required) {
             if (!source.includes(value)) {
