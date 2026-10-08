@@ -310,7 +310,7 @@ def main():
             print("PASS: single-file TypeScript")
 
             print("STEP: arguments setup", flush=True)
-            open_file(page, "main.ts")
+            open_file(page, "main.tsx")
             set_editor_value(
                 page,
                 'declare const process: any\n\ninterface Greeting {\n    message: string\n}\n\nconst greeting: Greeting = {\n    message: "TypeScript arguments OK 日本語🚀"\n}\n\nconsole.log(greeting.message)\nconsole.log("ARGS=" + JSON.stringify(process.argv.slice(2)))'
