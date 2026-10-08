@@ -27,31 +27,35 @@ def set_editor_value(page, source):
     page.wait_for_timeout(500)
 
 
-def create_file(page, path, source):
-    print("STEP: create file button", flush=True)
-    page.get_by_role(
-        "button",
-        name="新しいファイル",
-        exact=True
-    ).click()
+def upload_file(page, path, source):
+    import tempfile
 
-    print("STEP: create file name input", flush=True)
-    name_input = page.get_by_label("新しいファイル名")
-    expect(name_input).to_be_visible(timeout=5_000)
-    name_input.fill(path)
+    suffix = "." + path.rsplit(".", 1)[-1]
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        suffix=suffix,
+        delete=False
+    ) as handle:
+        handle.write(source)
+        temp_path = handle.name
 
-    print("STEP: create file commit", flush=True)
-    name_input.press("Enter")
+    try:
+        print("STEP: upload file input", flush=True)
+        page.locator('input[type="file"]').set_input_files(temp_path)
 
-    file_button = page.locator(
-        '.explorer-file[title="' + path + '"] .explorer-file-main'
-    )
-    expect(file_button).to_be_visible(timeout=10_000)
+        file_button = page.locator(
+            '.explorer-file[title="' + path + '"] .explorer-file-main'
+        )
+        expect(file_button).to_be_visible(timeout=10_000)
 
-    print("STEP: create file editor", flush=True)
-    file_button.click()
-    page.wait_for_timeout(750)
-    set_editor_value(page, source)
+        print("STEP: upload file editor", flush=True)
+        file_button.click()
+        page.wait_for_timeout(750)
+        set_editor_value(page, source)
+    finally:
+        import os
+        os.unlink(temp_path)
 
 
 def open_file(page, name):
@@ -310,7 +314,7 @@ def main():
             print("PASS: TypeScript arguments")
 
             print("STEP: TSX setup", flush=True)
-            create_file(
+            upload_file(
                 page,
                 "main.tsx",
                 'const value: number = 42\nconsole.log("TSX OK", value)'
