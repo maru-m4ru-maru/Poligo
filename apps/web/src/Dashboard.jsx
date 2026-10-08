@@ -36,6 +36,16 @@ const TEMPLATES = [
     }
   },
   {
+    id: 'typescript',
+    title: 'TypeScript',
+    subtitle: 'TypeScript',
+    type: 'TypeScript',
+    categories: ['人気', 'バックエンド', 'ネイティブ言語'],
+    files: {
+      'main.ts': 'interface User {\n    name: string\n    age: number\n}\n\nconst user: User = {\n    name: "TypeScript",\n    age: 5\n}\n\nconsole.log("Hello from Poligo", user.name, user.age)'
+    }
+  },
+  {
     id: 'java',
     title: 'Java',
     subtitle: 'Java',
@@ -221,7 +231,8 @@ const TEMPLATE_ICONS = {
   PHP: '/icons/php.svg',
   Ruby: '/icons/ruby.svg',
   Kotlin: '/icons/kotlin.svg',
-  'C#': '/icons/csharp.svg'
+  'C#': '/icons/csharp.svg',
+  TypeScript: '/icons/typescript.svg'
 }
 
 function TemplateIcon({ type }) {
