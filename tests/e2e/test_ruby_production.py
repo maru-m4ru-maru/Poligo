@@ -436,7 +436,7 @@ end"""
 
             set_editor_value(page, single_args_ruby)
             page.get_by_label("実行引数").fill(
-                'alpha "hello world" 'single quote' "$(not-executed)"'
+                "alpha \"hello world\" 'single quote' \"$(not-executed)\""
             )
             run_and_wait(page, "成功")
             wait_for_output(
