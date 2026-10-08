@@ -222,11 +222,15 @@ def main():
                 create_project(page, language)
                 set_editor_value(page, language["source"])
 
-                page.get_by_role(
+                debug_button = page.get_by_role(
                     "button",
                     name="Debug",
                     exact=True
-                ).click()
+                )
+                expect(
+                    debug_button
+                ).to_be_visible(timeout=10_000)
+                debug_button.click()
 
                 expect(
                     page.get_by_label("実行引数")
