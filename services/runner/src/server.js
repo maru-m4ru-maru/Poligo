@@ -186,6 +186,40 @@ const server = http.createServer(async (request, response) => {
   })
 })
 
+server.on('upgrade', (request, socket, head) => {
+  if (!authorized(request)) {
+    socket.destroy()
+    return
+  }
+
+  const url = new URL(
+    request.url || '/',
+    'http://localhost'
+  )
+  const prefix = '/v1/terminals/'
+
+  if (!url.pathname.startsWith(prefix)) {
+    socket.destroy()
+    return
+  }
+
+  const id = url.pathname.slice(prefix.length)
+
+  if (!id || id.includes('/')) {
+    socket.destroy()
+    return
+  }
+
+  terminalWebSocketServer.handleUpgrade(
+    request,
+    socket,
+    head,
+    client => {
+      void attachTerminalSocket(id, client)
+    }
+  )
+})
+
 server.listen(port, '0.0.0.0', () => {
   console.log('Poligo runner listening on ' + port)
 })
