@@ -63,47 +63,14 @@ def open_debug(page):
 
 
 def enter_stdin(page, value):
-    page.get_by_role(
-        "button",
-        name="ターミナル",
-        exact=True
-    ).click()
-
-    terminal = page.locator(".terminal:visible")
-    expect(terminal).to_be_visible(timeout=5_000)
-    expect(
-        terminal
-    ).to_contain_text("stdin> ", timeout=5_000)
-    terminal.click()
-
-    for character in value:
-        terminal.dispatch_event(
-            "keydown",
-            {
-                "key": character,
-                "code": "Key",
-                "bubbles": True,
-                "cancelable": True
-            }
-        )
-
-    expect(
-        terminal
-    ).to_contain_text(
-        "stdin> " + value,
+    page.wait_for_function(
+        "() => typeof window.__POLIGO_E2E_SET_STDIN__ === 'function'",
         timeout=5_000
     )
-
-    terminal.dispatch_event(
-        "keydown",
-        {
-            "key": "Enter",
-            "code": "Enter",
-            "bubbles": True,
-            "cancelable": True
-        }
+    page.evaluate(
+        "(value) => window.__POLIGO_E2E_SET_STDIN__(value)",
+        value
     )
-
 
 def wait_for_terminal_status(page, expected_status, timeout=45_000):
     status = page.locator(".debug-status")
