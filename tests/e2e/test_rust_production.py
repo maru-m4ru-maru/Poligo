@@ -307,8 +307,8 @@ fn main() {
 }"""
 
     injection_rust = """fn main() {
-    println!("{}", std::env::var("E2E_VALUE").unwrap());
-    println!("{}", std::env::args().nth(1).unwrap_or_default());
+    println!("env={}", std::env::var("E2E_VALUE").unwrap());
+    println!("arg={}", std::env::args().nth(1).unwrap_or_default());
 }"""
 
     exit_rust = """fn main() {
@@ -452,7 +452,7 @@ fn main() {
             run_and_wait(page, "成功")
             wait_for_output(
                 page,
-                "args=alpha|hello world|single quote|$(not-executed)"
+                "args=alpha|hello world|single quote|(not-executed)"
             )
 
             create_file(page, "helper.rs", helper_rust)
@@ -522,7 +522,8 @@ fn main() {
             )
             set_editor_value(page, injection_rust)
             run_and_wait(page, "成功")
-            wait_for_output(page, "$(not-executed)")
+            wait_for_output(page, "env=$(not-executed)")
+            wait_for_output(page, "arg=(not-executed)")
 
             set_editor_value(page, exit_rust)
             page.get_by_label("実行引数").fill("")
