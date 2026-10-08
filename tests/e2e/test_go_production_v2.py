@@ -1,4 +1,5 @@
 # Production E2E runs against the currently live Render deployment.
+# Comprehensive multi-file, nested-entrypoint, resource, environment, argument, error, and timeout coverage.
 import os
 import uuid
 
