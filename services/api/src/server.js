@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
+import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
 import { auth, initializeAuthDatabase } from './auth.js'
 import { getDatabase, getDatabaseStatus, initializeDatabase } from './turso.js'
@@ -2448,6 +2449,38 @@ function findLatestJudge0LanguageId(languages, patterns) {
   return candidates[0].id
 }
 
+function transpileTypeScriptTsx(source, entrypoint, environment) {
+  const preparedSource = prepareTypeScriptSource(source, environment)
+  const result = ts.transpileModule(preparedSource, {
+    fileName: entrypoint,
+    compilerOptions: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.CommonJS,
+      jsx: ts.JsxEmit.React,
+      esModuleInterop: true,
+      sourceMap: false
+    },
+    reportDiagnostics: true
+  })
+
+  const diagnostics = result.diagnostics || []
+
+  if (diagnostics.length) {
+    const message = ts.formatDiagnosticsWithColorAndContext(
+      diagnostics,
+      {
+        getCanonicalFileName: fileName => fileName,
+        getCurrentDirectory: () => process.cwd(),
+        getNewLine: () => '\n'
+      }
+    ).replace(/\x1b\[[0-9;]*m/g, '')
+
+    throw new Error(message.trim())
+  }
+
+  return result.outputText
+}
+
 function findJudge0LanguageId(languages, language) {
   if (language === 'python') {
     return findLatestJudge0LanguageId(
@@ -2522,6 +2555,13 @@ function findJudge0LanguageId(languages, language) {
     return findLatestJudge0LanguageId(
       languages,
       [name => name.startsWith('c (gcc ')]
+    )
+  }
+
+  if (language === 'javascript') {
+    return findLatestJudge0LanguageId(
+      languages,
+      [name => name.startsWith('javascript (')]
     )
   }
 
@@ -2930,7 +2970,36 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     preparedSource = prepareTypeScriptSource(source, environment)
 
     if (entrypointLower.endsWith('.tsx')) {
-      options.compiler_options = '--jsx react'
+      const javascriptLanguageId = findJudge0LanguageId(
+        languages,
+        'javascript'
+      )
+
+      if (!javascriptLanguageId) {
+        send(response, 503, {
+          error: 'JavaScript execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      try {
+        preparedSource = transpileTypeScriptTsx(
+          source,
+          entrypoint,
+          environment
+        )
+      } catch (error) {
+        executionOwners.delete(id)
+        send(response, 400, {
+          error: error instanceof Error
+            ? error.message
+            : 'TSX compilation failed'
+        })
+        return
+      }
+
+      languageId = javascriptLanguageId
+      options.compiler_options = ''
     }
 
     const additionalFiles = buildTypeScriptAdditionalFiles(
