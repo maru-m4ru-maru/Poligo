@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: production-kotlin-e2e
+  cancel-in-progress: true
+
 jobs:
   production-kotlin-e2e:
     if: >
