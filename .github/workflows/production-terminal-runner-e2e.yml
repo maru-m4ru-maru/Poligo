@@ -1,0 +1,56 @@
+name: Poligo Terminal Runner E2E
+run-name: Poligo Terminal runner E2E
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: poligo-terminal-runner-e2e
+  cancel-in-progress: true
+
+jobs:
+  terminal-runner-e2e:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[terminal-e2e-run]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install test dependency
+        run: npm install --no-save ws@8.22.0
+
+      - name: Build runner
+        run: docker build -t poligo-runner-terminal-e2e -f services/runner/Dockerfile .
+
+      - name: Start runner
+        run: |
+          docker run             -d             --name poligo-runner-terminal-e2e             -p 10001:10001             -e RUNNER_TOKEN=terminal-e2e-token             -e TERMINAL_NETWORK_MODE=none             -e TERMINAL_IDLE_TTL_MS=60000             -v /var/run/docker.sock:/var/run/docker.sock             poligo-runner-terminal-e2e
+
+      - name: Wait for runner
+        run: |
+          set -e
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 5 http://127.0.0.1:10001/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs poligo-runner-terminal-e2e
+          exit 1
+
+      - name: Run terminal E2E
+        run: node tests/e2e/test_terminal_runner.mjs
+
+      - name: Runner logs
+        if: always()
+        run: docker logs poligo-runner-terminal-e2e
+
+      - name: Stop runner
+        if: always()
+        run: docker rm -f poligo-runner-terminal-e2e
