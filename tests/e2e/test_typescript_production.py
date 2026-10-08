@@ -360,7 +360,6 @@ def main():
                 "while (true) {}"
             )
             page.get_by_label("実行引数").fill("")
-            page.get_by_label("標準入力").fill("")
             run_and_expect_timeout(page)
             print("PASS: timeout")
 
