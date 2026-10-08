@@ -70,6 +70,21 @@ const executionCleanupTimer = setInterval(() => {
       executionOwners.delete(id)
     }
   }
+
+  for (const [id, record] of terminalOwners) {
+    if (record.expiresAt <= now) {
+      terminalOwners.delete(id)
+
+      if (runnerUrl) {
+        void runnerTerminalRequest(
+          '/v1/terminals/' + encodeURIComponent(id),
+          {
+            method: 'DELETE'
+          }
+        ).catch(() => {})
+      }
+    }
+  }
 }, 60_000)
 
 executionCleanupTimer.unref?.()
