@@ -2771,6 +2771,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       )
     }
   } else if (payload.language === 'rust') {
+    options.compiler_options = '--edition=2024'
     const environment = getExecutionEnvironment(files)
     const needsPreparedRust =
       Object.keys(environment).length > 0 ||
