@@ -214,6 +214,27 @@ def rename_file(page, name, new_name):
     ).to_be_visible(timeout=10_000)
 
 
+def create_file(page, name, source=""):
+    page.get_by_role(
+        "button",
+        name="新しいファイル"
+    ).click()
+
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_be_visible(timeout=5_000)
+
+    dialog.locator("input").first.fill(name)
+    dialog.get_by_role(
+        "button",
+        name=re.compile(r"^(保存|作成)$")
+    ).click()
+
+    open_file(page, name)
+
+    if source:
+        set_editor_value(page, source)
+
+
 def delete_project(page):
     page.goto(
         BASE_URL + "/#/dashboard",
@@ -303,59 +324,102 @@ def main():
                 page,
                 'interface Greeting {\n    message: string\n}\n\nconst greeting: Greeting = {\n    message: "TypeScript basic OK 日本語🚀"\n}\n\nconsole.log(greeting.message)'
             )
+            page.get_by_label("実行引数").fill("")
             run_and_expect_success(
                 page,
                 "TypeScript basic OK 日本語🚀"
             )
             print("PASS: single-file TypeScript")
 
-            print("STEP: arguments setup", flush=True)
+            print("STEP: environment resource stdin arguments setup", flush=True)
+            create_file(
+                page,
+                ".env",
+                "POLIGO_TS_E2E=environment-日本語🚀"
+            )
+            create_file(
+                page,
+                "data.txt",
+                "resource-日本語-🚀"
+            )
             open_file(page, "main.ts")
             set_editor_value(
                 page,
-                'declare const process: any\n\ninterface Greeting {\n    message: string\n}\n\nconst greeting: Greeting = {\n    message: "TypeScript arguments OK 日本語🚀"\n}\n\nconsole.log(greeting.message)\nconsole.log("ARGS=" + JSON.stringify(process.argv.slice(2)))'
+                'declare const process: any\ndeclare const require: any\n\nconst fs: any = require("fs")\nconst stdin = fs.readFileSync(0, "utf8").trim()\nconst args = process.argv.slice(2)\n\nconsole.log("TypeScript resources OK")\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)\nconsole.log("ARGS=" + JSON.stringify(args))\nconsole.log("STDIN=" + stdin)\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())'
             )
             page.get_by_label("実行引数").fill(
-                '"" "日本語 2"'
+                '"first" "日本語 2"'
             )
-            print("STEP: run TypeScript arguments", flush=True)
+            enter_stdin(
+                page,
+                "stdin-日本語🚀"
+            )
+            print("STEP: run environment resource stdin arguments", flush=True)
             run_and_expect_success(
                 page,
-                "TypeScript arguments OK 日本語🚀"
+                "TypeScript resources OK"
             )
 
-            expect(page.locator(".debug-panel")).to_contain_text(
-                'ARGS=["","日本語 2"]',
+            panel = page.locator(".debug-panel")
+            expect(panel).to_contain_text(
+                "ENV=environment-日本語🚀",
                 timeout=10_000
             )
-            print("PASS: TypeScript arguments")
+            expect(panel).to_contain_text(
+                'ARGS=["first","日本語 2"]',
+                timeout=10_000
+            )
+            expect(panel).to_contain_text(
+                "STDIN=stdin-日本語🚀",
+                timeout=10_000
+            )
+            expect(panel).to_contain_text(
+                "DATA=resource-日本語-🚀",
+                timeout=10_000
+            )
+            print("PASS: environment, arguments, stdin, resources")
 
-            print("STEP: TSX setup", flush=True)
-            page.get_by_role(
-                "button",
-                name="新しいファイル"
-            ).click()
-
-            dialog = page.get_by_role("dialog")
-            expect(dialog).to_be_visible(timeout=5_000)
-
-            dialog.locator("input").first.fill("main.tsx")
-            dialog.get_by_role(
-                "button",
-                name=re.compile(r"^(保存|作成)$")
-            ).click()
-
-            open_file(page, "main.tsx")
-            set_editor_value(
+            print("STEP: TSX JSX setup", flush=True)
+            create_file(
                 page,
-                'const value: number = 42\nconsole.log("TSX OK", value)'
+                "main.tsx",
+                '/** @jsx h */\nfunction h(tag: string, props: any, ...children: any[]) {\n    return tag + ":" + props.value + ":" + children.join("")\n}\n\nconst value: number = 42\nconst element = <div value={value}>TSX JSX</div>\nconsole.log(element)'
             )
             page.get_by_label("実行引数").fill("")
             run_and_expect_success(
                 page,
-                "TSX OK 42"
+                "div:42:TSX JSX"
             )
-            print("PASS: TSX execution")
+            print("PASS: TSX JSX execution")
+
+            print("STEP: declaration entrypoint rejection", flush=True)
+            open_file(page, "main.ts")
+            rename_file(page, "main.ts", "main.d.ts")
+            open_file(page, "main.d.ts")
+            page.get_by_label("実行引数").fill("")
+            run_and_expect_failure(
+                page,
+                "TypeScript entrypoint must be a top-level .ts or .tsx implementation file"
+            )
+            rename_file(page, "main.d.ts", "main.ts")
+            print("PASS: declaration entrypoint rejection")
+
+            print("STEP: TypeScript multi-file rejection", flush=True)
+            create_file(
+                page,
+                "helper.ts",
+                'export const helper: number = 1'
+            )
+            open_file(page, "main.ts")
+            set_editor_value(
+                page,
+                'console.log("single-file scope")'
+            )
+            run_and_expect_failure(
+                page,
+                "multi-file TypeScript execution is not supported"
+            )
+            print("PASS: multi-file TypeScript rejection")
 
             print("STEP: compile error setup", flush=True)
             open_file(page, "main.ts")
