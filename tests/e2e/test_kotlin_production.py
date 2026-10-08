@@ -237,9 +237,9 @@ fun main(args: Array<String>) {
 
     injection_kotlin = """import java.io.File
 
-fun main() {
+fun main(args: Array<String>) {
     val env = System.getenv("E2E_VALUE") ?: ""
-    val arg = System.getenv("E2E_ARG") ?: ""
+    val arg = args.joinToString("|")
     println(env)
     println(arg)
     println(File("/tmp/kotlin-e2e-marker").exists())
