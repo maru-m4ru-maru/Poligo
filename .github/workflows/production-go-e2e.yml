@@ -1,0 +1,60 @@
+name: Poligo Production Go E2E
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  production-go-e2e:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[go-e2e-run]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.63.0
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Wait for production services
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+        run: |
+          set -e
+          for attempt in $(seq 1 60); do
+            if curl -fsS "$POLIGO_API_URL/api/health" >/tmp/poligo-api-health.json &&
+              curl -fsS "$POLIGO_WEB_URL/" >/tmp/poligo-web-health.html; then
+              cat /tmp/poligo-api-health.json
+              echo "Production services are reachable."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Production services did not become reachable in time." >&2
+          exit 1
+
+      - name: Run production Go E2E
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+        run: python tests/e2e/test_go_production.py
+
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: poligo-go-production-e2e-failure
+          path: poligo-go-production-e2e-failure.png
+          if-no-files-found: ignore
