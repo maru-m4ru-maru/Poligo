@@ -193,7 +193,7 @@ def main():
 import java.nio.charset.StandardCharsets
 import kotlin.system.exitProcess
 
-fun main() {
+fun main(args: Array<String>) {
     print("no-newline|")
     println("unicode=日本語🚀€")
     System.err.println("stderr-ok")
@@ -228,7 +228,7 @@ fun main() {
     println("resource=" + resource)
     println("file=" + fileContent)
     println("helper=" + helperValue())
-    println("args=" + System.getProperty("poligo.args", ""))
+    println("args=" + args.joinToString("|"))
 }"""
 
     helper_kotlin = """fun helperValue(): String {
@@ -239,7 +239,7 @@ fun main() {
 
 fun main() {
     val env = System.getenv("E2E_VALUE") ?: ""
-    val arg = System.getProperty("poligo.args", "")
+    val arg = System.getenv("E2E_ARG") ?: ""
     println(env)
     println(arg)
     println(File("/tmp/kotlin-e2e-marker").exists())
