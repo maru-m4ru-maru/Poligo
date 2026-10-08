@@ -1,0 +1,91 @@
+name: Poligo TypeScript execution case diagnostics
+run-name: Poligo TypeScript case diagnostics
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  diagnostic:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[typescript-e2e-run]')
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        case:
+          - stdin
+          - args
+          - resource
+          - environment
+          - combined
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.63.0
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Wait for production services
+        run: |
+          set -e
+          for attempt in $(seq 1 300); do
+            if curl -fsS --connect-timeout 5 --max-time 10 "https://poligo-api-g0wc.onrender.com/api/health" >/tmp/poligo-api-health.json &&
+              curl -fsS --connect-timeout 5 --max-time 10 "https://poligo-web-2n2l.onrender.com/" >/tmp/poligo-web-health.html; then
+              cat /tmp/poligo-api-health.json
+
+              if python - <<'PY'
+          import json
+
+          with open("/tmp/poligo-api-health.json", encoding="utf-8") as handle:
+              data = json.load(handle)
+
+          database = data.get("database") or {}
+
+          raise SystemExit(
+              0
+              if data.get("status") == "ok" and
+              data.get("service") == "api" and
+              data.get("executor") == "judge0" and
+              database.get("status") == "online"
+              else 1
+          )
+          PY
+              then
+                echo "Production services are healthy."
+                exit 0
+              fi
+            fi
+
+            sleep 2
+          done
+
+          echo "Production services did not become healthy." >&2
+          cat /tmp/poligo-api-health.json 2>/dev/null || true
+          exit 1
+
+      - name: Run TypeScript diagnostic
+        env:
+          POLIGO_TS_E2E_CASE: ${{ matrix.case }}
+        run: python -u tests/e2e/test_typescript_execution_cases.py
+
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: poligo-typescript-${{ matrix.case }}-failure
+          path: poligo-typescript-${{ matrix.case }}-failure.png
+          if-no-files-found: ignore
