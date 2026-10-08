@@ -231,7 +231,15 @@ def create_file(page, name, source=""):
         set_editor_value(page, source)
 
 
-def run_typescript_case(page, name, source, expected, args="", stdin="", extra_files=None):
+def run_typescript_case(
+    page,
+    name,
+    source,
+    expected,
+    args="",
+    stdin="",
+    extra_files=None
+):
     print("STEP: " + name + " project", flush=True)
     create_typescript_project(page)
     open_debug(page)
@@ -353,7 +361,7 @@ def main():
             run_typescript_case(
                 page,
                 "TypeScript stdin",
-                'declare const require: any\\nconst fs: any = require("fs")\\nconsole.log("STDIN=" + fs.readFileSync(0, "utf8").trim())',
+                'declare const require: any\nconst fs: any = require("fs")\nconsole.log("STDIN=" + fs.readFileSync(0, "utf8").trim())',
                 "STDIN=stdin-日本語🚀",
                 stdin="stdin-日本語🚀"
             )
@@ -361,7 +369,7 @@ def main():
             run_typescript_case(
                 page,
                 "TypeScript arguments",
-                'declare const process: any\\nconsole.log("ARGS=" + JSON.stringify(process.argv.slice(2)))',
+                'declare const process: any\nconsole.log("ARGS=" + JSON.stringify(process.argv.slice(2)))',
                 'ARGS=["first","日本語 2"]',
                 args='"first" "日本語 2"'
             )
@@ -369,7 +377,7 @@ def main():
             run_typescript_case(
                 page,
                 "TypeScript resource",
-                'declare const require: any\\nconst fs: any = require("fs")\\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())',
+                'declare const require: any\nconst fs: any = require("fs")\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())',
                 "DATA=resource-日本語-🚀",
                 extra_files={"data.txt": "resource-日本語-🚀"}
             )
@@ -377,7 +385,7 @@ def main():
             run_typescript_case(
                 page,
                 "TypeScript environment",
-                'declare const process: any\\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)',
+                'declare const process: any\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)',
                 "ENV=environment-日本語🚀",
                 extra_files={".env": "POLIGO_TS_E2E=environment-日本語🚀"}
             )
@@ -385,7 +393,7 @@ def main():
             run_typescript_case(
                 page,
                 "TypeScript combined execution",
-                'declare const process: any\\ndeclare const require: any\\nconst fs: any = require("fs")\\nconst stdin = fs.readFileSync(0, "utf8").trim()\\nconst args = process.argv.slice(2)\\nconsole.log("TypeScript resources OK")\\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)\\nconsole.log("ARGS=" + JSON.stringify(args))\\nconsole.log("STDIN=" + stdin)\\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())',
+                'declare const process: any\ndeclare const require: any\nconst fs: any = require("fs")\nconst stdin = fs.readFileSync(0, "utf8").trim()\nconst args = process.argv.slice(2)\nconsole.log("TypeScript resources OK")\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)\nconsole.log("ARGS=" + JSON.stringify(args))\nconsole.log("STDIN=" + stdin)\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())',
                 "TypeScript resources OK",
                 args='"first" "日本語 2"',
                 stdin="stdin-日本語🚀",
