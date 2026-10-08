@@ -471,6 +471,7 @@ fn main() {
 
             enter_stdin(page, "日本語入力")
 
+            select_file(page, "main.rs")
             open_debug(page)
             page.get_by_label("実行引数").fill(
                 "alpha multi-value"
