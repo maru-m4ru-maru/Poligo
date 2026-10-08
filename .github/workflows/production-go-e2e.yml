@@ -1,5 +1,6 @@
 name: Poligo Production Go E2E
 # Production runtime is validated after the Render deployment completes.
+# Nested Go entrypoints are exercised separately.
 
 on:
   push:
