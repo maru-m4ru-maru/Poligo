@@ -1,4 +1,5 @@
 name: Poligo Production Go E2E
+# Production runtime is validated after the Render deployment completes.
 
 on:
   push:
