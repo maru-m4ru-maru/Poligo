@@ -633,6 +633,12 @@ function buildGoAdditionalFiles(files, entrypoint) {
       continue
     }
 
+    if (path === 'compile' || path === 'run') {
+      throw new Error(
+        'compile and run are reserved filenames for Go multi-file execution'
+      )
+    }
+
     if (path.toLowerCase().endsWith('.go')) {
       continue
     }
