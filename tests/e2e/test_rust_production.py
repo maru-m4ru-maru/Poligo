@@ -255,6 +255,15 @@ fn main() {
     println!("args={}", std::env::args().skip(1).collect::<Vec<_>>().join("|"));
 }"""
 
+    edition_2024_rust = """fn main() {
+    let values = [Some(1), Some(2)];
+    if let Some(first) = values[0]
+        && let Some(second) = values[1]
+    {
+        println!("edition-2024={}", first + second);
+    }
+}"""
+
     main_rust = """mod helper;
 
 use std::fs;
@@ -454,6 +463,20 @@ fn main() {
                 page,
                 "args=alpha|hello world|single quote|(not-executed)"
             )
+
+            page.get_by_label("実行引数").fill(
+                "alpha \"\" omega"
+            )
+            run_and_wait(page, "成功")
+            wait_for_output(
+                page,
+                "args=alpha||omega"
+            )
+
+            set_editor_value(page, edition_2024_rust)
+            page.get_by_label("実行引数").fill("")
+            run_and_wait(page, "成功")
+            wait_for_output(page, "edition-2024=3")
 
             create_file(page, "helper.rs", helper_rust)
             create_file(page, ".env", "E2E_VALUE='env value $(not-executed)'")
