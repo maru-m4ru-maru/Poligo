@@ -32,6 +32,8 @@ const EXECUTION_REQUESTS_PER_WINDOW = 12
 const EXECUTION_RECORD_TTL_MS = 10 * 60 * 1000
 const EXECUTION_CPU_TIME_LIMIT = 2
 const EXECUTION_WALL_TIME_LIMIT = 5
+const JUDGE0_SUBMISSION_TIMEOUT_MS = 15_000
+const JUDGE0_STATUS_TIMEOUT_MS = 10_000
 const EXECUTION_MEMORY_LIMIT = 128_000
 const EXECUTION_STACK_LIMIT = 64_000
 const EXECUTION_MAX_PROCESSES = 60
@@ -2589,7 +2591,8 @@ async function submitJudge0(source, languageId, stdin, options = {}) {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(submission)
+        body: JSON.stringify(submission),
+        signal: AbortSignal.timeout(JUDGE0_SUBMISSION_TIMEOUT_MS)
       }
     )
 
@@ -3030,7 +3033,8 @@ async function handleJudge0ExecutionStatus(response, id) {
     judge0Url + '/submissions/' + encodeURIComponent(id) +
       '?base64_encoded=true&fields=stdout,stderr,compile_output,status_id,status,message,time,wall_time,memory,exit_code,exit_signal',
     {
-      method: 'GET'
+      method: 'GET',
+      signal: AbortSignal.timeout(JUDGE0_STATUS_TIMEOUT_MS)
     }
   )
 
