@@ -1,0 +1,83 @@
+name: Poligo Production Rust E2E
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-rust-e2e
+  cancel-in-progress: true
+
+jobs:
+  production-rust-e2e:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[rust-e2e-run]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.63.0
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Wait for production services
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+          EXPECTED_API_COMMIT: ${{ github.sha }}
+        run: |
+          set -e
+          for attempt in $(seq 1 90); do
+            if curl -fsS "$POLIGO_API_URL/api/health" >/tmp/poligo-api-health.json &&
+              curl -fsS "$POLIGO_WEB_URL/" >/tmp/poligo-web-health.html; then
+              cat /tmp/poligo-api-health.json
+
+              if python - "$EXPECTED_API_COMMIT" <<'PY'
+          import json
+          import sys
+
+          with open("/tmp/poligo-api-health.json", encoding="utf-8") as handle:
+              data = json.load(handle)
+
+          expected = sys.argv[1]
+          actual = data.get("commit", "")
+
+          raise SystemExit(0 if actual == expected else 1)
+          PY
+              then
+                echo "Production services for $EXPECTED_API_COMMIT are reachable."
+                exit 0
+              fi
+            fi
+
+            sleep 2
+          done
+
+          echo "Production services did not become reachable at the expected commit." >&2
+          cat /tmp/poligo-api-health.json 2>/dev/null || true
+          exit 1
+
+      - name: Run production Rust E2E
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+        run: python tests/e2e/test_rust_production.py
+
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: poligo-rust-production-e2e-failure
+          path: poligo-rust-production-e2e-failure.png
+          if-no-files-found: ignore
