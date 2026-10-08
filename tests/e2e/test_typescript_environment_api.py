@@ -57,19 +57,26 @@ def main():
             print("STEP: create TypeScript project", flush=True)
             ts.create_typescript_project(page)
 
-            print("STEP: fetch projects", flush=True)
-            projects_response = page.evaluate(
-                """async (url) => {
-                    const response = await fetch(url, {
-                        credentials: "include"
-                    })
-                    return {
-                        status: response.status,
-                        body: await response.text()
-                    }
-                }""",
-                API_URL + "/api/projects"
+            cookies = context.cookies()
+            cookie_header = "; ".join(
+                cookie["name"] + "=" + cookie["value"]
+                for cookie in cookies
             )
+            api_headers = {
+                "Cookie": cookie_header,
+                "Origin": BASE_URL
+            }
+
+            print("STEP: fetch projects", flush=True)
+            projects_response = page.request.get(
+                API_URL + "/api/projects",
+                headers=api_headers,
+                timeout=15_000
+            )
+            projects_response = {
+                "status": projects_response.status,
+                "body": projects_response.text()
+            }
             if not 200 <= projects_response["status"] < 300:
                 raise AssertionError(
                     "Project list request failed: " +
@@ -105,23 +112,16 @@ def main():
             }
 
             print("STEP: direct execution submit", flush=True)
-            execution_response = page.evaluate(
-                """async ([url, payload]) => {
-                    const response = await fetch(url, {
-                        method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify(payload)
-                    })
-                    return {
-                        status: response.status,
-                        body: await response.text()
-                    }
-                }""",
-                [API_URL + "/api/executions", payload]
+            execution_response = page.request.post(
+                API_URL + "/api/executions",
+                data=payload,
+                headers=api_headers,
+                timeout=60_000
             )
+            execution_response = {
+                "status": execution_response.status,
+                "body": execution_response.text()
+            }
             print(
                 "SUBMIT STATUS: " +
                 str(execution_response["status"]),
@@ -137,18 +137,15 @@ def main():
             execution_id = body["id"]
 
             for attempt in range(60):
-                status_response = page.evaluate(
-                    """async (url) => {
-                        const response = await fetch(url, {
-                            credentials: "include"
-                        })
-                        return {
-                            status: response.status,
-                            body: await response.text()
-                        }
-                    }""",
-                    API_URL + "/api/executions/" + execution_id
+                status_response = page.request.get(
+                    API_URL + "/api/executions/" + execution_id,
+                    headers=api_headers,
+                    timeout=15_000
                 )
+                status_response = {
+                    "status": status_response.status,
+                    "body": status_response.text()
+                }
                 if not 200 <= status_response["status"] < 300:
                     raise AssertionError(
                         "Execution status request failed: " +
