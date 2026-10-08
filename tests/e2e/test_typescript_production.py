@@ -239,7 +239,7 @@ def run_typescript_case(page, name, source, expected, args="", stdin="", extra_f
     for file_name, file_source in (extra_files or {}).items():
         create_file(page, file_name, file_source)
 
-    open_file(page, "main.ts" if "main.ts" in page.locator(".explorer-file").all_inner_text() else "main.ts")
+    open_file(page, "main.ts")
     set_editor_value(page, source)
     page.get_by_label("実行引数").fill(args)
     enter_stdin(page, stdin)
