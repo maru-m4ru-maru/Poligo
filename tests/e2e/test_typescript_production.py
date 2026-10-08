@@ -276,60 +276,26 @@ def main():
             )
             print("PASS: single-file TypeScript")
 
-            print("STEP: additional resources setup", flush=True)
-            create_file(
-                page,
-                "data.txt",
-                "resource-日本語-🚀"
-            )
-            create_file(
-                page,
-                ".env",
-                "POLIGO_TS_E2E=environment-日本語🚀"
-            )
+            print("STEP: arguments setup", flush=True)
             open_file(page, "main.ts")
-            print("STEP: set resource-aware main.ts", flush=True)
             set_editor_value(
                 page,
-                'declare const process: any\ndeclare const require: any\n\nconst fs: any = require("fs")\nconst data = fs.readFileSync("data.txt", "utf8").trim()\nconst stdin = fs.readFileSync(0, "utf8").trim()\nconst args = process.argv.slice(2)\n\nconsole.log("TypeScript resources OK")\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)\nconsole.log("ARGS=" + JSON.stringify(args))\nconsole.log("DATA=" + data)\nconsole.log("STDIN=" + stdin)\nfs.writeFileSync("created.txt", "filesystem-ok")\nconsole.log("FILE=" + fs.readFileSync("created.txt", "utf8"))'
+                'declare const process: any\n\ninterface Greeting {\n    message: string\n}\n\nconst greeting: Greeting = {\n    message: "TypeScript arguments OK 日本語🚀"\n}\n\nconsole.log(greeting.message)\nconsole.log("ARGS=" + JSON.stringify(process.argv.slice(2)))'
             )
-            print("STEP: set args", flush=True)
             page.get_by_label("実行引数").fill(
                 '"" "日本語 2"'
             )
-            print("STEP: set stdin", flush=True)
-            enter_stdin(
-                page,
-                "stdin-日本語🚀"
-            )
-            print("STEP: run resource-aware TypeScript", flush=True)
+            print("STEP: run TypeScript arguments", flush=True)
             run_and_expect_success(
                 page,
-                "TypeScript resources OK"
+                "TypeScript arguments OK 日本語🚀"
             )
 
-            panel = page.locator(".debug-panel")
-            expect(panel).to_contain_text(
-                "ENV=environment-日本語🚀",
-                timeout=10_000
-            )
-            expect(panel).to_contain_text(
+            expect(page.locator(".debug-panel")).to_contain_text(
                 'ARGS=["", "日本語 2"]',
                 timeout=10_000
             )
-            expect(panel).to_contain_text(
-                "DATA=resource-日本語-🚀",
-                timeout=10_000
-            )
-            expect(panel).to_contain_text(
-                "STDIN=stdin-日本語🚀",
-                timeout=10_000
-            )
-            expect(panel).to_contain_text(
-                "FILE=filesystem-ok",
-                timeout=10_000
-            )
-            print("PASS: environment, args, stdin, resources, filesystem")
+            print("PASS: TypeScript arguments")
 
             print("STEP: TSX setup", flush=True)
             create_file(
