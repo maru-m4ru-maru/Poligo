@@ -531,7 +531,7 @@ end"""
             assert "7" in failed_text
 
             set_editor_value(page, syntax_error_ruby)
-            run_failed(page, "SyntaxError")
+            run_failed(page, "syntax error")
 
             delete_file(page, "cmd/injection/Injection.rb")
 
