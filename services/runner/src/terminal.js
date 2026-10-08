@@ -180,6 +180,52 @@ async function createWorkspaceArchive(files) {
   }
 }
 
+async function writeWorkspaceArchive(container, archive) {
+  const exec = await container.exec({
+    Cmd: [
+      'tar',
+      '-xf',
+      '-',
+      '-C',
+      '/workspace'
+    ],
+    AttachStdin: true,
+    AttachStdout: true,
+    AttachStderr: true,
+    Tty: false
+  })
+
+  const stream = await exec.start({
+    hijack: true,
+    stdin: true
+  })
+
+  const exitCodePromise = new Promise((resolve, reject) => {
+    stream.on('end', async () => {
+      try {
+        const result = await exec.inspect()
+        resolve(result.ExitCode ?? 0)
+      } catch (error) {
+        reject(error)
+      }
+    })
+
+    stream.on('error', reject)
+  })
+
+  stream.write(archive)
+  stream.end()
+
+  const exitCode = await exitCodePromise
+
+  if (exitCode !== 0) {
+    throw new Error(
+      'terminal workspace extraction failed with exit code ' +
+      exitCode
+    )
+  }
+}
+
 function normalizeArchivePath(name) {
   let value = String(name || '')
     .replace(/^\.\//, '')
@@ -413,11 +459,9 @@ async function createTerminal({
       h: 32
     })
 
-    await container.putArchive(
-      archive,
-      {
-        path: '/workspace'
-      }
+    await writeWorkspaceArchive(
+      container,
+      archive
     )
 
     session.stream.write('cd /workspace\n')
