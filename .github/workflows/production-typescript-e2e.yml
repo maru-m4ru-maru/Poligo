@@ -13,7 +13,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.head_commit.message, '[typescript-e2e-run]')
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v5
 
@@ -69,7 +69,7 @@ jobs:
       - name: Run production TypeScript E2E
         env:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
-        run: python tests/e2e/test_typescript_production.py
+        run: python -u tests/e2e/test_typescript_production.py
 
       - name: Upload failure screenshot
         if: failure()
