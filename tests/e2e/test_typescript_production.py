@@ -28,22 +28,25 @@ def set_editor_value(page, source):
 
 
 def upload_file(page, path, source):
-    print("STEP: upload file input", flush=True)
-    page.locator('input[type="file"]').set_input_files({
-        "name": path,
-        "mimeType": "text/plain",
-        "buffer": source.encode("utf-8")
-    })
+    import tempfile
 
-    file_button = page.locator(
-        '.explorer-file[title="' + path + '"] .explorer-file-main'
-    )
-    expect(file_button).to_be_visible(timeout=10_000)
+    with tempfile.TemporaryDirectory() as directory:
+        file_path = os.path.join(directory, path)
+        with open(file_path, "w", encoding="utf-8") as handle:
+            handle.write(source)
 
-    print("STEP: upload file editor", flush=True)
-    file_button.click()
-    page.wait_for_timeout(750)
-    set_editor_value(page, source)
+        print("STEP: upload file input", flush=True)
+        page.locator('input[type="file"]').set_input_files(file_path)
+
+        file_button = page.locator(
+            '.explorer-file[title="' + path + '"] .explorer-file-main'
+        )
+        expect(file_button).to_be_visible(timeout=10_000)
+
+        print("STEP: upload file editor", flush=True)
+        file_button.click()
+        page.wait_for_timeout(750)
+        set_editor_value(page, source)
 
 
 def open_file(page, name):
