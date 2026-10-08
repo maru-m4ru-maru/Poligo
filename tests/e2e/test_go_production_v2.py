@@ -452,7 +452,7 @@ func main() {
                 page,
                 "E2E_VALUE=$(touch " + env_marker + ")"
             )
-            select_file(page, "Injection.go")
+            select_file(page, "cmd/injection/Injection.go")
             run_and_wait(page, "成功")
 
             for output in [
