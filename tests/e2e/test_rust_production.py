@@ -256,12 +256,8 @@ fn main() {
 }"""
 
     edition_2024_rust = """fn main() {
-    let values = [Some(1), Some(2)];
-    if let Some(first) = values[0]
-        && let Some(second) = values[1]
-    {
-        println!("edition-2024={}", first + second);
-    }
+    let gen = 1;
+    println!("{}", gen);
 }"""
 
     main_rust = """mod helper;
@@ -475,8 +471,7 @@ fn main() {
 
             set_editor_value(page, edition_2024_rust)
             page.get_by_label("実行引数").fill("")
-            run_and_wait(page, "成功")
-            wait_for_output(page, "edition-2024=3")
+            run_failed(page, "reserved keyword")
 
             create_file(page, "helper.rs", helper_rust)
             create_file(page, ".env", "E2E_VALUE='env value $(not-executed)'")
