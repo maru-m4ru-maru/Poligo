@@ -3183,7 +3183,16 @@ async function handleExecution(request, response) {
   registerExecution(id, session.user.id)
 
   if (!runnerUrl) {
-    await handleJudge0Execution(response, payload, id, session.user.id)
+    try {
+      await handleJudge0Execution(response, payload, id, session.user.id)
+    } catch (error) {
+      executionOwners.delete(id)
+      send(response, 400, {
+        error: error instanceof Error
+          ? error.message
+          : 'execution request is invalid'
+      })
+    }
     return
   }
 
