@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import uuid
 
@@ -224,8 +225,7 @@ def main():
 
                 debug_button = page.get_by_role(
                     "button",
-                    name="Debug",
-                    exact=True
+                    name=re.compile(r"Debug$")
                 )
                 expect(
                     debug_button
