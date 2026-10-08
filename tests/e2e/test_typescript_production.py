@@ -310,7 +310,7 @@ def main():
             print("PASS: single-file TypeScript")
 
             print("STEP: arguments setup", flush=True)
-            open_file(page, "main.tsx")
+            open_file(page, "main.ts")
             set_editor_value(
                 page,
                 'declare const process: any\n\ninterface Greeting {\n    message: string\n}\n\nconst greeting: Greeting = {\n    message: "TypeScript arguments OK 日本語🚀"\n}\n\nconsole.log(greeting.message)\nconsole.log("ARGS=" + JSON.stringify(process.argv.slice(2)))'
@@ -331,13 +331,25 @@ def main():
             print("PASS: TypeScript arguments")
 
             print("STEP: TSX setup", flush=True)
-            rename_file(page, "main.ts", "main.txt")
-            upload_file(
+            page.get_by_role(
+                "button",
+                name="新しいファイル"
+            ).click()
+
+            dialog = page.get_by_role("dialog")
+            expect(dialog).to_be_visible(timeout=5_000)
+
+            dialog.locator("input").first.fill("main.tsx")
+            dialog.get_by_role(
+                "button",
+                name=re.compile(r"^(保存|作成)$")
+            ).click()
+
+            open_file(page, "main.tsx")
+            set_editor_value(
                 page,
-                "main.tsx",
                 'const value: number = 42\nconsole.log("TSX OK", value)'
             )
-            open_file(page, "main.tsx")
             page.get_by_label("実行引数").fill("")
             run_and_expect_success(
                 page,
