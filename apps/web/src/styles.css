@@ -6927,3 +6927,93 @@ body {
     white-space: normal;
   }
 }
+
+
+.account-settings-admin {
+  margin-top: 24px;
+}
+
+.account-settings-admin-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.account-settings-admin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  background: var(--panel-background, rgba(255, 255, 255, 0.02));
+}
+
+.account-settings-admin-user {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.account-settings-admin-user strong,
+.account-settings-admin-user span,
+.account-settings-admin-user small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-settings-admin-user strong {
+  font-size: 14px;
+}
+
+.account-settings-admin-user span {
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+.account-settings-admin-user small {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.account-settings-admin-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.account-settings-admin-control input {
+  width: 92px;
+}
+
+.account-settings-inline-button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  cursor: pointer;
+}
+
+.account-settings-inline-button.secondary {
+  opacity: 0.72;
+}
+
+.account-settings-inline-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (max-width: 760px) {
+  .account-settings-admin-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-settings-admin-control {
+    flex-wrap: wrap;
+  }
+}
