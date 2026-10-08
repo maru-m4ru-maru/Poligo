@@ -866,6 +866,71 @@ function buildGoAdditionalFiles(files, entrypoint) {
   return archive.toString('base64')
 }
 
+function getRubySourcePaths(files) {
+  return Object.keys(files)
+    .filter(filePath => filePath.toLowerCase().endsWith('.rb'))
+    .sort()
+}
+
+function buildRubyAdditionalFiles(
+  files,
+  entrypoint,
+  environment,
+  args
+) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    if (
+      path === 'compile' ||
+      path === 'run'
+    ) {
+      throw new Error(
+        'compile and run are reserved filenames for Ruby multi-file execution'
+      )
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (!archiveFiles.some(file => file.path.toLowerCase().endsWith('.rb'))) {
+    throw new Error('Ruby source files are required')
+  }
+
+  const environmentLines = Object.entries(environment || {}).map(
+    ([key, value]) => 'export ' + key + '=' + shellQuote(value)
+  )
+  const argumentLine = formatExecutionArguments(args || [])
+
+  archiveFiles.push({
+    path: 'run',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      ...environmentLines,
+      'exec ruby ' +
+        shellQuote(entrypoint) +
+        (argumentLine ? ' ' + argumentLine : '')
+    ].join('\n') + '\n')
+  })
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('Ruby execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
 function getKotlinSourcePaths(files) {
   return Object.keys(files)
     .filter(filePath => filePath.toLowerCase().endsWith('.kt'))
@@ -2532,6 +2597,39 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
         options.additional_files = additionalFiles
       }
     }
+  } else if (payload.language === 'ruby') {
+    const rubySourcePaths = getRubySourcePaths(files)
+    const environment = getExecutionEnvironment(files)
+    const hasEnvironment = Object.keys(environment).length > 0
+    const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
+      filePath !== entrypoint &&
+      !isSecretEnvFile(filePath)
+    )
+    const multiFile =
+      rubySourcePaths.length > 1 ||
+      hasEnvironment ||
+      hasAdditionalProjectFiles ||
+      entrypoint.includes('/')
+
+    if (multiFile) {
+      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!multiFileLanguageId) {
+        send(response, 503, {
+          error: 'Ruby multi-file execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      languageId = multiFileLanguageId
+      preparedSource = null
+      options.additional_files = buildRubyAdditionalFiles(
+        files,
+        entrypoint,
+        environment,
+        payload.args
+      )
+    }
   } else if (payload.language === 'kotlin') {
     const sourcePaths = getKotlinSourcePaths(files)
     const environment = getExecutionEnvironment(files)
@@ -2581,6 +2679,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     payload.args.length > 0 &&
     !(payload.language === 'java' && findMultiFileJudge0LanguageId(languages) === languageId) &&
     !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId)
+    !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
