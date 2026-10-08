@@ -947,15 +947,6 @@ async function request(path, options = {}) {
     window.clearTimeout(timer)
   }
 
-
-  if (!response.ok) {
-    throw new Error(
-      body?.error ||
-      response.status + ' ' + response.statusText
-    )
-  }
-
-  return body
 }
 
 function firstFile(files) {
