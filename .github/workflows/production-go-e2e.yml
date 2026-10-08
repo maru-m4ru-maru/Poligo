@@ -55,6 +55,11 @@ jobs:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
         run: python tests/e2e/test_go_production_v2.py
 
+      - name: Run production storage quota E2E
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+        run: python tests/e2e/test_storage_production.py
+
       - name: Upload failure screenshot
         if: failure()
         uses: actions/upload-artifact@v5
