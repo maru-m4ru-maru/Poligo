@@ -36,7 +36,7 @@ jobs:
           EXPECTED_API_COMMIT: ${{ github.sha }}
         run: |
           set -e
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 300); do
             if curl -fsS "$POLIGO_API_URL/api/health" >/tmp/poligo-api-health.json &&
               curl -fsS "$POLIGO_WEB_URL/" >/tmp/poligo-web-health.html; then
               cat /tmp/poligo-api-health.json
