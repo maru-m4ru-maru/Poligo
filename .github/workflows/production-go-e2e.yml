@@ -1,6 +1,7 @@
 name: Poligo Production Go E2E
 # Production runtime is validated after the Render deployment completes.
 # Nested Go entrypoints are exercised separately.
+# The authenticated account page also exposes its effective storage limit.
 # Shell-sensitive arguments are validated as single parsed arguments.
 
 on:
