@@ -44,6 +44,23 @@ def create_file(page, path, source):
     page.wait_for_timeout(800)
 
 
+def delete_file(page, path):
+    row = page.locator(
+        '.explorer-file[title="' + path + '"]'
+    )
+    expect(row).to_be_visible(timeout=5_000)
+    row.get_by_role(
+        "button",
+        name="ファイルを削除"
+    ).click()
+    page.get_by_role(
+        "button",
+        name="Delete",
+        exact=True
+    ).click()
+    expect(row).not_to_be_visible(timeout=5_000)
+
+
 def select_file(page, name):
     file_button = page.locator(
         '.explorer-file[title="' + name + '"] .explorer-file-main'
@@ -410,6 +427,7 @@ fun main() {
 
             set_editor_value(page, compile_error_kotlin)
             run_failed(page, "error")
+            delete_file(page, "cmd/injection/Injection.kt")
 
             create_file(page, "cmd/timeout/Timeout.kt", timeout_kotlin)
             select_file(page, "cmd/timeout/Timeout.kt")
