@@ -953,11 +953,11 @@ function buildKotlinAdditionalFiles(
       '  exit 1',
       'fi',
       'mapfile -d "" sources < <(find . -type f -iname "*.kt" -print0)',
-      'if [ -z "${#sources[@]}" ]; then',
+      'if [ "${#sources[@]}" -eq 0 ]; then',
       '  echo "No Kotlin source files found." >&2',
       '  exit 1',
       'fi',
-      '"$KOTLINC" "${sources[@]}" -include-runtime -d /tmp/poligo-kotlin.jar'
+      '"$KOTLINC" "${sources[@]}" -d /tmp/poligo-kotlin'
     ].join('\n') + '\n')
   })
 
@@ -972,7 +972,12 @@ function buildKotlinAdditionalFiles(
       '#!/bin/bash',
       'set -e',
       ...environmentLines,
-      'exec java -cp /tmp/poligo-kotlin.jar ' +
+      'KOTLIN="$(dirname "$KOTLINC")/kotlin"',
+      'if [ ! -x "$KOTLIN" ]; then',
+      '  echo "Kotlin runtime was not found." >&2',
+      '  exit 1',
+      'fi',
+      'exec "$KOTLIN" -classpath /tmp/poligo-kotlin ' +
         shellQuote(mainClass) +
         ' "$@"'
     ].join('\n') + '\n')
