@@ -2522,6 +2522,32 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (
+    request.url === '/api/admin/users' ||
+    request.url.startsWith('/api/admin/users/')
+  ) {
+    try {
+      await handleAdminUsersRequest(request, response)
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'admin request failed'
+      const status =
+        message === 'authentication required'
+          ? 401
+          : message === 'administrator access required'
+            ? 403
+            : message.includes('storage limit')
+              ? 400
+              : 500
+
+      send(response, status, {
+        error: message
+      })
+    }
+    return
+  }
+
   if (request.method === 'POST' && request.url === '/api/workspace/claim') {
     try {
       await claimWorkspace(request, response)
