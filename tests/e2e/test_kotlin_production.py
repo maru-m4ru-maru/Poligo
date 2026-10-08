@@ -298,10 +298,10 @@ object ObjectEntry {
     }
 }"""
 
-    packaged_kotlin = """package e2e.packaged
+    packaged_kotlin = """@file:JvmName("CustomEntry")
 
 fun main() {
-    println("packaged-kotlin-ok")
+    println("jvmname-kotlin-ok")
 }"""
 
     jvmname_kotlin = """@file:JvmName("CustomEntry")
@@ -466,7 +466,7 @@ fun main() {
             select_file(page, "cmd/packaged/Packaged.kt")
             page.get_by_label("実行引数").fill("")
             run_and_wait(page, "成功")
-            wait_for_output(page, "packaged-kotlin-ok")
+            wait_for_output(page, "jvmname-kotlin-ok")
 
             create_file(page, "cmd/injection/Injection.kt", injection_kotlin)
             select_file(page, ".env")
