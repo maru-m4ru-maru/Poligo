@@ -7,6 +7,10 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: poligo-typescript-production-e2e
+  cancel-in-progress: true
+
 jobs:
   production-typescript-e2e:
     if: >
@@ -33,6 +37,7 @@ jobs:
         env:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
           POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+          EXPECTED_API_COMMIT: ${{ github.sha }}
         run: |
           set -e
           for attempt in $(seq 1 300); do
@@ -40,25 +45,28 @@ jobs:
               curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_WEB_URL/" >/tmp/poligo-web-health.html; then
               cat /tmp/poligo-api-health.json
 
-              if python - <<'PY'
+              if python - "$EXPECTED_API_COMMIT" <<'PY'
           import json
+          import sys
 
           with open("/tmp/poligo-api-health.json", encoding="utf-8") as handle:
               data = json.load(handle)
 
           database = data.get("database") or {}
+          expected = sys.argv[1]
 
           raise SystemExit(
               0
               if data.get("status") == "ok" and
               data.get("service") == "api" and
               data.get("executor") == "judge0" and
-              database.get("status") == "online"
+              database.get("status") == "online" and
+              data.get("commit") == expected
               else 1
           )
           PY
               then
-                echo "Production services are healthy."
+                echo "Production services are healthy at $EXPECTED_API_COMMIT."
                 exit 0
               fi
             fi
@@ -66,7 +74,7 @@ jobs:
             sleep 2
           done
 
-          echo "Production services did not become healthy." >&2
+          echo "Production services did not become healthy at $EXPECTED_API_COMMIT." >&2
           cat /tmp/poligo-api-health.json 2>/dev/null || true
           exit 1
 
