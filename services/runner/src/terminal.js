@@ -403,6 +403,8 @@ async function createTerminal({
       h: 32
     })
 
+    session.stream.write('cd /workspace\n')
+
     return {
       id: terminalId,
       status: 'ready',
