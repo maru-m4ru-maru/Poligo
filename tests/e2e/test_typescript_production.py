@@ -28,17 +28,29 @@ def set_editor_value(page, source):
 
 
 def create_file(page, path, source):
+    print("STEP: create file button", flush=True)
     page.get_by_role(
         "button",
         name="新しいファイル",
         exact=True
     ).click()
 
+    print("STEP: create file name input", flush=True)
     name_input = page.get_by_label("新しいファイル名")
     expect(name_input).to_be_visible(timeout=5_000)
     name_input.fill(path)
+
+    print("STEP: create file commit", flush=True)
     name_input.press("Enter")
-    page.wait_for_timeout(300)
+
+    file_button = page.locator(
+        '.explorer-file[title="' + path + '"] .explorer-file-main'
+    )
+    expect(file_button).to_be_visible(timeout=10_000)
+
+    print("STEP: create file editor", flush=True)
+    file_button.click()
+    page.wait_for_timeout(500)
     set_editor_value(page, source)
 
 
