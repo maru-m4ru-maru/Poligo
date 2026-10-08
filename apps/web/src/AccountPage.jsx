@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { authClient } from './auth-client'
 
-const STORAGE_LIMIT = 15 * 1024 * 1024
+const DEFAULT_STORAGE_LIMIT = 15 * 1024 * 1024
 
 function navigate(path) {
   if (
@@ -57,8 +57,14 @@ function formatBytes(bytes) {
 
 export default function AccountPage({ session }) {
   const [usageBytes, setUsageBytes] = useState(0)
+  const [storageLimitBytes, setStorageLimitBytes] = useState(DEFAULT_STORAGE_LIMIT)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminUsers, setAdminUsers] = useState([])
+  const [adminLoading, setAdminLoading] = useState(false)
+  const [adminError, setAdminError] = useState('')
+  const [adminSavingId, setAdminSavingId] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -67,8 +73,9 @@ export default function AccountPage({ session }) {
   const [passwordBusy, setPasswordBusy] = useState(false)
 
   const usagePercent = useMemo(() => {
-    return Math.min((usageBytes / STORAGE_LIMIT) * 100, 100)
-  }, [usageBytes])
+    if (!storageLimitBytes) return 0
+    return Math.min((usageBytes / storageLimitBytes) * 100, 100)
+  }, [storageLimitBytes, usageBytes])
 
   useEffect(() => {
     async function loadUsage() {
@@ -92,6 +99,13 @@ export default function AccountPage({ session }) {
         }
 
         setUsageBytes(Number(result.stats?.storageBytes || 0))
+        setStorageLimitBytes(
+          Number(
+            result.user?.storageLimitBytes ||
+            DEFAULT_STORAGE_LIMIT
+          )
+        )
+        setIsAdmin(result.user?.isAdmin === true)
       } catch (reason) {
         setError(
           reason instanceof Error
@@ -105,6 +119,142 @@ export default function AccountPage({ session }) {
 
     void loadUsage()
   }, [])
+
+  useEffect(() => {
+    if (!isAdmin) return
+
+    async function loadAdminUsers() {
+      setAdminLoading(true)
+      setAdminError('')
+
+      try {
+        const response = await fetch('/api/admin/users', {
+          credentials: 'include'
+        })
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            result.error ||
+            '管理対象ユーザーを読み込めませんでした'
+          )
+        }
+
+        setAdminUsers(Array.isArray(result.users) ? result.users : [])
+      } catch (reason) {
+        setAdminError(
+          reason instanceof Error
+            ? reason.message
+            : '管理対象ユーザーを読み込めませんでした'
+        )
+      } finally {
+        setAdminLoading(false)
+      }
+    }
+
+    void loadAdminUsers()
+  }, [isAdmin])
+
+  async function updateStorageLimit(userId, megabytes) {
+    if (adminSavingId) return
+
+    const value = Number(megabytes)
+
+    if (!Number.isInteger(value) || value < 1 || value > 10240) {
+      setAdminError('保存容量上限は1〜10240 MiBで指定してください。')
+      return
+    }
+
+    setAdminSavingId(userId)
+    setAdminError('')
+
+    try {
+      const response = await fetch(
+        '/api/admin/users/' +
+          encodeURIComponent(userId) +
+          '/storage-limit',
+        {
+          method: 'PUT',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            limitBytes: value * 1024 * 1024
+          })
+        }
+      )
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+          '保存容量上限を変更できませんでした'
+        )
+      }
+
+      setAdminUsers(current => current.map(user =>
+        user.id === userId
+          ? {
+              ...user,
+              storageLimitBytes: value * 1024 * 1024
+            }
+          : user
+      ))
+    } catch (reason) {
+      setAdminError(
+        reason instanceof Error
+          ? reason.message
+          : '保存容量上限を変更できませんでした'
+      )
+    } finally {
+      setAdminSavingId('')
+    }
+  }
+
+  async function resetStorageLimit(userId) {
+    if (adminSavingId) return
+
+    setAdminSavingId(userId)
+    setAdminError('')
+
+    try {
+      const response = await fetch(
+        '/api/admin/users/' +
+          encodeURIComponent(userId) +
+          '/storage-limit',
+        {
+          method: 'DELETE',
+          credentials: 'include'
+        }
+      )
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+          '保存容量上限を標準値に戻せませんでした'
+        )
+      }
+
+      setAdminUsers(current => current.map(user =>
+        user.id === userId
+          ? {
+              ...user,
+              storageLimitBytes: DEFAULT_STORAGE_LIMIT
+            }
+          : user
+      ))
+    } catch (reason) {
+      setAdminError(
+        reason instanceof Error
+          ? reason.message
+          : '保存容量上限を標準値に戻せませんでした'
+      )
+    } finally {
+      setAdminSavingId('')
+    }
+  }
 
   async function signOut() {
     await authClient.signOut()
@@ -247,7 +397,7 @@ export default function AccountPage({ session }) {
 
               <strong>
                 {formatBytes(usageBytes)}
-                <small> / 15 MB</small>
+                <small> / {formatBytes(storageLimitBytes)}</small>
               </strong>
             </div>
 
@@ -266,14 +416,14 @@ export default function AccountPage({ session }) {
                     ? '0% 使用中'
                     : usagePercent.toFixed(2) + '% 使用中'}
               </span>
-              <span>上限 15 MB</span>
+              <span>上限 {formatBytes(storageLimitBytes)}</span>
             </div>
 
             {error && (
               <p className="account-settings-error">{error}</p>
             )}
 
-            {!loading && !error && usageBytes > STORAGE_LIMIT && (
+            {!loading && !error && usageBytes > storageLimitBytes && (
               <p className="account-settings-warning">
                 保存容量の上限を超えています。追加容量については運営者へご相談ください。
               </p>
@@ -299,6 +449,107 @@ export default function AccountPage({ session }) {
               </div>
             </div>
           </section>
+
+          {isAdmin && (
+            <section className="account-settings-section account-settings-admin">
+              <div className="account-settings-section-head">
+                <div>
+                  <span>ADMINISTRATION</span>
+                  <h2>ユーザー保存容量</h2>
+                </div>
+                <strong>
+                  標準 {formatBytes(DEFAULT_STORAGE_LIMIT)}
+                </strong>
+              </div>
+
+              <p className="account-settings-note">
+                1〜10240 MiBの範囲で、アカウントごとの保存容量上限を変更できます。変更はサーバー側で強制されます。
+              </p>
+
+              {adminLoading && (
+                <p className="account-settings-note">ユーザー一覧を読み込み中...</p>
+              )}
+
+              {adminError && (
+                <p className="account-settings-error">{adminError}</p>
+              )}
+
+              {!adminLoading && !adminError && (
+                <div className="account-settings-admin-list">
+                  {adminUsers.map(user => {
+                    const limitMiB = Math.round(
+                      user.storageLimitBytes / (1024 * 1024)
+                    )
+                    const usageMiB = (
+                      user.storageBytes / (1024 * 1024)
+                    ).toFixed(1)
+
+                    return (
+                      <div
+                        key={user.id}
+                        className="account-settings-admin-row"
+                      >
+                        <div className="account-settings-admin-user">
+                          <strong>{user.name || '未設定'}</strong>
+                          <span>{user.email}</span>
+                          <small>
+                            {usageMiB} MiB 使用中
+                            {user.isAdmin ? ' / 管理者' : ''}
+                          </small>
+                        </div>
+
+                        <div className="account-settings-admin-control">
+                          <input
+                            type="number"
+                            min="1"
+                            max="10240"
+                            step="1"
+                            value={limitMiB}
+                            onChange={event => {
+                              const value = Number(event.target.value)
+                              setAdminUsers(current => current.map(item =>
+                                item.id === user.id
+                                  ? {
+                                      ...item,
+                                      storageLimitBytes:
+                                        (Number.isFinite(value) ? value : 1) *
+                                        1024 *
+                                        1024
+                                    }
+                                  : item
+                              ))
+                            }}
+                            aria-label={user.email + ' 保存容量上限 MiB'}
+                            disabled={adminSavingId === user.id}
+                          />
+                          <span>MiB</span>
+                          <button
+                            type="button"
+                            className="account-settings-inline-button"
+                            onClick={() => void updateStorageLimit(
+                              user.id,
+                              limitMiB
+                            )}
+                            disabled={adminSavingId === user.id}
+                          >
+                            {adminSavingId === user.id ? '保存中...' : '保存'}
+                          </button>
+                          <button
+                            type="button"
+                            className="account-settings-inline-button secondary"
+                            onClick={() => void resetStorageLimit(user.id)}
+                            disabled={adminSavingId === user.id}
+                          >
+                            標準値
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="account-settings-section">
             <div className="account-settings-section-head">
