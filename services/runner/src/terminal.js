@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { PassThrough } from 'node:stream'
 import Docker from 'dockerode'
 import tar from 'tar-stream'
 
@@ -276,8 +277,8 @@ async function readWorkspaceArchive(container) {
   let stdoutBytes = 0
 
   return await new Promise((resolve, reject) => {
-    const stdoutStream = new (require('node:stream').PassThrough)()
-    const stderrStream = new (require('node:stream').PassThrough)()
+    const stdoutStream = new PassThrough()
+    const stderrStream = new PassThrough()
 
     stdoutStream.on('data', chunk => {
       stdoutBytes += chunk.length
@@ -357,7 +358,7 @@ async function readWorkspaceArchive(container) {
 
         extract.on('error', reject)
 
-        const archiveStream = new (require('node:stream').PassThrough)()
+        const archiveStream = new PassThrough()
 
         archiveStream.end(Buffer.concat(stdout))
         archiveStream.pipe(extract)
