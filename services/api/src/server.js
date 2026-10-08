@@ -1154,16 +1154,24 @@ function buildTypeScriptAdditionalFiles(files, entrypoint) {
 }
 
 function prepareTypeScriptSource(source, environment) {
-  if (!Object.keys(environment || {}).length) {
+  const entries = Object.entries(environment || {})
+
+  if (!entries.length) {
     return source
   }
+
+  const assignments = entries.map(([key, value]) =>
+    '(globalThis as any).process.env[' +
+      JSON.stringify(key) +
+      '] = ' +
+      JSON.stringify(value) +
+    ';'
+  )
 
   return [
     '(globalThis as any).process = (globalThis as any).process || {};',
     '(globalThis as any).process.env = (globalThis as any).process.env || {};',
-    'Object.assign((globalThis as any).process.env, ' +
-      JSON.stringify(environment) +
-    ');',
+    ...assignments,
     source
   ].join('\n')
 }
