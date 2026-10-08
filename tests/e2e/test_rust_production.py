@@ -212,17 +212,8 @@ def main():
     basic_rust = """fn main() {
     println!("Hello from Poligo Rust E2E");
     println!("unicode=日本語🚀€");
-    println!("rustc={}", rustc_version());
     println!("arch={}", std::env::consts::ARCH);
-}
-
-fn rustc_version() -> String {
-    let output = std::process::Command::new("rustc")
-        .arg("--version")
-        .output()
-        .unwrap();
-
-    String::from_utf8_lossy(&output.stdout).trim().to_string()
+    println!("target={}", if cfg!(target_os = "linux") { "linux" } else { "other" });
 }"""
 
     feature_rust = """use std::collections::BTreeMap;
@@ -438,8 +429,8 @@ fn main() {
             run_and_wait(page, "成功")
             wait_for_output(page, "Hello from Poligo Rust E2E")
             wait_for_output(page, "unicode=日本語🚀€")
-            wait_for_output(page, "rustc ")
             wait_for_output(page, "arch=")
+            wait_for_output(page, "target=linux")
 
             set_editor_value(page, feature_rust)
             run_and_wait(page, "成功")
