@@ -211,7 +211,7 @@ socket.send(
 socket.send(
   JSON.stringify({
     type: 'input',
-    data: "printf 'SYNC_MARKER:%s\\n' \"$(cat created.txt)\"\\n"
+    data: "printf 'SYNC_MARKER:%s\\n' \"$(cat created.txt)\"\n"
   })
 )
 
