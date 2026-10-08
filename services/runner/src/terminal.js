@@ -274,11 +274,12 @@ async function createTerminal({
   }
 
   const workspace = await writeWorkspace(files)
+  let container = null
 
   try {
     await ensureImage()
 
-    const container = await docker.createContainer({
+    container = await docker.createContainer({
       Image: terminalImage,
       Cmd: ['bash', '--login'],
       WorkingDir: '/workspace',
@@ -399,6 +400,18 @@ async function createTerminal({
       createdAt: session.createdAt
     }
   } catch (error) {
+    if (container) {
+      try {
+        await container.kill()
+      } catch {}
+
+      try {
+        await container.remove({
+          force: true
+        })
+      } catch {}
+    }
+
     await fs.rm(workspace, {
       recursive: true,
       force: true
