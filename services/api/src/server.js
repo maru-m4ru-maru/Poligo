@@ -2609,7 +2609,8 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       rubySourcePaths.length > 1 ||
       hasEnvironment ||
       hasAdditionalProjectFiles ||
-      entrypoint.includes('/')
+      entrypoint.includes('/') ||
+      payload.args.length > 0
 
     if (multiFile) {
       const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
