@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
+import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
 import { auth, initializeAuthDatabase } from './auth.js'
@@ -46,6 +47,8 @@ const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
 const executionRateState = new Map()
 const executionOwners = new Map()
+const terminalOwners = new Map()
+const TERMINAL_RECORD_TTL_MS = 30 * 60 * 1000
 
 const executionCleanupTimer = setInterval(() => {
   const now = Date.now()
