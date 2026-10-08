@@ -299,6 +299,12 @@ fun main() {
     println("packaged-kotlin-ok")
 }"""
 
+    jvmname_kotlin = """@file:JvmName("CustomEntry")
+
+fun main() {
+    println("jvmname-kotlin-ok")
+}"""
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
