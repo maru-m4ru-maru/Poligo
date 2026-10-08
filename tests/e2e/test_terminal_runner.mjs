@@ -128,6 +128,22 @@ if (created.status !== 202) {
   )
 }
 
+const initialFiles = await request(
+  '/v1/terminals/' +
+    encodeURIComponent(id) +
+    '/files'
+)
+
+if (
+  initialFiles.status !== 200 ||
+  initialFiles.body?.files?.['main.js'] !== 'console.log("terminal e2e")\\n'
+) {
+  throw new Error(
+    'terminal workspace was not initialized: ' +
+    initialFiles.text
+  )
+}
+
 const socket = new WebSocket(
   baseUrl.replace('http', 'ws') +
     '/v1/terminals/' +
