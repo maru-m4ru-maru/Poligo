@@ -32,6 +32,7 @@ const EXECUTION_REQUESTS_PER_WINDOW = 12
 const EXECUTION_RECORD_TTL_MS = 10 * 60 * 1000
 const EXECUTION_CPU_TIME_LIMIT = 2
 const EXECUTION_WALL_TIME_LIMIT = 5
+const JUDGE0_LANGUAGE_TIMEOUT_MS = 10_000
 const JUDGE0_SUBMISSION_TIMEOUT_MS = 15_000
 const JUDGE0_STATUS_TIMEOUT_MS = 10_000
 const EXECUTION_MEMORY_LIMIT = 128_000
@@ -2391,7 +2392,9 @@ let judge0LanguagesPromise = null
 
 async function getJudge0Languages() {
   if (!judge0LanguagesPromise) {
-    judge0LanguagesPromise = fetch(judge0Url + '/languages/')
+    judge0LanguagesPromise = fetch(judge0Url + '/languages/', {
+      signal: AbortSignal.timeout(JUDGE0_LANGUAGE_TIMEOUT_MS)
+    })
       .then(async response => {
         if (!response.ok) {
           throw new Error('Judge0 language list request failed')
