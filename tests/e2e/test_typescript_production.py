@@ -46,7 +46,6 @@ def upload_file(page, path, source):
         print("STEP: upload file editor", flush=True)
         file_button.click()
         page.wait_for_timeout(750)
-        set_editor_value(page, source)
 
 
 def open_file(page, name):
