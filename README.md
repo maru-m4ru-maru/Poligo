@@ -38,7 +38,7 @@ The production execution path covers single-file and multi-file Ruby projects, R
 
 Rust is a supported Poligo execution language.
 
-The production execution path covers Rust single-file and multi-file projects, command-line arguments, UTF-8 stdin/stdout/stderr, .env variables, project resources, Rust module files, filesystem access, compilation failures, non-zero exits, and execution timeouts.
+The production execution path covers Rust 2024 single-file and multi-file projects, empty and quoted command-line arguments, UTF-8 stdin/stdout/stderr, .env variables, project resources, Rust module files, filesystem access, compilation failures, non-zero exits, and execution timeouts.
 
 ## Kotlin support
 
