@@ -32,7 +32,7 @@ Browser
 
 Kotlin/JVM is a supported Poligo execution language.
 
-The production execution path covers single-file and multi-file Kotlin projects, package declarations, `@file:JvmName`, `object` entrypoints with `@JvmStatic main`, command-line arguments, UTF-8 stdin/stdout/stderr, `.env` variables, project resources, filesystem access, compilation failures, non-zero exits, and execution timeouts.
+The production execution path covers Kotlin/JVM projects in both single-file and multi-file form, package declarations, `@file:JvmName`, `object` entrypoints with `@JvmStatic main`, command-line arguments, UTF-8 stdin/stdout/stderr, `.env` variables, project resources, filesystem access, compilation failures, non-zero exits, and execution timeouts.
 
 ## Project storage
 
