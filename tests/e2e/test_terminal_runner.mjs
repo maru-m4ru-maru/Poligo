@@ -210,7 +210,19 @@ socket.send(
 
 await waitForOutput(
   socket,
-  output => output.includes('created.txt') || output.includes('workspace')
+  output => output.includes('workspace')
+)
+
+socket.send(
+  JSON.stringify({
+    type: 'input',
+    data: "printf 'SYNC_MARKER:%s\\n' \"$(cat created.txt)\"\\n"
+  })
+)
+
+await waitForOutput(
+  socket,
+  output => output.includes('SYNC_MARKER:created-by-terminal')
 )
 
 socket.send(
