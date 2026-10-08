@@ -4331,6 +4331,78 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (
+    request.method === 'POST' &&
+    request.url === '/api/terminal/sessions'
+  ) {
+    try {
+      await handleTerminalCreate(request, response)
+    } catch (error) {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal request failed'
+      })
+    }
+    return
+  }
+
+  if (
+    request.method === 'POST' &&
+    request.url.startsWith('/api/terminal/sessions/') &&
+    request.url.endsWith('/sync')
+  ) {
+    const id = request.url.slice(
+      '/api/terminal/sessions/'.length,
+      -'/sync'.length
+    )
+
+    if (!id || id.includes('/')) {
+      send(response, 400, {
+        error: 'invalid terminal session id'
+      })
+      return
+    }
+
+    try {
+      await handleTerminalSync(request, response, id)
+    } catch (error) {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal sync failed'
+      })
+    }
+    return
+  }
+
+  if (
+    request.method === 'DELETE' &&
+    request.url.startsWith('/api/terminal/sessions/')
+  ) {
+    const id = request.url.slice(
+      '/api/terminal/sessions/'.length
+    )
+
+    if (!id || id.includes('/')) {
+      send(response, 400, {
+        error: 'invalid terminal session id'
+      })
+      return
+    }
+
+    try {
+      await handleTerminalClose(request, response, id)
+    } catch (error) {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal close failed'
+      })
+    }
+    return
+  }
+
   if (request.method === 'POST' && request.url === '/api/projects') {
     try {
       await handleProjectRequest(request, response)
