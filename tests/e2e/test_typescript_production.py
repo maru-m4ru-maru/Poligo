@@ -1,7 +1,10 @@
 import os
 import re
+import sys
 import time
 import uuid
+
+sys.stdout.reconfigure(line_buffering=True)
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -220,6 +223,7 @@ def main():
     password = "PoligoTypeScriptE2E!" + uuid.uuid4().hex[:18]
 
     with sync_playwright() as playwright:
+        print("STEP: launch browser", flush=True)
         browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
             viewport={
@@ -228,9 +232,11 @@ def main():
             }
         )
         page = context.new_page()
+        page.set_default_timeout(15_000)
+        page.set_default_navigation_timeout(20_000)
 
         try:
-            print("E2E account:", email)
+            print("STEP: account setup " + email, flush=True)
 
             page.goto(
                 BASE_URL + "/createaccount?e2e=1",
@@ -256,9 +262,12 @@ def main():
                 timeout=60_000
             )
 
+            print("STEP: create TypeScript project", flush=True)
             create_typescript_project(page)
+            print("STEP: open debug", flush=True)
             open_debug(page)
 
+            print("STEP: single-file setup", flush=True)
             set_editor_value(
                 page,
                 'interface Greeting {\n    message: string\n}\n\nconst greeting: Greeting = {\n    message: "TypeScript basic OK 日本語🚀"\n}\n\nconsole.log(greeting.message)'
@@ -269,6 +278,7 @@ def main():
             )
             print("PASS: single-file TypeScript")
 
+            print("STEP: multi-file setup", flush=True)
             create_file(
                 page,
                 "lib/helper.ts",
@@ -324,6 +334,7 @@ def main():
             )
             print("PASS: multi-file imports, env, args, stdin, resources, filesystem")
 
+            print("STEP: TSX setup", flush=True)
             create_file(
                 page,
                 "main.tsx",
@@ -337,6 +348,7 @@ def main():
             )
             print("PASS: TSX")
 
+            print("STEP: compile error setup", flush=True)
             open_file(page, "main.ts")
             set_editor_value(
                 page,
@@ -345,6 +357,7 @@ def main():
             run_and_expect_failure(page, "TS2322")
             print("PASS: compile error")
 
+            print("STEP: runtime error setup", flush=True)
             set_editor_value(
                 page,
                 'declare const process: any\nconsole.error("runtime error-日本語🚀")\nprocess.exitCode = 7'
@@ -363,9 +376,11 @@ def main():
             run_and_expect_timeout(page)
             print("PASS: timeout")
 
+            print("STEP: delete project", flush=True)
             page.wait_for_timeout(1_500)
             delete_project(page)
 
+            print("STEP: sign out", flush=True)
             page.get_by_role(
                 "button",
                 name="サインアウト",
