@@ -910,14 +910,31 @@ function buildPreview(files, requestedFile = 'index.html', depth = 0) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(API_URL + path, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    }
-  })
+  const timeoutMs = Number.isFinite(options.timeoutMs)
+    ? options.timeoutMs
+    : 30_000
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => {
+    controller.abort()
+  }, timeoutMs)
+
+  const { timeoutMs: _timeoutMs, ...fetchOptions } = options
+
+  let response
+
+  try {
+    response = await fetch(API_URL + path, {
+      ...fetchOptions,
+      signal: fetchOptions.signal || controller.signal,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(fetchOptions.headers || {})
+      }
+    })
+  } finally {
+    window.clearTimeout(timer)
+  }
 
   const body = await response.json().catch(() => null)
 
@@ -2709,6 +2726,7 @@ function IDE({ projectId }) {
 
     try {
       const result = await request('/api/executions', {
+        timeoutMs: 20_000,
         method: 'POST',
         body: JSON.stringify({
           projectId: currentProjectId,
@@ -2737,7 +2755,10 @@ function IDE({ projectId }) {
 
       for (let attempt = 0; attempt < 120; attempt += 1) {
         const status = await request(
-          '/api/executions/' + encodeURIComponent(result.id)
+          '/api/executions/' + encodeURIComponent(result.id),
+          {
+            timeoutMs: 15_000
+          }
         )
 
         if (
