@@ -22,7 +22,9 @@ const openRouterModels = {
 }
 const MAX_FILES = 200
 const MAX_PROJECT_BYTES = 5_000_000
-const STORAGE_LIMIT_BYTES = 15 * 1024 * 1024
+const DEFAULT_STORAGE_LIMIT_BYTES = 15 * 1024 * 1024
+const MIN_STORAGE_LIMIT_BYTES = 1 * 1024 * 1024
+const MAX_STORAGE_LIMIT_BYTES = 10 * 1024 * 1024 * 1024
 const MAX_REQUEST_BYTES = 8_000_000
 const MAX_EXECUTION_ARCHIVE_BYTES = 3_000_000
 const EXECUTION_WINDOW_MS = 5 * 60 * 1000
@@ -514,6 +516,106 @@ function getJavaSourcePaths(files) {
     .sort()
 }
 
+function getGoSourcePaths(files) {
+  return Object.keys(files)
+    .filter(filePath => filePath.toLowerCase().endsWith('.go'))
+    .sort()
+}
+
+function getGoPackageName(source) {
+  if (typeof source !== 'string') {
+    return ''
+  }
+
+  const match = source.match(
+    /^[ \t]*package[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*$/m
+  )
+
+  return match?.[1] || ''
+}
+
+function buildGoAdditionalFiles(
+  files,
+  entrypoint,
+  multiFile,
+  environment,
+  args
+) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    if (multiFile && (path === 'compile' || path === 'run')) {
+      throw new Error(
+        'compile and run are reserved filenames for Go multi-file execution'
+      )
+    }
+
+    if (!multiFile && path === entrypoint) {
+      continue
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (multiFile) {
+    const entryDirectory = entrypoint.includes('/')
+      ? entrypoint.slice(0, entrypoint.lastIndexOf('/'))
+      : ''
+    const packagePath = entryDirectory
+      ? './' + entryDirectory
+      : '.'
+
+    archiveFiles.push({
+      path: 'compile',
+      mode: 0o100755,
+      data: Buffer.from([
+        '#!/bin/bash',
+        'set -e',
+        'if [ -f go.mod ]; then',
+        '  go build -trimpath -o /tmp/poligo ' + shellQuote(packagePath),
+        'else',
+        '  GO111MODULE=off go build -trimpath -o /tmp/poligo ' + shellQuote(packagePath),
+        'fi'
+      ].join('\n') + '\n')
+    })
+
+    const environmentLines = Object.entries(environment || {}).map(
+      ([key, value]) => 'export ' + key + '=' + shellQuote(value)
+    )
+    const argumentLine = formatExecutionArguments(args || [])
+
+    archiveFiles.push({
+      path: 'run',
+      mode: 0o100755,
+      data: Buffer.from([
+        '#!/bin/bash',
+        'set -e',
+        ...environmentLines,
+        'exec /tmp/poligo' + (argumentLine ? ' ' + argumentLine : '')
+      ].join('\n') + '\n')
+    })
+  }
+
+  if (!archiveFiles.length) {
+    return ''
+  }
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('Go execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
 function buildJavaAdditionalFiles(
   files,
   entrypoint,
@@ -787,6 +889,78 @@ async function getSession(request) {
   })
 }
 
+function getConfiguredAdminSet(value, normalize) {
+  return new Set(
+    String(value || '')
+      .split(',')
+      .map(item => normalize(item.trim()))
+      .filter(Boolean)
+  )
+}
+
+const adminUserIds = getConfiguredAdminSet(
+  process.env.POLIGO_ADMIN_USER_IDS,
+  value => value
+)
+const adminEmails = getConfiguredAdminSet(
+  process.env.POLIGO_ADMIN_EMAILS,
+  value => value.toLowerCase()
+)
+
+function isAdminSession(session) {
+  const user = session?.user
+
+  if (!user?.id) {
+    return false
+  }
+
+  return (
+    adminUserIds.has(user.id) ||
+    adminEmails.has(String(user.email || '').toLowerCase())
+  )
+}
+
+async function requireAdminSession(request) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    throw new Error('authentication required')
+  }
+
+  if (!isAdminSession(session)) {
+    throw new Error('administrator access required')
+  }
+
+  return session
+}
+
+function normalizeStorageLimitBytes(value) {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value % (1024 * 1024) !== 0 ||
+    value < MIN_STORAGE_LIMIT_BYTES ||
+    value > MAX_STORAGE_LIMIT_BYTES
+  ) {
+    throw new Error('storage limit must be a whole number of MiB between 1 MiB and 10 GiB')
+  }
+
+  return value
+}
+
+async function getStorageLimitBytes(ownerId) {
+  const database = getDatabase()
+  const statement = await database.prepare(
+    'SELECT limit_bytes FROM user_storage_limits WHERE user_id = ?'
+  )
+  const rows = await statement.all([ownerId])
+  const value = Number(rows[0]?.limit_bytes)
+
+  return Number.isSafeInteger(value) && value >= MIN_STORAGE_LIMIT_BYTES
+    ? value
+    : DEFAULT_STORAGE_LIMIT_BYTES
+}
+
 async function getOwnerId(request) {
   const session = await getSession(request)
 
@@ -984,8 +1158,9 @@ async function createProject(ownerId, payload) {
   const storedFiles = encryptProjectSecrets(payload.files)
   const newStorageBytes = getStoredFileBytes(storedFiles)
   const currentStorageBytes = await getOwnerStorageBytes(ownerId)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
 
-  if (currentStorageBytes + newStorageBytes > STORAGE_LIMIT_BYTES) {
+  if (currentStorageBytes + newStorageBytes > storageLimitBytes) {
     throw new Error('storage limit exceeded')
   }
 
@@ -1028,12 +1203,13 @@ async function updateProject(projectId, ownerId, payload) {
   const currentProjectStorageBytes = await getProjectStorageBytes(projectId, ownerId)
   const currentOwnerStorageBytes = await getOwnerStorageBytes(ownerId)
   const newStorageBytes = getStoredFileBytes(storedFiles)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
 
   if (
     currentOwnerStorageBytes -
       currentProjectStorageBytes +
       newStorageBytes >
-    STORAGE_LIMIT_BYTES
+    storageLimitBytes
   ) {
     throw new Error('storage limit exceeded')
   }
@@ -1449,12 +1625,16 @@ async function handleDashboardRequest(request, response) {
   )
   const projects = await projectStatement.all([...ownerIds, limit])
 
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+
   send(response, 200, {
     user: {
       id: session.user.id,
       name: session.user.name,
       email: session.user.email,
-      image: session.user.image || null
+      image: session.user.image || null,
+      isAdmin: isAdminSession(session),
+      storageLimitBytes
     },
     stats: {
       projectCount: Number(stats.project_count || 0),
@@ -1844,6 +2024,71 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     if (additionalFiles) {
       options.additional_files = additionalFiles
     }
+  } else if (payload.language === 'go') {
+    const goSourcePaths = getGoSourcePaths(files)
+    const packageName = getGoPackageName(source)
+    const environment = getExecutionEnvironment(files)
+    const hasEnvironment = Object.keys(environment).length > 0
+    const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
+      filePath !== entrypoint &&
+      !isSecretEnvFile(filePath)
+    )
+    const fileName = entrypoint.split('/').pop() || ''
+    const canUsePredefinedGo =
+      fileName.toLowerCase() === 'main.go' &&
+      goSourcePaths.length === 1 &&
+      !entrypoint.includes('/') &&
+      packageName === 'main' &&
+      !hasEnvironment &&
+      payload.args.length === 0 &&
+      !hasAdditionalProjectFiles
+    const multiFile =
+      !canUsePredefinedGo ||
+      goSourcePaths.length > 1 ||
+      Boolean(entrypoint.includes('/')) ||
+      hasEnvironment ||
+      payload.args.length > 0 ||
+      hasAdditionalProjectFiles
+
+    if (packageName && packageName !== 'main') {
+      send(response, 400, {
+        error: 'Go entrypoint must use package main'
+      })
+      return
+    }
+
+    if (multiFile) {
+      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!multiFileLanguageId) {
+        send(response, 503, {
+          error: 'Go multi-file execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      languageId = multiFileLanguageId
+      preparedSource = null
+      options.additional_files = buildGoAdditionalFiles(
+        files,
+        entrypoint,
+        true,
+        environment,
+        payload.args
+      )
+    } else {
+      const additionalFiles = buildGoAdditionalFiles(
+        files,
+        entrypoint,
+        false,
+        environment,
+        payload.args
+      )
+
+      if (additionalFiles) {
+        options.additional_files = additionalFiles
+      }
+    }
   } else if (payload.language === 'java') {
     const javaSourcePaths = getJavaSourcePaths(files)
     const packageName = getJavaPackageName(source)
@@ -1915,7 +2160,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   if (
     payload.args.length > 0 &&
     !(
-      payload.language === 'java' &&
+      (payload.language === 'java' || payload.language === 'go') &&
       languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID
     )
   ) {
@@ -2355,6 +2600,138 @@ function buildAiSystemPrompt() {
   ].join('\n')
 }
 
+async function handleAdminUsersRequest(request, response) {
+  const session = await requireAdminSession(request)
+  const url = new URL(request.url, 'http://localhost')
+  const parts = url.pathname.split('/').filter(Boolean)
+  const database = getDatabase()
+
+  if (request.method === 'GET' && parts.length === 3) {
+    const usersStatement = await database.prepare(
+      `SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.createdAt,
+        u.updatedAt,
+        COALESCE((
+          SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
+          FROM projects p
+          LEFT JOIN project_files pf ON pf.project_id = p.id
+          WHERE p.owner_id = u.id
+        ), 0) AS storage_bytes,
+        COALESCE(usl.limit_bytes, ?) AS storage_limit_bytes
+      FROM "user" u
+      LEFT JOIN user_storage_limits usl ON usl.user_id = u.id
+      ORDER BY u.createdAt DESC`
+    )
+    const rows = await usersStatement.all([DEFAULT_STORAGE_LIMIT_BYTES])
+
+    send(response, 200, {
+      users: rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        createdAt: Number(row.createdAt),
+        updatedAt: Number(row.updatedAt),
+        storageBytes: Number(row.storage_bytes || 0),
+        storageLimitBytes: Number(row.storage_limit_bytes || DEFAULT_STORAGE_LIMIT_BYTES),
+        isAdmin:
+          adminUserIds.has(row.id) ||
+          adminEmails.has(String(row.email || '').toLowerCase())
+      })),
+      defaultStorageLimitBytes: DEFAULT_STORAGE_LIMIT_BYTES,
+      minStorageLimitBytes: MIN_STORAGE_LIMIT_BYTES,
+      maxStorageLimitBytes: MAX_STORAGE_LIMIT_BYTES,
+      currentAdminUserId: session.user.id
+    })
+    return
+  }
+
+  if (
+    request.method === 'PUT' &&
+    parts.length === 5 &&
+    parts[2] === 'users' &&
+    parts[4] === 'storage-limit'
+  ) {
+    const userId = parts[3]
+    const userStatement = await database.prepare(
+      'SELECT id, name, email FROM "user" WHERE id = ?'
+    )
+    const users = await userStatement.all([userId])
+
+    if (!users[0]) {
+      send(response, 404, {
+        error: 'user not found'
+      })
+      return
+    }
+
+    const payload = await readJson(request)
+    const limitBytes = normalizeStorageLimitBytes(payload.limitBytes)
+
+    await database.batch([
+      {
+        sql: `INSERT INTO user_storage_limits (user_id, limit_bytes, updated_at)
+              VALUES (?, ?, ?)
+              ON CONFLICT(user_id) DO UPDATE SET
+                limit_bytes = excluded.limit_bytes,
+                updated_at = excluded.updated_at`,
+        args: [userId, limitBytes, Date.now()]
+      }
+    ], 'immediate')
+
+    send(response, 200, {
+      ok: true,
+      user: {
+        ...users[0],
+        storageLimitBytes: limitBytes
+      }
+    })
+    return
+  }
+
+  if (
+    request.method === 'DELETE' &&
+    parts.length === 5 &&
+    parts[2] === 'users' &&
+    parts[4] === 'storage-limit'
+  ) {
+    const userId = parts[3]
+    const userStatement = await database.prepare(
+      'SELECT id, name, email FROM "user" WHERE id = ?'
+    )
+    const users = await userStatement.all([userId])
+
+    if (!users[0]) {
+      send(response, 404, {
+        error: 'user not found'
+      })
+      return
+    }
+
+    await database.batch([
+      {
+        sql: 'DELETE FROM user_storage_limits WHERE user_id = ?',
+        args: [userId]
+      }
+    ], 'immediate')
+
+    send(response, 200, {
+      ok: true,
+      user: {
+        ...users[0],
+        storageLimitBytes: DEFAULT_STORAGE_LIMIT_BYTES
+      }
+    })
+    return
+  }
+
+  send(response, 404, {
+    error: 'not found'
+  })
+}
+
 async function handleAiAssist(request, response) {
   const session = await getSession(request)
 
@@ -2731,7 +3108,8 @@ const server = http.createServer(async (request, response) => {
         message.includes('invalid data URL file content') ||
         message.includes('execution arguments') ||
         message.includes('too many execution arguments') ||
-        message.startsWith('Java ')
+        message.startsWith('Java ') ||
+        message.startsWith('Go ')
           ? 400
           : 502
 
