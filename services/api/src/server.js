@@ -967,7 +967,7 @@ function buildKotlinAdditionalFiles(
       '  KOTLIN_LIB_DIR=""',
       '  for root in /usr/local /opt /root/.sdkman /usr/lib /usr/share; do',
       '    if [ -d "$root" ]; then',
-      '      KOTLIN_LIB_DIR="$(find "$root" -type f -name "kotlin-stdlib*.jar" -print -quit 2>/dev/null | xargs -r dirname)',
+      '      KOTLIN_LIB_DIR="$(find "$root" -type f -name "kotlin-stdlib*.jar" -print -quit 2>/dev/null | xargs -r dirname)"',
       '      if [ -n "$KOTLIN_LIB_DIR" ]; then',
       '        break',
       '      fi',
