@@ -28,24 +28,30 @@ def set_editor_value(page, source):
 
 
 def upload_file(page, path, source):
-    import tempfile
+    print("STEP: upload file input", flush=True)
+    page.locator('input[type="file"]').evaluate(
+        """(input, payload) => {
+            const data = new DataTransfer()
+            const file = new File(
+                [payload.source],
+                payload.name,
+                { type: "text/plain" }
+            )
+            data.items.add(file)
+            input.files = data.files
+            input.dispatchEvent(new Event("change", { bubbles: true }))
+        }""",
+        {"name": path, "source": source}
+    )
 
-    with tempfile.TemporaryDirectory() as directory:
-        file_path = os.path.join(directory, path)
-        with open(file_path, "w", encoding="utf-8") as handle:
-            handle.write(source)
+    file_button = page.locator(
+        '.explorer-file[title="' + path + '"] .explorer-file-main'
+    )
+    expect(file_button).to_be_visible(timeout=10_000)
 
-        print("STEP: upload file input", flush=True)
-        page.locator('input[type="file"]').set_input_files(file_path)
-
-        file_button = page.locator(
-            '.explorer-file[title="' + path + '"] .explorer-file-main'
-        )
-        expect(file_button).to_be_visible(timeout=10_000)
-
-        print("STEP: upload file editor", flush=True)
-        file_button.click()
-        page.wait_for_timeout(750)
+    print("STEP: upload file editor", flush=True)
+    file_button.click()
+    page.wait_for_timeout(750)
 
 
 def open_file(page, name):
