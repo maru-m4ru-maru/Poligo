@@ -50,7 +50,7 @@ def create_file(page, path, source):
 
     print("STEP: create file editor", flush=True)
     file_button.click()
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(750)
     set_editor_value(page, source)
 
 
