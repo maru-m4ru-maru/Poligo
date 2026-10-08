@@ -654,7 +654,7 @@ function prepareGoSource(files, entrypoint, environment, args) {
   const needsRuntime =
     Object.keys(environment || {}).length > 0 ||
     (args || []).length > 0
-  const importSpecs = []
+  const importEntries = []
   const parts = []
   let mainCount = 0
   let mainFile = ''
@@ -672,7 +672,7 @@ function prepareGoSource(files, entrypoint, environment, args) {
     const parsedImports = extracted.imports.map(parseGoImportSpec)
 
     for (const item of parsedImports) {
-      importSpecs.push(item.spec)
+      importEntries.push(item)
 
       if (item.path === 'os' && item.localName !== '_') {
         if (runtimeImport && runtimeImport.localName !== item.localName) {
@@ -710,20 +710,58 @@ function prepareGoSource(files, entrypoint, environment, args) {
     throw new Error('Go project must contain exactly one main function in the entrypoint file')
   }
 
-  if (needsRuntime) {
-    if (runtimeImport?.localName === '_') {
-      throw new Error('Go source cannot use a blank import of os when execution arguments or environment are configured')
+  const allSource = sourcePaths
+    .map(sourcePath => files[sourcePath])
+    .join('\n')
+
+  const makeInternalName = prefix => {
+    let value = prefix
+
+    while (allSource.includes(value)) {
+      value += '_'
     }
 
-    if (!runtimeImport) {
-      importSpecs.push('_poligoRuntime "os"')
-      runtimeImport = {
-        localName: '_poligoRuntime'
-      }
+    return value
+  }
+
+  const userMainName = makeInternalName('_poligoUserMain')
+  const argsName = makeInternalName('_poligoArgs')
+
+  if (needsRuntime && runtimeImport?.localName === '.') {
+    throw new Error('Go source cannot use a dot import of os when execution arguments or environment are configured')
+  }
+
+  if (needsRuntime && runtimeImport?.localName === '_') {
+    throw new Error('Go source cannot use a blank import of os when execution arguments or environment are configured')
+  }
+
+  if (needsRuntime && !runtimeImport) {
+    const runtimeName = makeInternalName('_poligoRuntime')
+    importEntries.push({
+      localName: runtimeName,
+      path: 'os',
+      spec: runtimeName + ' "os"'
+    })
+    runtimeImport = {
+      localName: runtimeName
     }
   }
 
-  const uniqueImports = [...new Set(importSpecs)]
+  const seenImports = new Set()
+  const uniqueImportEntries = []
+
+  for (const item of importEntries) {
+    const key = item.localName + '\0' + item.path
+
+    if (seenImports.has(key)) {
+      continue
+    }
+
+    seenImports.add(key)
+    uniqueImportEntries.push(item)
+  }
+
+  const uniqueImports = uniqueImportEntries.map(item => item.spec)
   const argumentLines = (args || []).map(value =>
     '    ' + JSON.stringify(value) + ','
   )
@@ -755,7 +793,7 @@ function prepareGoSource(files, entrypoint, environment, args) {
   if (needsRuntime) {
     wrapperLines.push(
       '  ' + runtimeName + '.Args = append([]string{' +
-        runtimeName + '.Args[0]}, _poligoArgs...)'
+        runtimeName + '.Args[0]}, ' + argsName + '...)'
     )
   }
 
@@ -763,7 +801,7 @@ function prepareGoSource(files, entrypoint, environment, args) {
     wrapperLines.splice(
       wrapperLines.length - 1,
       0,
-      '  _poligoArgs := []string{',
+      '  ' + argsName + ' := []string{',
       ...argumentLines,
       '  }'
     )
@@ -771,81 +809,34 @@ function prepareGoSource(files, entrypoint, environment, args) {
 
   wrapperLines.push(
     ...environmentLines,
-    '  _poligoUserMain()',
+    '  ' + userMainName + '()',
     '}',
     ''
   )
 
   return wrapperLines.join('\n') + parts.join('\n\n') + '\n'
 }
-function buildGoAdditionalFiles(
-  files,
-  entrypoint,
-  multiFile,
-  environment,
-  args
-) {
+function buildGoAdditionalFiles(files, entrypoint) {
   const archiveFiles = []
 
   for (const [path, content] of Object.entries(files)) {
-    if (isSecretEnvFile(path)) {
+    if (isSecretEnvFile(path) || path === entrypoint) {
       continue
     }
 
-    if (
-      multiFile &&
-      (path === 'compile' || path === 'run')
-    ) {
+    if (path === 'compile' || path === 'run') {
       throw new Error(
         'compile and run are reserved filenames for Go multi-file execution'
       )
     }
 
-    if (!multiFile && path === entrypoint) {
-      continue
-    }
-
-    if (!multiFile && path.toLowerCase().endsWith('.go')) {
+    if (path.toLowerCase().endsWith('.go')) {
       continue
     }
 
     archiveFiles.push({
       path,
       data: decodeExecutionFile(content)
-    })
-  }
-
-  if (multiFile) {
-    const entryDirectory = getGoSourceDirectory(entrypoint)
-    const buildTarget = entryDirectory
-      ? './' + entryDirectory
-      : '.'
-    const environmentLines = Object.entries(environment || {}).map(
-      ([key, value]) => 'export ' + key + '=' + shellQuote(value)
-    )
-    const argumentLine = formatExecutionArguments(args || [])
-
-    archiveFiles.push({
-      path: 'compile',
-      mode: 0o100755,
-      data: Buffer.from([
-        '#!/bin/bash',
-        'set -e',
-        'GO111MODULE=off go build -o /tmp/poligo ' +
-          shellQuote(buildTarget)
-      ].join('\n') + '\n')
-    })
-
-    archiveFiles.push({
-      path: 'run',
-      mode: 0o100755,
-      data: Buffer.from([
-        '#!/bin/bash',
-        'set -e',
-        ...environmentLines,
-        'exec /tmp/poligo' +
-          (argumentLine ? ' ' + argumentLine : '')
-      ].join('\n') + '\n')
     })
   }
 
@@ -2276,11 +2267,21 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     const hasEnvironment = Object.keys(environment).length > 0
     const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
       filePath !== entrypoint &&
-      !isSecretEnvFile(filePath)
+      !isSecretEnvFile(filePath) &&
+      !filePath.toLowerCase().endsWith('.go')
     )
-    const multiFile =
+    const fileName = entrypoint.split('/').pop() || ''
+    const canUsePredefinedGo =
+      fileName.toLowerCase() === 'main.go' &&
+      goSourcePaths.length === 1 &&
+      !entrypoint.includes('/') &&
+      packageName === 'main' &&
+      !hasEnvironment &&
+      payload.args.length === 0 &&
+      !hasAdditionalProjectFiles
+    const needsPreparedGo =
+      !canUsePredefinedGo ||
       goSourcePaths.length > 1 ||
-      entrypoint.includes('/') ||
       hasEnvironment ||
       payload.args.length > 0 ||
       hasAdditionalProjectFiles
@@ -2292,39 +2293,20 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       return
     }
 
-    if (multiFile) {
-      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
-
-      if (!multiFileLanguageId) {
-        send(response, 503, {
-          error: 'Go multi-file execution is unavailable on this Judge0 instance'
-        })
-        return
-      }
-
-      languageId = multiFileLanguageId
-      preparedSource = null
-      options.additional_files = buildGoAdditionalFiles(
+    if (needsPreparedGo) {
+      preparedSource = prepareGoSource(
         files,
         entrypoint,
-        true,
         environment,
         payload.args
       )
-    } else {
-      const additionalFiles = buildGoAdditionalFiles(
-        files,
-        entrypoint,
-        false,
-        environment,
-        payload.args
-      )
-
-      if (additionalFiles) {
-        options.additional_files = additionalFiles
-      }
     }
-  } else if (payload.language === 'java') {
+
+    const additionalFiles = buildGoAdditionalFiles(files, entrypoint)
+
+    if (additionalFiles) {
+      options.additional_files = additionalFiles
+    }  } else if (payload.language === 'java') {
     const javaSourcePaths = getJavaSourcePaths(files)
     const packageName = getJavaPackageName(source)
     const environment = getExecutionEnvironment(files)
@@ -2394,10 +2376,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
 
   if (
     payload.args.length > 0 &&
-    !(
-      (payload.language === 'java' || payload.language === 'go') &&
-      languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID
-    )
+    !(payload.language === 'java' && languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
