@@ -2916,6 +2916,10 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     const environment = getExecutionEnvironment(files)
     preparedSource = prepareTypeScriptSource(source, environment)
 
+    if (entrypointLower.endsWith('.tsx')) {
+      options.compiler_options = '--jsx react'
+    }
+
     const additionalFiles = buildTypeScriptAdditionalFiles(
       files,
       entrypoint
