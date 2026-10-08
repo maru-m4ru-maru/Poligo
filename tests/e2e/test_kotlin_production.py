@@ -85,7 +85,7 @@ def run_and_wait(page, expected_status):
     status = page.locator(".debug-status")
     panel = page.locator(".debug-panel")
 
-    for attempt in range(3):
+    for attempt in range(5):
         page.get_by_role(
             "button",
             name="▶ 実行",
@@ -93,24 +93,27 @@ def run_and_wait(page, expected_status):
         ).click()
 
         expect(status).to_contain_text(
-            expected_status,
+            "成功|失敗|タイムアウト",
             timeout=30_000
         )
 
         panel_text = panel.inner_text()
+        status_text = status.inner_text()
 
-        if (
-            "Execution Error 502" not in panel_text and
-            "Execution Error502" not in panel_text and
-            "Execution Error 503" not in panel_text and
-            "Execution Error503" not in panel_text
-        ):
+        transient_error = (
+            "Execution Error 502" in panel_text or
+            "Execution Error502" in panel_text or
+            "Execution Error 503" in panel_text or
+            "Execution Error503" in panel_text
+        )
+
+        if expected_status in status_text:
             return status
 
-        if attempt == 2:
+        if not transient_error or attempt == 4:
             return status
 
-        page.wait_for_timeout(2_000)
+        page.wait_for_timeout(4_000)
 
     return status
 
