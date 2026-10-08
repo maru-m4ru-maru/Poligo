@@ -44,6 +44,10 @@ function authorized(request) {
   return request.headers.authorization === 'Bearer ' + runnerToken
 }
 
+const terminalWebSocketServer = new WebSocketServer({
+  noServer: true
+})
+
 const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     send(response, 200, {
