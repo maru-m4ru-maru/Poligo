@@ -418,7 +418,7 @@ def main():
                 '/** @jsx h */\nfunction h(tag: string, props: any, ...children: any[]) {\n    return tag + ":" + props.value + ":" + children.join("")\n}\n\nconst value: number = 42\nconst element = <div value={value}>TSX JSX</div>\nconsole.log(element)'
             )
             page.get_by_label("実行引数").fill("")
-            print("STEP: TSX JSX run", flush=True)
+            print("STEP: TSX browser execution", flush=True)
             run_and_expect_success(
                 page,
                 "div:42:TSX JSX"
