@@ -3523,6 +3523,13 @@ function IDE({ projectId }) {
                     window.__POLIGO_E2E_SET_EDITOR__ = source => {
                       editor.setValue(source)
                     }
+                    window.__POLIGO_E2E_SET_STDIN__ = value => {
+                      setExecutionStdin(
+                        typeof value === 'string'
+                          ? value
+                          : ''
+                      )
+                    }
                   }
                 }}
                 theme="poligo-neutral"
