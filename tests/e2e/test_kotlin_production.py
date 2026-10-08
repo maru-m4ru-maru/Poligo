@@ -377,8 +377,8 @@ fun main() {
             ]:
                 wait_for_output(page, output)
 
-            create_file(page, "cmd/app/Main.kt", nested_kotlin)
-            select_file(page, "cmd/app/Main.kt")
+            create_file(page, "cmd/app/Nested.kt", nested_kotlin)
+            select_file(page, "cmd/app/Nested.kt")
             page.get_by_label("実行引数").fill("")
             run_and_wait(page, "成功")
             wait_for_output(page, "nested-kotlin-ok")
