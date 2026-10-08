@@ -408,17 +408,25 @@ def main():
             open_debug(page)
 
             print("STEP: TSX JSX setup", flush=True)
-            create_file(
+            print("STEP: TSX rename main.ts -> main.tsx", flush=True)
+            rename_file(page, "main.ts", "main.tsx")
+            print("STEP: TSX open main.tsx", flush=True)
+            open_file(page, "main.tsx")
+            print("STEP: TSX set source", flush=True)
+            set_editor_value(
                 page,
-                "main.tsx",
                 '/** @jsx h */\nfunction h(tag: string, props: any, ...children: any[]) {\n    return tag + ":" + props.value + ":" + children.join("")\n}\n\nconst value: number = 42\nconst element = <div value={value}>TSX JSX</div>\nconsole.log(element)'
             )
             page.get_by_label("実行引数").fill("")
+            print("STEP: TSX JSX run", flush=True)
             run_and_expect_success(
                 page,
                 "div:42:TSX JSX"
             )
             print("PASS: TSX JSX execution")
+            print("STEP: TSX rename main.tsx -> main.ts", flush=True)
+            rename_file(page, "main.tsx", "main.ts")
+            open_file(page, "main.ts")
 
             print("STEP: declaration entrypoint rejection", flush=True)
             open_file(page, "main.ts")
