@@ -420,6 +420,7 @@ end"""
             wait_for_output(page, "Hello from Poligo Ruby E2E")
             wait_for_output(page, "unicode=日本語🚀€")
             wait_for_output(page, "ruby=2.7.")
+            wait_for_output(page, "encoding=UTF-8")
 
             set_editor_value(page, feature_ruby)
             run_and_wait(page, "成功")
