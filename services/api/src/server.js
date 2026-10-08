@@ -931,6 +931,89 @@ function buildRubyAdditionalFiles(
   return archive.toString('base64')
 }
 
+function getRustSourcePaths(files) {
+  return Object.keys(files)
+    .filter(filePath => filePath.toLowerCase().endsWith('.rs'))
+    .sort()
+}
+
+function buildRustAdditionalFiles(
+  files,
+  entrypoint,
+  environment,
+  args
+) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    if (
+      path === 'compile' ||
+      path === 'run'
+    ) {
+      throw new Error(
+        'compile and run are reserved filenames for Rust multi-file execution'
+      )
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (!archiveFiles.some(file => file.path.toLowerCase().endsWith('.rs'))) {
+    throw new Error('Rust source files are required')
+  }
+
+  archiveFiles.push({
+    path: 'compile',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      'RUSTC="$(command -v rustc || true)"',
+      'if [ -z "$RUSTC" ]; then',
+      '  RUSTC="$(find /usr/local /opt /root/.cargo /usr/lib /usr/share -type f -path "*/bin/rustc" -print -quit 2>/dev/null)"',
+      'fi',
+      'if [ -z "$RUSTC" ]; then',
+      '  echo "Rust compiler was not found." >&2',
+      '  exit 1',
+      'fi',
+      'mkdir -p /tmp/poligo-rust',
+      '"$RUSTC" --edition=2021 ' + shellQuote(entrypoint) + ' -o /tmp/poligo-rust/poligo'
+    ].join('\n') + '\n')
+  })
+
+  const environmentLines = Object.entries(environment || {}).map(
+    ([key, value]) => 'export ' + key + '=' + shellQuote(value)
+  )
+  const argumentLine = formatExecutionArguments(args || [])
+
+  archiveFiles.push({
+    path: 'run',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      ...environmentLines,
+      'exec /tmp/poligo-rust/poligo' +
+        (argumentLine ? ' ' + argumentLine : '')
+    ].join('\n') + '\n')
+  })
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('Rust execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
 function getKotlinSourcePaths(files) {
   return Object.keys(files)
     .filter(filePath => filePath.toLowerCase().endsWith('.kt'))
@@ -2631,6 +2714,40 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
         payload.args
       )
     }
+  } else if (payload.language === 'rust') {
+    const rustSourcePaths = getRustSourcePaths(files)
+    const environment = getExecutionEnvironment(files)
+    const hasEnvironment = Object.keys(environment).length > 0
+    const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
+      filePath !== entrypoint &&
+      !isSecretEnvFile(filePath)
+    )
+    const multiFile =
+      rustSourcePaths.length > 1 ||
+      hasEnvironment ||
+      hasAdditionalProjectFiles ||
+      entrypoint.includes('/') ||
+      payload.args.length > 0
+
+    if (multiFile) {
+      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!multiFileLanguageId) {
+        send(response, 503, {
+          error: 'Rust multi-file execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      languageId = multiFileLanguageId
+      preparedSource = null
+      options.additional_files = buildRustAdditionalFiles(
+        files,
+        entrypoint,
+        environment,
+        payload.args
+      )
+    }
   } else if (payload.language === 'kotlin') {
     const sourcePaths = getKotlinSourcePaths(files)
     const environment = getExecutionEnvironment(files)
@@ -2680,7 +2797,8 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     payload.args.length > 0 &&
     !(payload.language === 'java' && findMultiFileJudge0LanguageId(languages) === languageId) &&
     !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId) &&
-    !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId)
+    !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId) &&
+    !(payload.language === 'rust' && findMultiFileJudge0LanguageId(languages) === languageId)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
