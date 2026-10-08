@@ -62,6 +62,11 @@ def open_debug(page):
 
 
 def enter_stdin(page, value):
+    page.get_by_role(
+        "button",
+        name="ターミナル",
+        exact=True
+    ).click()
     terminal = page.locator(".terminal:visible")
     terminal.click(force=True)
     page.keyboard.type(value)
