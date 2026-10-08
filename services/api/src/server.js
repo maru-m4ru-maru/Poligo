@@ -958,7 +958,27 @@ function buildKotlinAdditionalFiles(
       '  echo "No Kotlin source files found." >&2',
       '  exit 1',
       'fi',
-      '"$KOTLINC" "${sources[@]}" -d /tmp/poligo-kotlin'
+      '"$KOTLINC" "${sources[@]}" -d /tmp/poligo-kotlin',
+      'KOTLIN_LIB_DIR="$(dirname "$KOTLINC")/../lib"',
+      'if [ ! -d "$KOTLIN_LIB_DIR" ]; then',
+      '  KOTLIN_LIB_DIR=""',
+      'fi',
+      'if [ -z "$KOTLIN_LIB_DIR" ] || ! find "$KOTLIN_LIB_DIR" -maxdepth 1 -type f -name "kotlin-stdlib*.jar" -print -quit | grep -q .; then',
+      '  KOTLIN_LIB_DIR=""',
+      '  for root in /usr/local /opt /root/.sdkman /usr/lib /usr/share; do',
+      '    if [ -d "$root" ]; then',
+      '      KOTLIN_LIB_DIR="$(find "$root" -type f -name "kotlin-stdlib*.jar" -print -quit 2>/dev/null | xargs -r dirname)',
+      '      if [ -n "$KOTLIN_LIB_DIR" ]; then',
+      '        break',
+      '      fi',
+      '    fi',
+      '  done',
+      'fi',
+      'if [ -z "$KOTLIN_LIB_DIR" ]; then',
+      '  echo "Kotlin standard library was not found." >&2',
+      '  exit 1',
+      'fi',
+      'find "$KOTLIN_LIB_DIR" -maxdepth 1 -type f -name "kotlin-stdlib*.jar" -print > /tmp/poligo-kotlin-stdlib-files'
     ].join('\n') + '\n')
   })
 
@@ -974,12 +994,12 @@ function buildKotlinAdditionalFiles(
       '#!/bin/bash',
       'set -e',
       ...environmentLines,
-      'KOTLIN="$(dirname "$KOTLINC")/kotlin"',
-      'if [ ! -x "$KOTLIN" ]; then',
-      '  echo "Kotlin runtime was not found." >&2',
+      'if [ ! -s /tmp/poligo-kotlin-stdlib-files ]; then',
+      '  echo "Kotlin standard library metadata was not found." >&2',
       '  exit 1',
       'fi',
-      'exec "$KOTLIN" -classpath /tmp/poligo-kotlin ' +
+      'KOTLIN_STDLIB="$(paste -sd: /tmp/poligo-kotlin-stdlib-files)"',
+      'exec java -cp "/tmp/poligo-kotlin:$KOTLIN_STDLIB" ' +
         shellQuote(mainClass) +
         (argumentLine ? ' ' + argumentLine : '')
     ].join('\n') + '\n')
