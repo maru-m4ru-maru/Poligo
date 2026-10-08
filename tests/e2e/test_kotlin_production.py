@@ -217,6 +217,28 @@ def main():
     println("kotlin=" + KotlinVersion.CURRENT)
 }"""
 
+    feature_kotlin = """data class User(val name: String, val score: Int)
+
+fun String.poligoLabel(): String {
+    return "label=" + uppercase()
+}
+
+fun main() {
+    val user = User("maru", 10)
+    val values = listOf(1, 2, 3, 4, 5)
+    val doubled = values.map { it * 2 }.filter { it >= 6 }
+    val state = when {
+        user.score >= 10 -> "advanced"
+        else -> "basic"
+    }
+    val nickname: String? = "kotlin"
+    println("data=" + user.name + ":" + user.score)
+    println("collection=" + doubled.joinToString(","))
+    println("when=" + state)
+    println("nullable=" + (nickname?.uppercase() ?: "NONE"))
+    println("extension=" + "ok".poligoLabel())
+}"""
+
     main_kotlin = """import java.io.File
 import java.nio.charset.StandardCharsets
 import kotlin.system.exitProcess
@@ -299,12 +321,6 @@ object ObjectEntry {
 }"""
 
     packaged_kotlin = """@file:JvmName("CustomEntry")
-
-fun main() {
-    println("jvmname-kotlin-ok")
-}"""
-
-    jvmname_kotlin = """@file:JvmName("CustomEntry")
 
 fun main() {
     println("jvmname-kotlin-ok")
@@ -414,6 +430,17 @@ fun main() {
             open_debug(page)
             run_and_wait(page, "成功")
             wait_for_output(page, "Hello from Poligo Kotlin E2E")
+
+            set_editor_value(page, feature_kotlin)
+            run_and_wait(page, "成功")
+            for output in [
+                "data=maru:10",
+                "collection=6,8,10",
+                "when=advanced",
+                "nullable=KOTLIN",
+                "extension=label=OK",
+            ]:
+                wait_for_output(page, output)
             wait_for_output(page, "unicode=日本語🚀€")
             wait_for_output(page, "kotlin=2.1.")
 
