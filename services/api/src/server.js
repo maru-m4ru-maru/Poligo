@@ -2313,6 +2313,12 @@ async function submitJudge0(source, languageId, stdin, options = {}) {
     lastResponse = judge0Response
     lastResult = result
 
+    console.warn(
+      'Judge0 submission failed:',
+      judge0Response.status,
+      result
+    )
+
     if (judge0Response.status !== 429 && judge0Response.status !== 502 && judge0Response.status !== 503) {
       break
     }
