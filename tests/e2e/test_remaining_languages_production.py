@@ -88,11 +88,10 @@ def run_and_wait(page):
         if value == "成功":
             return
 
+        normalized_text = text.lower()
         transient = (
-            "Execution Error 502" in text or
-            "Execution Error502" in text or
-            "Execution Error 503" in text or
-            "Execution Error503" in text
+            "execution error" in normalized_text and
+            ("502" in normalized_text or "503" in normalized_text)
         )
 
         if not transient or attempt == 4:
