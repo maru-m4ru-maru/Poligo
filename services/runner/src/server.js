@@ -71,6 +71,76 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (
+    request.method === 'POST' &&
+    request.url === '/v1/terminals'
+  ) {
+    try {
+      const payload = await readJson(request)
+      const session = await createTerminalSession(payload)
+
+      send(response, 202, session)
+    } catch (error) {
+      send(response, 400, {
+        error: error instanceof Error
+          ? error.message
+          : 'invalid terminal request'
+      })
+    }
+
+    return
+  }
+
+  if (
+    request.method === 'GET' &&
+    request.url.startsWith('/v1/terminals/') &&
+    request.url.endsWith('/files')
+  ) {
+    const id = request.url.slice(
+      '/v1/terminals/'.length,
+      -'/files'.length
+    )
+
+    try {
+      const files = await getTerminalFiles(id)
+
+      send(response, 200, {
+        files
+      })
+    } catch (error) {
+      send(response, 404, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal session not found'
+      })
+    }
+
+    return
+  }
+
+  if (
+    request.method === 'DELETE' &&
+    request.url.startsWith('/v1/terminals/')
+  ) {
+    const id = request.url.slice('/v1/terminals/'.length)
+
+    try {
+      await closeTerminal(id)
+
+      send(response, 200, {
+        ok: true
+      })
+    } catch (error) {
+      send(response, 404, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal session not found'
+      })
+    }
+
+    return
+  }
+
   if (request.method === 'POST' && request.url === '/v1/run') {
     try {
       const payload = await readJson(request)
