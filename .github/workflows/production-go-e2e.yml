@@ -50,7 +50,7 @@ jobs:
       - name: Run production Go E2E
         env:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
-        run: python tests/e2e/test_go_production.py
+        run: python tests/e2e/test_go_production_v2.py
 
       - name: Upload failure screenshot
         if: failure()
