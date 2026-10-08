@@ -3190,7 +3190,8 @@ async function handleExecution(request, response) {
       send(response, 400, {
         error: error instanceof Error
           ? error.message
-          : 'execution request is invalid'
+          : 'execution request is invalid',
+        type: 'invalid_execution_request'
       })
     }
     return
