@@ -473,7 +473,8 @@ fn main() {
 
             enter_stdin(page, "日本語入力")
 
-            open_debug(page)            page.get_by_label("実行引数").fill(
+            open_debug(page)
+            page.get_by_label("実行引数").fill(
                 "alpha multi-value"
             )
             set_editor_value(page, main_rust)
