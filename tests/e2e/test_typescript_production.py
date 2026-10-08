@@ -14,6 +14,8 @@ BASE_URL = os.getenv(
     "https://poligo-web-2n2l.onrender.com"
 ).rstrip("/")
 
+API_URL = "https://poligo-api-g0wc.onrender.com"
+
 
 def set_editor_value(page, source):
     page.wait_for_function(
@@ -231,6 +233,94 @@ def create_file(page, name, source=""):
         set_editor_value(page, source)
 
 
+
+def run_typescript_tsx_api_success(page, context, source, expected_output):
+    cookies = context.cookies()
+    cookie_header = "; ".join(
+        cookie["name"] + "=" + cookie["value"]
+        for cookie in cookies
+    )
+    headers = {
+        "Cookie": cookie_header,
+        "Origin": BASE_URL
+    }
+
+    print("STEP: TSX API fetch project", flush=True)
+    projects_response = page.request.get(
+        API_URL + "/api/projects",
+        headers=headers,
+        timeout=15_000
+    )
+
+    if not 200 <= projects_response.status < 300:
+        raise AssertionError(projects_response.text())
+
+    projects = projects_response.json()
+
+    if not projects:
+        raise AssertionError("No project was returned")
+
+    project_id = projects[0]["id"]
+
+    payload = {
+        "projectId": project_id,
+        "language": "typescript",
+        "entrypoint": "main.tsx",
+        "stdin": "",
+        "args": [],
+        "files": {
+            "main.tsx": source
+        }
+    }
+
+    print("STEP: TSX API submit", flush=True)
+    response = page.request.post(
+        API_URL + "/api/executions",
+        data=payload,
+        headers=headers,
+        timeout=60_000
+    )
+
+    body = response.json()
+
+    if not 200 <= response.status < 300:
+        raise AssertionError(str(body))
+
+    execution_id = body["id"]
+
+    for attempt in range(60):
+        status_response = page.request.get(
+            API_URL + "/api/executions/" + execution_id,
+            headers=headers,
+            timeout=15_000
+        )
+
+        if not 200 <= status_response.status < 300:
+            raise AssertionError(status_response.text())
+
+        status_body = status_response.json()
+        status = status_body.get("status")
+
+        if status in {"succeeded", "failed", "timeout"}:
+            if status != "succeeded":
+                raise AssertionError(str(status_body))
+
+            stdout = (status_body.get("result") or {}).get(
+                "stdout",
+                ""
+            )
+
+            if expected_output not in stdout:
+                raise AssertionError(
+                    "Unexpected TSX output: " + str(status_body)
+                )
+
+            return
+
+        time.sleep(1)
+
+    raise AssertionError("TSX API execution did not finish")
+
 def run_typescript_case(
     page,
     name,
@@ -407,26 +497,14 @@ def main():
             create_typescript_project(page)
             open_debug(page)
 
-            print("STEP: TSX JSX setup", flush=True)
-            print("STEP: TSX rename main.ts -> main.tsx", flush=True)
-            rename_file(page, "main.ts", "main.tsx")
-            print("STEP: TSX open main.tsx", flush=True)
-            open_file(page, "main.tsx")
-            print("STEP: TSX set source", flush=True)
-            set_editor_value(
+            print("STEP: TSX JSX production execution", flush=True)
+            run_typescript_tsx_api_success(
                 page,
-                '/** @jsx h */\nfunction h(tag: string, props: any, ...children: any[]) {\n    return tag + ":" + props.value + ":" + children.join("")\n}\n\nconst value: number = 42\nconst element = <div value={value}>TSX JSX</div>\nconsole.log(element)'
-            )
-            page.get_by_label("実行引数").fill("")
-            print("STEP: TSX browser execution", flush=True)
-            run_and_expect_success(
-                page,
+                context,
+                '/** @jsx h */\nfunction h(tag: string, props: any, ...children: any[]) {\n    return tag + ":" + props.value + ":" + children.join("")\n}\n\nconst value: number = 42\nconst element = <div value={value}>TSX JSX</div>\nconsole.log(element)',
                 "div:42:TSX JSX"
             )
             print("PASS: TSX JSX execution")
-            print("STEP: TSX rename main.tsx -> main.ts", flush=True)
-            rename_file(page, "main.tsx", "main.ts")
-            open_file(page, "main.ts")
 
             print("STEP: declaration entrypoint rejection", flush=True)
             open_file(page, "main.ts")
