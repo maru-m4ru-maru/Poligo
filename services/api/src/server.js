@@ -1112,6 +1112,134 @@ function getKotlinMainClass(source, entrypoint) {
     : className
 }
 
+function getTypeScriptSourcePaths(files) {
+  return Object.keys(files)
+    .filter(filePath => {
+      const lower = filePath.toLowerCase()
+      return (
+        (lower.endsWith('.ts') || lower.endsWith('.tsx')) &&
+        !lower.endsWith('.d.ts')
+      )
+    })
+    .sort()
+}
+
+function getTypeScriptOutputPath(entrypoint) {
+  return entrypoint.replace(/\.(tsx?)$/i, '.js')
+}
+
+function buildTypeScriptAdditionalFiles(
+  files,
+  entrypoint,
+  environment,
+  args
+) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    if (path === 'compile' || path === 'run') {
+      throw new Error(
+        'compile and run are reserved filenames for TypeScript multi-file execution'
+      )
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  const sourcePaths = getTypeScriptSourcePaths(files)
+
+  if (!sourcePaths.length) {
+    throw new Error('TypeScript source files are required')
+  }
+
+  const compilerPath = [
+    'TSCC="$(command -v tsc || true)"',
+    'if [ -z "$TSCC" ]; then',
+    '  TSCC="$(find /usr/local /opt /root/.nvm /root/.asdf /usr/lib /usr/share -type f -name tsc -print -quit 2>/dev/null)"',
+    'fi',
+    'if [ -z "$TSCC" ]; then',
+    '  echo "TypeScript compiler was not found." >&2',
+    '  exit 1',
+    'fi'
+  ]
+
+  const nodePath = [
+    'NODE="$(command -v node || true)"',
+    'if [ -z "$NODE" ]; then',
+    '  echo "Node.js runtime was not found." >&2',
+    '  exit 1',
+    'fi'
+  ]
+
+  const compileSources = [
+    'mapfile -d "" sources < <(find . -type f \(',
+    '  -name "*.ts" -o -name "*.tsx"',
+    '\) ! -name "*.d.ts" -print0)',
+    'if [ "${#sources[@]}" -eq 0 ]; then',
+    '  echo "No TypeScript source files found." >&2',
+    '  exit 1',
+    'fi',
+    'mkdir -p out',
+    ...compilerPath,
+    ...nodePath,
+    '"$TSCC" --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --outDir out "${sources[@]}"',
+    'while IFS= read -r -d "" resource; do',
+    '  case "$resource" in',
+    '    ./compile|./run|./out/*|*.ts|*.tsx|*.d.ts) continue ;;',
+    '  esac',
+    '  target="out/${resource#./}"',
+    '  mkdir -p "$(dirname "$target")"',
+    '  cp -- "$resource" "$target"',
+    'done < <(find . -type f -not -path "./out/*" -print0)'
+  ]
+
+  archiveFiles.push({
+    path: 'compile',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      ...compileSources
+    ].join('\n') + '\n')
+  })
+
+  const environmentLines = Object.entries(environment || {}).map(
+    ([key, value]) => 'export ' + key + '=' + shellQuote(value)
+  )
+  const argumentLine = formatExecutionArguments(args || [])
+  const runtimeEntrypoint = getTypeScriptOutputPath(entrypoint)
+
+  archiveFiles.push({
+    path: 'run',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      ...nodePath,
+      ...environmentLines,
+      'cd out',
+      'exec "$NODE" ' +
+        shellQuote(runtimeEntrypoint) +
+        (argumentLine ? ' ' + argumentLine : ' "$@"')
+    ].join('\n') + '\n')
+  })
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('TypeScript execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
 function buildKotlinAdditionalFiles(
   files,
   entrypoint,
@@ -2843,6 +2971,46 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
         payload.args
       )
     }
+  } else if (payload.language === 'typescript') {
+    options.cpu_time_limit = 5
+    options.wall_time_limit = 15
+
+    const sourcePaths = getTypeScriptSourcePaths(files)
+    const environment = getExecutionEnvironment(files)
+    const hasEnvironment = Object.keys(environment).length > 0
+    const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
+      filePath !== entrypoint &&
+      !isSecretEnvFile(filePath) &&
+      !filePath.toLowerCase().endsWith('.ts') &&
+      !filePath.toLowerCase().endsWith('.tsx') &&
+      !filePath.toLowerCase().endsWith('.d.ts')
+    )
+    const multiFile =
+      sourcePaths.length > 1 ||
+      hasEnvironment ||
+      hasAdditionalProjectFiles ||
+      entrypoint.includes('/') ||
+      payload.args.length > 0
+
+    if (multiFile) {
+      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!multiFileLanguageId) {
+        send(response, 503, {
+          error: 'TypeScript multi-file execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      languageId = multiFileLanguageId
+      preparedSource = null
+      options.additional_files = buildTypeScriptAdditionalFiles(
+        files,
+        entrypoint,
+        environment,
+        payload.args
+      )
+    }
   } else if (payload.language === 'php') {
     const environment = getExecutionEnvironment(files)
     preparedSource = preparePhpSource(entrypoint, environment)
@@ -2857,7 +3025,8 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     payload.args.length > 0 &&
     !(payload.language === 'java' && findMultiFileJudge0LanguageId(languages) === languageId) &&
     !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId) &&
-    !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId)
+    !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId) &&
+    !(payload.language === 'typescript' && findMultiFileJudge0LanguageId(languages) === languageId)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
