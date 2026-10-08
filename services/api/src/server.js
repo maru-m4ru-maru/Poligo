@@ -937,26 +937,118 @@ function getRustSourcePaths(files) {
     .sort()
 }
 
-function buildRustAdditionalFiles(
+function getRustModulePaths(source, files, entrypoint) {
+  const entryDirectory = entrypoint.includes('/')
+    ? entrypoint.slice(0, entrypoint.lastIndexOf('/'))
+    : ''
+
+  const modulePaths = new Map()
+  const pattern = /^([ \t]*)mod[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*;[ \t]*$/gm
+  let match
+
+  while ((match = pattern.exec(source))) {
+    const moduleName = match[2]
+
+    if (modulePaths.has(moduleName)) {
+      continue
+    }
+
+    const siblingFile = entryDirectory
+      ? entryDirectory + '/' + moduleName + '.rs'
+      : moduleName + '.rs'
+    const siblingDirectory = entryDirectory
+      ? entryDirectory + '/' + moduleName + '/mod.rs'
+      : moduleName + '/mod.rs'
+
+    if (Object.prototype.hasOwnProperty.call(files, siblingFile)) {
+      modulePaths.set(moduleName, siblingFile)
+      continue
+    }
+
+    if (Object.prototype.hasOwnProperty.call(files, siblingDirectory)) {
+      modulePaths.set(moduleName, siblingDirectory)
+    }
+  }
+
+  return modulePaths
+}
+
+function prepareRustSource(
+  source,
   files,
   entrypoint,
-  environment,
-  args
+  environment
+) {
+  let prepared = source
+
+  const modulePaths = getRustModulePaths(
+    source,
+    files,
+    entrypoint
+  )
+
+  if (modulePaths.size) {
+    prepared = prepared.replace(
+      /^([ \t]*)mod[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*;[ \t]*$/gm,
+      (full, indentation, moduleName) => {
+        const modulePath = modulePaths.get(moduleName)
+
+        if (!modulePath) {
+          return full
+        }
+
+        return indentation +
+          '#[path = ' +
+          JSON.stringify(modulePath) +
+          '] mod ' +
+          moduleName +
+          ';'
+      }
+    )
+  }
+
+  if (!Object.keys(environment || {}).length) {
+    return prepared
+  }
+
+  const mainPattern = /\\bfn[ \t]+main[ \t]*\\(/
+  if (!mainPattern.test(prepared)) {
+    throw new Error('Rust entrypoint must contain a main function')
+  }
+
+  prepared = prepared.replace(
+    mainPattern,
+    'fn __poligo_user_main('
+  )
+
+  const environmentLines = Object.entries(environment).map(
+    ([key, value]) =>
+      '    std::env::set_var(' +
+      JSON.stringify(key) +
+      ', ' +
+      JSON.stringify(value) +
+      ');'
+  )
+
+  return [
+    prepared,
+    '',
+    'fn main() {',
+    ...environmentLines,
+    '    __poligo_user_main();',
+    '}'
+  ].join('\\n')
+}
+
+function buildRustAdditionalFiles(
+  files,
+  entrypoint
 ) {
   const archiveFiles = []
 
   for (const [path, content] of Object.entries(files)) {
-    if (isSecretEnvFile(path)) {
+    if (path === entrypoint || isSecretEnvFile(path)) {
       continue
-    }
-
-    if (
-      path === 'compile' ||
-      path === 'run'
-    ) {
-      throw new Error(
-        'compile and run are reserved filenames for Rust multi-file execution'
-      )
     }
 
     archiveFiles.push({
@@ -965,45 +1057,9 @@ function buildRustAdditionalFiles(
     })
   }
 
-  if (!archiveFiles.some(file => file.path.toLowerCase().endsWith('.rs'))) {
-    throw new Error('Rust source files are required')
+  if (!archiveFiles.length) {
+    return ''
   }
-
-  archiveFiles.push({
-    path: 'compile',
-    mode: 0o100755,
-    data: Buffer.from([
-      '#!/bin/bash',
-      'set -e',
-      'RUSTC="$(command -v rustc || true)"',
-      'if [ -z "$RUSTC" ]; then',
-      '  RUSTC="$(find /usr/local /opt /root/.cargo /usr/lib /usr/share -type f -path "*/bin/rustc" -print -quit 2>/dev/null)"',
-      'fi',
-      'if [ -z "$RUSTC" ]; then',
-      '  echo "Rust compiler was not found." >&2',
-      '  exit 1',
-      'fi',
-      'mkdir -p /tmp/poligo-rust',
-      '"$RUSTC" --edition=2021 ' + shellQuote(entrypoint) + ' -o /tmp/poligo-rust/poligo'
-    ].join('\n') + '\n')
-  })
-
-  const environmentLines = Object.entries(environment || {}).map(
-    ([key, value]) => 'export ' + key + '=' + shellQuote(value)
-  )
-  const argumentLine = formatExecutionArguments(args || [])
-
-  archiveFiles.push({
-    path: 'run',
-    mode: 0o100755,
-    data: Buffer.from([
-      '#!/bin/bash',
-      'set -e',
-      ...environmentLines,
-      'exec /tmp/poligo-rust/poligo' +
-        (argumentLine ? ' ' + argumentLine : '')
-    ].join('\n') + '\n')
-  })
 
   const archive = zipStore(archiveFiles)
 
@@ -2715,38 +2771,28 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       )
     }
   } else if (payload.language === 'rust') {
-    const rustSourcePaths = getRustSourcePaths(files)
     const environment = getExecutionEnvironment(files)
-    const hasEnvironment = Object.keys(environment).length > 0
-    const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
-      filePath !== entrypoint &&
-      !isSecretEnvFile(filePath)
-    )
-    const multiFile =
-      rustSourcePaths.length > 1 ||
-      hasEnvironment ||
-      hasAdditionalProjectFiles ||
+    const needsPreparedRust =
+      Object.keys(environment).length > 0 ||
       entrypoint.includes('/') ||
-      payload.args.length > 0
+      getRustModulePaths(source, files, entrypoint).size > 0
 
-    if (multiFile) {
-      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
-
-      if (!multiFileLanguageId) {
-        send(response, 503, {
-          error: 'Rust multi-file execution is unavailable on this Judge0 instance'
-        })
-        return
-      }
-
-      languageId = multiFileLanguageId
-      preparedSource = null
-      options.additional_files = buildRustAdditionalFiles(
+    if (needsPreparedRust) {
+      preparedSource = prepareRustSource(
+        source,
         files,
         entrypoint,
-        environment,
-        payload.args
+        environment
       )
+    }
+
+    const additionalFiles = buildRustAdditionalFiles(
+      files,
+      entrypoint
+    )
+
+    if (additionalFiles) {
+      options.additional_files = additionalFiles
     }
   } else if (payload.language === 'kotlin') {
     const sourcePaths = getKotlinSourcePaths(files)
@@ -2797,8 +2843,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     payload.args.length > 0 &&
     !(payload.language === 'java' && findMultiFileJudge0LanguageId(languages) === languageId) &&
     !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId) &&
-    !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId) &&
-    !(payload.language === 'rust' && findMultiFileJudge0LanguageId(languages) === languageId)
+    !(payload.language === 'ruby' && findMultiFileJudge0LanguageId(languages) === languageId)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
