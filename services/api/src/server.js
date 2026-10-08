@@ -2799,6 +2799,9 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       options.additional_files = additionalFiles
     }
   } else if (payload.language === 'kotlin') {
+    options.cpu_time_limit = 5
+    options.wall_time_limit = 15
+
     const sourcePaths = getKotlinSourcePaths(files)
     const environment = getExecutionEnvironment(files)
     const hasEnvironment = Object.keys(environment).length > 0
