@@ -22,6 +22,7 @@ import Dashboard from './Dashboard'
 import HomePage from './HomePage'
 import TermsPage from './TermsPage'
 import AccountPage from './AccountPage'
+import TerminalPanel from './TerminalPanel'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1082,6 +1083,7 @@ function IDE({ projectId }) {
   const [dialog, setDialog] = useState(null)
   const [dialogBusy, setDialogBusy] = useState(false)
   const terminalRef = useRef(null)
+  const terminalPanelRef = useRef(null)
   const terminal = useRef(null)
   const terminalPendingLines = useRef([])
   const terminalInputBuffer = useRef('')
@@ -2533,12 +2535,7 @@ function IDE({ projectId }) {
   }
 
   function writeTerminalLines(text) {
-    const lines = String(text || '').split('\n')
-
-    setTerminalLines(current => [
-      ...current,
-      ...lines
-    ])
+    terminalPanelRef.current?.writeln(text)
   }
 
   function replaceTerminalInput(prompt, input) {
@@ -3606,19 +3603,12 @@ function IDE({ projectId }) {
                     (bottomTab === 'terminal' ? '' : 'panel-hidden')
                   }
                 >
-                  <div
-                    className="terminal"
-                    ref={terminalRef}
-                    tabIndex={0}
-                    onClick={() => terminalRef.current?.focus()}
-                    onKeyDown={handleTerminalKeyDown}
-                  >
-                    {terminalLines.map((line, index) => (
-                      <div key={index} className="terminal-line">
-                        {line || '\u00a0'}
-                      </div>
-                    ))}
-                  </div>
+                  <TerminalPanel
+                    ref={terminalPanelRef}
+                    apiUrl={API_URL}
+                    projectId={currentProjectId}
+                    active={bottomOpen && bottomTab === 'terminal'}
+                  />
                 </div>
 
                 <div
