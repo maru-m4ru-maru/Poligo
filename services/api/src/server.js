@@ -867,6 +867,126 @@ function buildGoAdditionalFiles(files, entrypoint) {
   return archive.toString('base64')
 }
 
+function getKotlinSourcePaths(files) {
+  return Object.keys(files)
+    .filter(filePath => filePath.toLowerCase().endsWith('.kt'))
+    .sort()
+}
+
+function getKotlinPackageName(source) {
+  const match = source.match(
+    /^\s*package[ \t]+([A-Za-z_][A-Za-z0-9_.]*)/m
+  )
+
+  return match?.[1] || ''
+}
+
+function getKotlinMainClass(source, entrypoint) {
+  const fileName = entrypoint.split('/').pop() || 'Main.kt'
+  const baseName = fileName.replace(/\.kt$/i, '')
+
+  const jvmName = source.match(
+    /@file:JvmName\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*\)/
+  )
+
+  let className = jvmName?.[1] || baseName + 'Kt'
+
+  const objectMain = source.match(
+    /\bobject[ \t]+([A-Za-z_][A-Za-z0-9_]*)[\s\S]{0,2000}?\b@JvmStatic[ \t]+fun[ \t]+main[ \t]*\(/
+  )
+
+  if (objectMain) {
+    className = objectMain[1]
+  }
+
+  const packageName = getKotlinPackageName(source)
+
+  return packageName
+    ? packageName + '.' + className
+    : className
+}
+
+function buildKotlinAdditionalFiles(
+  files,
+  entrypoint,
+  mainClass,
+  environment
+) {
+  const archiveFiles = []
+
+  for (const [path, content] of Object.entries(files)) {
+    if (isSecretEnvFile(path)) {
+      continue
+    }
+
+    if (
+      path === 'compile' ||
+      path === 'run'
+    ) {
+      throw new Error(
+        'compile and run are reserved filenames for Kotlin multi-file execution'
+      )
+    }
+
+    archiveFiles.push({
+      path,
+      data: decodeExecutionFile(content)
+    })
+  }
+
+  if (!archiveFiles.some(file => file.path.toLowerCase().endsWith('.kt'))) {
+    throw new Error('Kotlin source files are required')
+  }
+
+  archiveFiles.push({
+    path: 'compile',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      'KOTLINC="$(command -v kotlinc || true)"',
+      'if [ -z "$KOTLINC" ]; then',
+      '  KOTLINC="$(find /usr/local -type f -path "*/bin/kotlinc" -print -quit)"',
+      'fi',
+      'if [ -z "$KOTLINC" ]; then',
+      '  echo "Kotlin compiler was not found." >&2',
+      '  exit 1',
+      'fi',
+      'mapfile -d "" sources < <(find . -type f -iname "*.kt" -print0)',
+      'if [ -z "${#sources[@]}" ]; then',
+      '  echo "No Kotlin source files found." >&2',
+      '  exit 1',
+      'fi',
+      '"$KOTLINC" "${sources[@]}" -include-runtime -d /tmp/poligo-kotlin.jar'
+    ].join('\n') + '\n')
+  })
+
+  const environmentLines = Object.entries(environment || {}).map(
+    ([key, value]) => 'export ' + key + '=' + shellQuote(value)
+  )
+
+  archiveFiles.push({
+    path: 'run',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      ...environmentLines,
+      'exec java -cp /tmp/poligo-kotlin.jar ' +
+        shellQuote(mainClass) +
+        ' "$@"'
+    ].join('\n') + '\n')
+  })
+
+  const archive = zipStore(archiveFiles)
+
+  if (archive.length > MAX_EXECUTION_ARCHIVE_BYTES) {
+    throw new Error('Kotlin execution files are too large')
+  }
+
+  return archive.toString('base64')
+}
+
 function buildJavaAdditionalFiles(
   files,
   entrypoint,
@@ -2323,7 +2443,6 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       options.additional_files = additionalFiles
     }
   } else if (payload.language === 'java') {
-  } else if (payload.language === 'java') {
     const javaSourcePaths = getJavaSourcePaths(files)
     const packageName = getJavaPackageName(source)
     const environment = getExecutionEnvironment(files)
@@ -2380,6 +2499,31 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       if (additionalFiles) {
         options.additional_files = additionalFiles
       }
+    }
+  } else if (payload.language === 'kotlin') {
+    const sourcePaths = getKotlinSourcePaths(files)
+    const environment = getExecutionEnvironment(files)
+    const hasEnvironment = Object.keys(environment).length > 0
+    const hasAdditionalProjectFiles = Object.keys(files).some(filePath =>
+      filePath !== entrypoint &&
+      !isSecretEnvFile(filePath)
+    )
+    const mainClass = getKotlinMainClass(source, entrypoint)
+    const multiFile =
+      sourcePaths.length > 1 ||
+      hasEnvironment ||
+      hasAdditionalProjectFiles ||
+      entrypoint.includes('/')
+
+    if (multiFile) {
+      languageId = JUDGE0_MULTI_FILE_LANGUAGE_ID
+      preparedSource = null
+      options.additional_files = buildKotlinAdditionalFiles(
+        files,
+        entrypoint,
+        mainClass,
+        environment
+      )
     }
   } else if (payload.language === 'php') {
     const environment = getExecutionEnvironment(files)
