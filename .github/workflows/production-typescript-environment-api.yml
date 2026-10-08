@@ -1,0 +1,61 @@
+name: Poligo TypeScript API environment diagnostic
+run-name: Poligo TypeScript API environment diagnostic
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: poligo-typescript-api-environment-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  typescript-api-environment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.63.0
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Wait for production services
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+        run: |
+          set -e
+          for attempt in $(seq 1 240); do
+            if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_API_URL/api/health" >/tmp/poligo-api-health.json &&
+              curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_WEB_URL/" >/tmp/poligo-web-health.html; then
+              cat /tmp/poligo-api-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/poligo-api-health.json 2>/dev/null || true
+          exit 1
+
+      - name: Run direct TypeScript environment diagnostic
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+        run: python -u tests/e2e/test_typescript_environment_api.py
+
+      - name: Upload failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: poligo-typescript-api-environment-failure
+          path: poligo-typescript-api-environment-failure.png
+          if-no-files-found: ignore
