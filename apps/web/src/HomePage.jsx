@@ -15,6 +15,7 @@ const LANGUAGES = [
   { name: 'HTML', icon: '/icons/html5.svg' },
   { name: 'CSS', icon: '/icons/css.svg' },
   { name: 'JavaScript', icon: '/icons/javascript.svg' },
+  { name: 'TypeScript', icon: '/icons/typescript.svg' },
   { name: 'Python', icon: '/icons/python.svg' },
   { name: 'C', icon: '/icons/c.svg' },
   { name: 'C++', icon: '/icons/cplusplus.svg' },
