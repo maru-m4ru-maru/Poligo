@@ -32,6 +32,12 @@ LANGUAGES = [
         "output": "C++ OK 日本語🚀",
     },
     {
+        "title": "TypeScript",
+        "file": "main.ts",
+        "source": 'interface User { name: string; age: number }\n\nconst user: User = { name: "TypeScript", age: 5 }\nconsole.log("TypeScript OK 日本語🚀", user.name, user.age)',
+        "output": "TypeScript OK 日本語🚀",
+    },
+    {
         "title": "PHP",
         "file": "index.php",
         "source": '<?php\necho "PHP OK 日本語🚀\\n";',
