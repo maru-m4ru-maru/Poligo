@@ -445,7 +445,7 @@ func main() {
             create_file(page, "cmd/injection/Injection.go", injection_go)
             select_file(page, "cmd/injection/Injection.go")
             page.get_by_label("実行引数").fill(
-                "$(touch " + arg_marker + ")"
+                '"$(touch ' + arg_marker + ')"'
             )
             select_file(page, ".env")
             set_editor_value(
