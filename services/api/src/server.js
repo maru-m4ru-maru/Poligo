@@ -38,7 +38,6 @@ const EXECUTION_MAX_PROCESSES = 60
 const EXECUTION_MAX_FILE_SIZE = 1_024
 const MAX_EXECUTION_ARGUMENTS = 32
 const MAX_EXECUTION_ARGUMENT_BYTES = 512
-const JUDGE0_MULTI_FILE_LANGUAGE_ID = 89
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
 const executionRateState = new Map()
@@ -324,7 +323,7 @@ function getCFamilySourcePaths(files, language) {
 function findMultiFileJudge0LanguageId(languages) {
   const candidate = languages.find(item =>
     item?.is_archived !== true &&
-    item?.id === JUDGE0_MULTI_FILE_LANGUAGE_ID &&
+    Number.isInteger(item?.id) &&
     typeof item?.name === 'string' &&
     item.name.toLowerCase() === 'multi-file program'
   )
@@ -2572,7 +2571,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   if (
     payload.args.length > 0 &&
     !(payload.language === 'java' && languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID) &&
-    !(payload.language === 'kotlin' && languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID)
+    !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
   }
