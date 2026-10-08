@@ -1,4 +1,11 @@
 import http from 'node:http'
+import { WebSocketServer } from 'ws'
+import {
+  attachTerminalSocket,
+  closeTerminal,
+  createTerminalSession,
+  getTerminalFiles
+} from './terminal.js'
 import { enqueueJob, getJob, listExecutionLanguages } from './executor.js'
 
 const port = Number(process.env.PORT || 10001)
