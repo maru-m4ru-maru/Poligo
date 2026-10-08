@@ -187,7 +187,7 @@ def create_typescript_project(page):
     ).to_be_visible(timeout=30_000)
 
 
-def delete_file(page, name):
+def rename_file(page, name, new_name):
     file_row = page.locator(
         '.explorer-file[title="' + name + '"]'
     )
@@ -195,17 +195,17 @@ def delete_file(page, name):
 
     file_row.get_by_role(
         "button",
-        name="ファイルを削除"
+        name="名前を変更"
     ).click()
 
-    page.get_by_role(
-        "dialog"
-    ).get_by_role(
-        "button",
-        name="Delete"
-    ).click()
+    rename_input = file_row.locator(".explorer-file-rename")
+    expect(rename_input).to_be_visible(timeout=5_000)
+    rename_input.fill(new_name)
+    rename_input.press("Enter")
 
-    expect(file_row).not_to_be_visible(timeout=10_000)
+    expect(
+        page.locator('.explorer-file[title="' + new_name + '"]')
+    ).to_be_visible(timeout=10_000)
 
 
 def delete_project(page):
@@ -325,7 +325,7 @@ def main():
             print("PASS: TypeScript arguments")
 
             print("STEP: TSX setup", flush=True)
-            delete_file(page, "main.ts")
+            rename_file(page, "main.ts", "main.txt")
             upload_file(
                 page,
                 "main.tsx",
