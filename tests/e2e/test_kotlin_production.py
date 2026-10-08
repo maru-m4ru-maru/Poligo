@@ -317,6 +317,40 @@ fun main() {
                 timeout=60_000
             )
 
+            session_check = page.evaluate(
+                """async () => {
+                    const response = await fetch('/api/auth/get-session', {
+                        credentials: 'include',
+                        cache: 'no-store'
+                    })
+                    const body = await response.json().catch(() => null)
+                    return {
+                        status: response.status,
+                        user: body?.user || null
+                    }
+                }"""
+            )
+
+            assert session_check["status"] == 200, session_check
+            assert session_check["user"], session_check
+
+            page.goto(
+                BASE_URL + "/#/dashboard",
+                wait_until="domcontentloaded",
+                timeout=60_000
+            )
+
+            expect(
+                page.locator(".stack-dashboard")
+            ).to_be_visible(timeout=30_000)
+
+            expect(
+                page.get_by_role(
+                    "button",
+                    name="新規プロジェクト"
+                )
+            ).to_be_visible(timeout=10_000)
+
             page.get_by_role(
                 "button",
                 name="新規プロジェクト"
