@@ -92,13 +92,21 @@ def run_and_wait(page, expected_status):
             exact=True
         ).click()
 
-        expect(status).to_contain_text(
-            "成功|失敗|タイムアウト",
-            timeout=30_000
-        )
+        deadline = time.monotonic() + 30
+
+        while time.monotonic() < deadline:
+            status_text = status.inner_text()
+
+            if status_text in ("成功", "失敗", "タイムアウト"):
+                break
+
+            page.wait_for_timeout(250)
+        else:
+            raise AssertionError(
+                "Execution did not reach a terminal status."
+            )
 
         panel_text = panel.inner_text()
-        status_text = status.inner_text()
 
         transient_error = (
             "Execution Error 502" in panel_text or
