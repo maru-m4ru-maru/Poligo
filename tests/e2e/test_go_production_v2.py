@@ -215,6 +215,7 @@ func main() {
     fmt.Println("resource=" + string(resource))
     fmt.Println("file=" + string(fileContent))
     fmt.Println("helper=" + helperValue())
+    fmt.Println("init=" + fmt.Sprint(helperInitialized))
     fmt.Println("goroutine=" + <-channel)
     fmt.Println("json=" + string(encoded))
     fmt.Println("args=" + strings.Join(os.Args[1:], "|"))
