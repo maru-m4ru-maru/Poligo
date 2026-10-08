@@ -355,7 +355,7 @@ def main():
                 page,
                 "TSX OK 42"
             )
-            print("PASS: TSX")
+            print("PASS: TSX execution")
 
             print("STEP: compile error setup", flush=True)
             open_file(page, "main.ts")
