@@ -1023,11 +1023,13 @@ function prepareRustSource(
 
   const environmentLines = Object.entries(environment).map(
     ([key, value]) =>
-      '    std::env::set_var(' +
+      '    unsafe {',
+      '        std::env::set_var(' +
       JSON.stringify(key) +
       ', ' +
       JSON.stringify(value) +
-      ');'
+      ');',
+      '    }'
   )
 
   return [
