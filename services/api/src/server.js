@@ -1037,7 +1037,7 @@ function prepareRustSource(
     ...environmentLines,
     '    __poligo_user_main();',
     '}'
-  ].join('\\n')
+  ].join('\n')
 }
 
 function buildRustAdditionalFiles(
