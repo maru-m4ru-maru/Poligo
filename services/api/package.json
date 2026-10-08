@@ -13,6 +13,7 @@
     "@libsql/kysely-libsql": "0.4.1",
     "better-auth": "1.7.7",
     "kysely": "0.29.6",
-    "typescript": "5.6.2"
+    "typescript": "5.6.2",
+    "ws": "8.22.0"
   }
 }
