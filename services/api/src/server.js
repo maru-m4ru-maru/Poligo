@@ -916,7 +916,7 @@ function buildRubyAdditionalFiles(
       '#!/bin/bash',
       'set -e',
       ...environmentLines,
-      'exec ruby ' +
+      'exec /usr/local/ruby-2.7.0/bin/ruby ' +
         shellQuote(entrypoint) +
         (argumentLine ? ' ' + argumentLine : '')
     ].join('\n') + '\n')
