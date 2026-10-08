@@ -364,10 +364,9 @@ func main() {
                 name="アカウントを作成"
             ).click()
 
-            page.wait_for_url(
-                "**/#/dashboard",
-                timeout=60_000
-            )
+            expect(
+                page.get_by_text("ダッシュボード", exact=True)
+            ).to_be_visible(timeout=60_000)
 
             page.get_by_role(
                 "button",
