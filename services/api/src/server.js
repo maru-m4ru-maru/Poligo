@@ -2548,7 +2548,16 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
       entrypoint.includes('/')
 
     if (multiFile) {
-      languageId = JUDGE0_MULTI_FILE_LANGUAGE_ID
+      const multiFileLanguageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!multiFileLanguageId) {
+        send(response, 503, {
+          error: 'Kotlin multi-file execution is unavailable on this Judge0 instance'
+        })
+        return
+      }
+
+      languageId = multiFileLanguageId
       preparedSource = null
       options.additional_files = buildKotlinAdditionalFiles(
         files,
@@ -2570,7 +2579,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
 
   if (
     payload.args.length > 0 &&
-    !(payload.language === 'java' && languageId === JUDGE0_MULTI_FILE_LANGUAGE_ID) &&
+    !(payload.language === 'java' && findMultiFileJudge0LanguageId(languages) === languageId) &&
     !(payload.language === 'kotlin' && findMultiFileJudge0LanguageId(languages) === languageId)
   ) {
     options.command_line_arguments = formatExecutionArguments(payload.args)
