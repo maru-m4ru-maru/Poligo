@@ -231,6 +231,25 @@ def create_file(page, name, source=""):
         set_editor_value(page, source)
 
 
+def run_typescript_case(page, name, source, expected, args="", stdin="", extra_files=None):
+    print("STEP: " + name + " project", flush=True)
+    create_typescript_project(page)
+    open_debug(page)
+
+    for file_name, file_source in (extra_files or {}).items():
+        create_file(page, file_name, file_source)
+
+    open_file(page, "main.ts" if "main.ts" in page.locator(".explorer-file").all_inner_text() else "main.ts")
+    set_editor_value(page, source)
+    page.get_by_label("実行引数").fill(args)
+    enter_stdin(page, stdin)
+    print("STEP: " + name + " run", flush=True)
+    run_and_expect_success(page, expected)
+    print("PASS: " + name, flush=True)
+    page.wait_for_timeout(1_000)
+    delete_project(page)
+
+
 def delete_project(page):
     page.goto(
         BASE_URL + "/#/dashboard",
@@ -327,53 +346,58 @@ def main():
             )
             print("PASS: single-file TypeScript")
 
-            print("STEP: environment resource stdin arguments setup", flush=True)
-            create_file(
+            print("STEP: isolate execution features", flush=True)
+            page.wait_for_timeout(1_000)
+            delete_project(page)
+
+            run_typescript_case(
                 page,
-                ".env",
-                "POLIGO_TS_E2E=environment-日本語🚀"
-            )
-            create_file(
-                page,
-                "data.txt",
-                "resource-日本語-🚀"
-            )
-            open_file(page, "main.ts")
-            set_editor_value(
-                page,
-                'declare const process: any\ndeclare const require: any\n\nconst fs: any = require("fs")\nconst stdin = fs.readFileSync(0, "utf8").trim()\nconst args = process.argv.slice(2)\n\nconsole.log("TypeScript resources OK")\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)\nconsole.log("ARGS=" + JSON.stringify(args))\nconsole.log("STDIN=" + stdin)\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())'
-            )
-            page.get_by_label("実行引数").fill(
-                '"first" "日本語 2"'
-            )
-            enter_stdin(
-                page,
-                "stdin-日本語🚀"
-            )
-            print("STEP: run environment resource stdin arguments", flush=True)
-            run_and_expect_success(
-                page,
-                "TypeScript resources OK"
+                "TypeScript stdin",
+                'declare const require: any\\nconst fs: any = require("fs")\\nconsole.log("STDIN=" + fs.readFileSync(0, "utf8").trim())',
+                "STDIN=stdin-日本語🚀",
+                stdin="stdin-日本語🚀"
             )
 
-            panel = page.locator(".debug-panel")
-            expect(panel).to_contain_text(
-                "ENV=environment-日本語🚀",
-                timeout=10_000
-            )
-            expect(panel).to_contain_text(
+            run_typescript_case(
+                page,
+                "TypeScript arguments",
+                'declare const process: any\\nconsole.log("ARGS=" + JSON.stringify(process.argv.slice(2)))',
                 'ARGS=["first","日本語 2"]',
-                timeout=10_000
+                args='"first" "日本語 2"'
             )
-            expect(panel).to_contain_text(
-                "STDIN=stdin-日本語🚀",
-                timeout=10_000
-            )
-            expect(panel).to_contain_text(
+
+            run_typescript_case(
+                page,
+                "TypeScript resource",
+                'declare const require: any\\nconst fs: any = require("fs")\\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())',
                 "DATA=resource-日本語-🚀",
-                timeout=10_000
+                extra_files={"data.txt": "resource-日本語-🚀"}
             )
-            print("PASS: environment, arguments, stdin, resources")
+
+            run_typescript_case(
+                page,
+                "TypeScript environment",
+                'declare const process: any\\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)',
+                "ENV=environment-日本語🚀",
+                extra_files={".env": "POLIGO_TS_E2E=environment-日本語🚀"}
+            )
+
+            run_typescript_case(
+                page,
+                "TypeScript combined execution",
+                'declare const process: any\\ndeclare const require: any\\nconst fs: any = require("fs")\\nconst stdin = fs.readFileSync(0, "utf8").trim()\\nconst args = process.argv.slice(2)\\nconsole.log("TypeScript resources OK")\\nconsole.log("ENV=" + process.env.POLIGO_TS_E2E)\\nconsole.log("ARGS=" + JSON.stringify(args))\\nconsole.log("STDIN=" + stdin)\\nconsole.log("DATA=" + fs.readFileSync("data.txt", "utf8").trim())',
+                "TypeScript resources OK",
+                args='"first" "日本語 2"',
+                stdin="stdin-日本語🚀",
+                extra_files={
+                    ".env": "POLIGO_TS_E2E=environment-日本語🚀",
+                    "data.txt": "resource-日本語-🚀"
+                }
+            )
+
+            print("STEP: create TypeScript project for remaining cases", flush=True)
+            create_typescript_project(page)
+            open_debug(page)
 
             print("STEP: TSX JSX setup", flush=True)
             create_file(
