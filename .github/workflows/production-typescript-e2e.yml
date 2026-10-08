@@ -78,6 +78,22 @@ jobs:
           cat /tmp/poligo-api-health.json 2>/dev/null || true
           exit 1
 
+      - name: Validate TypeScript environment source
+        run: |
+          node <<'NODE'
+          const fs = await import('node:fs/promises')
+          const source = await fs.readFile('services/api/src/server.js', 'utf8')
+          const required = [
+            "'(globalThis as any).process = (globalThis as any).process || {};',",
+            "'(globalThis as any).process.env = (globalThis as any).process.env || {};',",
+            "      ')';"
+          ]
+          for (const value of required) {
+            if (!source.includes(value)) {
+              throw new Error('TypeScript environment source regression detected')
+            }
+          }
+          NODE
       - name: Run production TypeScript E2E
         env:
           POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
