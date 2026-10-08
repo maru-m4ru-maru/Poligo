@@ -126,7 +126,7 @@ async function writeWorkspace(files) {
   )
 
   try {
-    await fs.chmod(workspace, 0o770)
+    await fs.chmod(workspace, 0o777)
 
     for (const [name, content] of entries) {
       const safePath = normalizeFilePath(name)
@@ -148,15 +148,14 @@ async function writeWorkspace(files) {
 
       await fs.mkdir(path.dirname(destination), {
         recursive: true,
-        mode: 0o770
+        mode: 0o777
       })
 
       await fs.writeFile(destination, content, {
         encoding: 'utf8',
-        mode: 0o660
+        mode: 0o666
       })
 
-      await fs.chown(destination, 1000, 1000)
     }
 
     const directories = []
@@ -178,11 +177,9 @@ async function writeWorkspace(files) {
     await visit(workspace)
 
     for (const directory of directories) {
-      await fs.chown(directory, 1000, 1000)
-      await fs.chmod(directory, 0o770)
+      await fs.chmod(directory, 0o777)
     }
 
-    await fs.chown(workspace, 1000, 1000)
 
     return workspace
   } catch (error) {
