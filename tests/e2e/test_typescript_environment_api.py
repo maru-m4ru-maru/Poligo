@@ -1,3 +1,4 @@
+import json
 import time
 import uuid
 
@@ -57,12 +58,24 @@ def main():
             ts.create_typescript_project(page)
 
             print("STEP: fetch projects", flush=True)
-            projects_response = page.request.get(
-                API_URL + "/api/projects",
-                timeout=15_000
+            projects_response = page.evaluate(
+                """async (url) => {
+                    const response = await fetch(url, {
+                        credentials: "include"
+                    })
+                    return {
+                        status: response.status,
+                        body: await response.text()
+                    }
+                }""",
+                API_URL + "/api/projects"
             )
-            expect(projects_response).to_be_ok()
-            projects = projects_response.json()
+            if not 200 <= projects_response["status"] < 300:
+                raise AssertionError(
+                    "Project list request failed: " +
+                    str(projects_response)
+                )
+            projects = json.loads(projects_response["body"])
             if len(projects) != 1:
                 raise AssertionError(
                     "Expected exactly one project, got " +
@@ -92,28 +105,56 @@ def main():
             }
 
             print("STEP: direct execution submit", flush=True)
-            execution_response = page.request.post(
-                API_URL + "/api/executions",
-                data=payload,
-                timeout=60_000
+            execution_response = page.evaluate(
+                """async ([url, payload]) => {
+                    const response = await fetch(url, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify(payload)
+                    })
+                    return {
+                        status: response.status,
+                        body: await response.text()
+                    }
+                }""",
+                [API_URL + "/api/executions", payload]
             )
             print(
                 "SUBMIT STATUS: " +
-                str(execution_response.status),
+                str(execution_response["status"]),
                 flush=True
             )
-            body = execution_response.json()
-            print("SUBMIT BODY: " + str(body), flush=True)
-
-            expect(execution_response).to_be_ok()
+            print("SUBMIT BODY: " + execution_response["body"], flush=True)
+            if not 200 <= execution_response["status"] < 300:
+                raise AssertionError(
+                    "Execution submit failed: " +
+                    str(execution_response)
+                )
+            body = json.loads(execution_response["body"])
             execution_id = body["id"]
 
             for attempt in range(60):
-                status_response = page.request.get(
-                    API_URL + "/api/executions/" + execution_id,
-                    timeout=15_000
+                status_response = page.evaluate(
+                    """async (url) => {
+                        const response = await fetch(url, {
+                            credentials: "include"
+                        })
+                        return {
+                            status: response.status,
+                            body: await response.text()
+                        }
+                    }""",
+                    API_URL + "/api/executions/" + execution_id
                 )
-                status_body = status_response.json()
+                if not 200 <= status_response["status"] < 300:
+                    raise AssertionError(
+                        "Execution status request failed: " +
+                        str(status_response)
+                    )
+                status_body = json.loads(status_response["body"])
                 print(
                     "STATUS " +
                     str(attempt + 1) +
