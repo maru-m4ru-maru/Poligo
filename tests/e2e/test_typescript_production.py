@@ -187,6 +187,27 @@ def create_typescript_project(page):
     ).to_be_visible(timeout=30_000)
 
 
+def delete_file(page, name):
+    file_row = page.locator(
+        '.explorer-file[title="' + name + '"]'
+    )
+    expect(file_row).to_be_visible(timeout=5_000)
+
+    file_row.get_by_role(
+        "button",
+        name="ファイルを削除"
+    ).click()
+
+    page.get_by_role(
+        "dialog"
+    ).get_by_role(
+        "button",
+        name="Delete"
+    ).click()
+
+    expect(file_row).not_to_be_visible(timeout=10_000)
+
+
 def delete_project(page):
     page.goto(
         BASE_URL + "/#/dashboard",
@@ -304,6 +325,7 @@ def main():
             print("PASS: TypeScript arguments")
 
             print("STEP: TSX setup", flush=True)
+            delete_file(page, "main.ts")
             upload_file(
                 page,
                 "main.tsx",
