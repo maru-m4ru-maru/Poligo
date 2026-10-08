@@ -1011,7 +1011,7 @@ function prepareRustSource(
     return prepared
   }
 
-  const mainPattern = /\\bfn[ \t]+main[ \t]*\\(/
+  const mainPattern = /\bfn[ \t]+main[ \t]*\(/
   if (!mainPattern.test(prepared)) {
     throw new Error('Rust entrypoint must contain a main function')
   }
