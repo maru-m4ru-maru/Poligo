@@ -220,14 +220,10 @@ def create_file(page, name, source=""):
         name="新しいファイル"
     ).click()
 
-    dialog = page.get_by_role("dialog")
-    expect(dialog).to_be_visible(timeout=5_000)
-
-    dialog.locator("input").first.fill(name)
-    dialog.get_by_role(
-        "button",
-        name=re.compile(r"^(保存|作成)$")
-    ).click()
+    filename = page.get_by_label("新しいファイル名")
+    expect(filename).to_be_visible(timeout=5_000)
+    filename.fill(name)
+    filename.press("Enter")
 
     open_file(page, name)
 
