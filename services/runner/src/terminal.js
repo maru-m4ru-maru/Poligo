@@ -285,8 +285,11 @@ async function createTerminal({
       Image: terminalImage,
       Cmd: [
         'bash',
+        '--noprofile',
+        '--norc',
+        '-i',
         '-c',
-        'cd /workspace && exec bash'
+        'cd /workspace && exec bash --noprofile --norc -i'
       ],
       WorkingDir: '/workspace',
       User: '0:0',
