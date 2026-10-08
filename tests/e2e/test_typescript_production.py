@@ -404,23 +404,6 @@ def main():
             rename_file(page, "main.d.ts", "main.ts")
             print("PASS: declaration entrypoint rejection")
 
-            print("STEP: TypeScript multi-file rejection", flush=True)
-            create_file(
-                page,
-                "helper.ts",
-                'export const helper: number = 1'
-            )
-            open_file(page, "main.ts")
-            set_editor_value(
-                page,
-                'console.log("single-file scope")'
-            )
-            run_and_expect_failure(
-                page,
-                "multi-file TypeScript execution is not supported"
-            )
-            print("PASS: multi-file TypeScript rejection")
-
             print("STEP: compile error setup", flush=True)
             open_file(page, "main.ts")
             set_editor_value(
@@ -448,6 +431,23 @@ def main():
             page.get_by_label("実行引数").fill("")
             run_and_expect_timeout(page)
             print("PASS: timeout")
+
+            print("STEP: TypeScript multi-file rejection", flush=True)
+            create_file(
+                page,
+                "helper.ts",
+                'export const helper: number = 1'
+            )
+            open_file(page, "main.ts")
+            set_editor_value(
+                page,
+                'console.log("single-file scope")'
+            )
+            run_and_expect_failure(
+                page,
+                "multi-file TypeScript execution is not supported"
+            )
+            print("PASS: multi-file TypeScript rejection")
 
             print("STEP: delete project", flush=True)
             page.wait_for_timeout(1_500)
