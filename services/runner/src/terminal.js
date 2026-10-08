@@ -283,7 +283,7 @@ async function createTerminal({
 
     container = await docker.createContainer({
       Image: terminalImage,
-      Cmd: ['bash', '--login'],
+      Cmd: ['bash'],
       WorkingDir: '/workspace',
       User: '0:0',
       Env: [
