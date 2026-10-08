@@ -1112,16 +1112,22 @@ function getKotlinMainClass(source, entrypoint) {
     : className
 }
 
-function buildTypeScriptAdditionalFiles(files, entrypoint) {
+function buildTypeScriptMultiFileAdditionalFiles(
+  files,
+  entrypoint,
+  environment
+) {
   const archiveFiles = []
 
   for (const [path, content] of Object.entries(files)) {
-    if (path === entrypoint || isSecretEnvFile(path)) {
+    if (isSecretEnvFile(path)) {
       continue
     }
 
     if (path === 'compile' || path === 'run') {
-      continue
+      throw new Error(
+        'compile and run are reserved filenames for TypeScript multi-file execution'
+      )
     }
 
     archiveFiles.push({
@@ -1130,9 +1136,44 @@ function buildTypeScriptAdditionalFiles(files, entrypoint) {
     })
   }
 
-  if (!archiveFiles.length) {
-    return ''
-  }
+  archiveFiles.push({
+    path: 'compile',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      'TSC="$(command -v tsc || true)"',
+      'if [ -z "$TSC" ]; then',
+      '  TSC="$(find /usr/local /opt /root -type f -path "*/bin/tsc" -print -quit 2>/dev/null || true)"',
+      'fi',
+      'if [ -z "$TSC" ]; then',
+      '  echo "TypeScript compiler was not found." >&2',
+      '  exit 1',
+      'fi',
+      'mapfile -d "" sources < <(find . -type f \\( -name "*.ts" -o -name "*.tsx" \\) ! -path "./node_modules/*" -print0)',
+      'if [ "$" + "{#sources[@]}" -eq 0 ]; then',
+      '  echo "No TypeScript source files found." >&2',
+      '  exit 1',
+      'fi',
+      '"$TSC" --target es2020 --module commonjs --moduleResolution node --jsx react --outDir /tmp/poligo-typescript --pretty false "$" + "{sources[@]}"'
+    ].join('\n') + '\n')
+  })
+
+  const entrypointJavaScript = entrypoint.replace(/\.tsx?$/i, '.js')
+  const environmentLines = Object.entries(environment || {}).map(
+    ([key, value]) => 'export ' + key + '=' + shellQuote(value)
+  )
+
+  archiveFiles.push({
+    path: 'run',
+    mode: 0o100755,
+    data: Buffer.from([
+      '#!/bin/bash',
+      'set -e',
+      ...environmentLines,
+      'exec node ' + shellQuote('/tmp/poligo-typescript/' + entrypointJavaScript) + ' "$@"'
+    ].join('\n') + '\n')
+  })
 
   const archive = zipStore(archiveFiles)
 
@@ -2899,15 +2940,28 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
     }
 
     const environment = getExecutionEnvironment(files)
-    preparedSource = prepareTypeScriptSource(source, environment)
-
-    const additionalFiles = buildTypeScriptAdditionalFiles(
-      files,
-      entrypoint
+    const hasAdditionalProjectFiles = Object.keys(files).some(
+      path => path !== entrypoint && !isSecretEnvFile(path)
     )
 
-    if (additionalFiles) {
-      options.additional_files = additionalFiles
+    if (hasAdditionalProjectFiles) {
+      languageId = findMultiFileJudge0LanguageId(languages)
+
+      if (!languageId) {
+        send(response, 503, {
+          error: 'Judge0 multi-file execution is unavailable'
+        })
+        return
+      }
+
+      preparedSource = ''
+      options.additional_files = buildTypeScriptMultiFileAdditionalFiles(
+        files,
+        entrypoint,
+        environment
+      )
+    } else {
+      preparedSource = prepareTypeScriptSource(source, environment)
     }
   } else if (payload.language === 'php') {
     const environment = getExecutionEnvironment(files)
