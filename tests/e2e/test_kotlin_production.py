@@ -430,6 +430,8 @@ fun main() {
             open_debug(page)
             run_and_wait(page, "成功")
             wait_for_output(page, "Hello from Poligo Kotlin E2E")
+            wait_for_output(page, "unicode=日本語🚀€")
+            wait_for_output(page, "kotlin=2.1.")
 
             set_editor_value(page, feature_kotlin)
             run_and_wait(page, "成功")
