@@ -253,7 +253,7 @@ require_relative "../../lib/helper"
 stdin = STDIN.readline.chomp
 env = ENV.fetch("E2E_VALUE", "")
 resource = File.read(
-    File.expand_path("../../config/message.txt", __FILE__),
+    File.expand_path("../../config/message.txt", __dir__),
     encoding: "UTF-8"
 )
 
