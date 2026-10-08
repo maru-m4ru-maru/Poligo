@@ -251,64 +251,132 @@ function normalizeArchivePath(name) {
 }
 
 async function readWorkspaceArchive(container) {
-  const archive = await container.getArchive({
-    path: '/workspace'
+  const exec = await container.exec({
+    Cmd: [
+      'tar',
+      '-cf',
+      '-',
+      '-C',
+      '/workspace',
+      '.'
+    ],
+    AttachStdin: false,
+    AttachStdout: true,
+    AttachStderr: true,
+    Tty: false
   })
-  const extract = tar.extract()
-  const files = {}
-  let totalBytes = 0
+
+  const stream = await exec.start({
+    hijack: true,
+    stdin: false
+  })
+
+  const stdout = []
+  const stderr = []
+  let stdoutBytes = 0
 
   return await new Promise((resolve, reject) => {
-    extract.on('entry', (header, stream, next) => {
-      const name = normalizeArchivePath(header.name)
+    const stdoutStream = new (require('node:stream').PassThrough)()
+    const stderrStream = new (require('node:stream').PassThrough)()
 
-      if (
-        header.type !== 'file' ||
-        !name ||
-        Object.keys(files).length >= maxFiles
-      ) {
-        stream.resume()
-        stream.on('end', next)
+    stdoutStream.on('data', chunk => {
+      stdoutBytes += chunk.length
+
+      if (stdoutBytes > maxBytes + 1_048_576) {
+        reject(new Error('terminal workspace is too large'))
         return
       }
 
-      const chunks = []
-      let fileBytes = 0
+      stdout.push(Buffer.from(chunk))
+    })
 
-      stream.on('data', chunk => {
-        fileBytes += chunk.length
-        totalBytes += chunk.length
+    stderrStream.on('data', chunk => {
+      stderr.push(Buffer.from(chunk))
+    })
 
-        if (
-          fileBytes > maxBytes ||
-          totalBytes > maxBytes
-        ) {
-          extract.destroy(
-            new Error('terminal workspace is too large')
+    const finish = async () => {
+      try {
+        const result = await exec.inspect()
+        const exitCode = result.ExitCode ?? 0
+
+        if (exitCode !== 0) {
+          throw new Error(
+            Buffer.concat(stderr).toString('utf8').trim() ||
+            'terminal workspace archive failed'
           )
-          return
         }
 
-        chunks.push(Buffer.from(chunk))
-      })
+        const extract = tar.extract()
+        const files = {}
+        let totalBytes = 0
 
-      stream.on('end', () => {
-        files[name] = Buffer.concat(chunks).toString('utf8')
-        next()
-      })
+        extract.on('entry', (header, entryStream, next) => {
+          const name = normalizeArchivePath(header.name)
 
-      stream.on('error', reject)
-    })
+          if (
+            header.type !== 'file' ||
+            !name ||
+            Object.keys(files).length >= maxFiles
+          ) {
+            entryStream.resume()
+            entryStream.on('end', next)
+            return
+          }
 
-    extract.on('finish', () => {
-      resolve(files)
-    })
+          const chunks = []
+          let fileBytes = 0
 
-    extract.on('error', reject)
-    archive.on('error', reject)
-    archive.pipe(extract)
+          entryStream.on('data', chunk => {
+            fileBytes += chunk.length
+            totalBytes += chunk.length
+
+            if (
+              fileBytes > maxBytes ||
+              totalBytes > maxBytes
+            ) {
+              extract.destroy(
+                new Error('terminal workspace is too large')
+              )
+              return
+            }
+
+            chunks.push(Buffer.from(chunk))
+          })
+
+          entryStream.on('end', () => {
+            files[name] = Buffer.concat(chunks).toString('utf8')
+            next()
+          })
+
+          entryStream.on('error', reject)
+        })
+
+        extract.on('finish', () => {
+          resolve(files)
+        })
+
+        extract.on('error', reject)
+
+        const archiveStream = new (require('node:stream').PassThrough)()
+
+        archiveStream.end(Buffer.concat(stdout))
+        archiveStream.pipe(extract)
+      } catch (error) {
+        reject(error)
+      }
+    }
+
+    stream.on('end', finish)
+    stream.on('error', reject)
+
+    docker.modem.demuxStream(
+      stream,
+      stdoutStream,
+      stderrStream
+    )
   })
 }
+
 
 async function cleanupSession(session) {
   if (session.stream) {
