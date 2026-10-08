@@ -61,6 +61,14 @@ def open_debug(page):
     ).to_be_visible(timeout=5_000)
 
 
+def enter_stdin(page, value):
+    terminal = page.locator(".terminal:visible")
+    terminal.click(force=True)
+    page.keyboard.type(value)
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(300)
+
+
 def wait_for_terminal_status(page, expected_status, timeout=45_000):
     status = page.locator(".debug-status")
     deadline = time.monotonic() + timeout
@@ -281,7 +289,8 @@ def main():
             page.get_by_label("実行引数").fill(
                 '"" "日本語 2"'
             )
-            page.get_by_label("標準入力").fill(
+            enter_stdin(
+                page,
                 "stdin-日本語🚀"
             )
             run_and_expect_success(
@@ -319,7 +328,6 @@ def main():
             )
             open_file(page, "main.tsx")
             page.get_by_label("実行引数").fill("")
-            page.get_by_label("標準入力").fill("")
             run_and_expect_success(
                 page,
                 "TSX OK 42"
