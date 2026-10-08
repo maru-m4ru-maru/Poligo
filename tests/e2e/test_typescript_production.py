@@ -67,11 +67,34 @@ def enter_stdin(page, value):
         name="ターミナル",
         exact=True
     ).click()
+
     terminal = page.locator(".terminal:visible")
-    terminal.click(force=True)
-    page.keyboard.type(value)
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(300)
+    expect(terminal).to_be_visible(timeout=5_000)
+    expect(
+        terminal
+    ).to_contain_text("stdin> ", timeout=5_000)
+    terminal.click()
+
+    for character in value:
+        terminal.dispatch_event(
+            "keydown",
+            {
+                "key": character,
+                "code": "Key",
+                "bubbles": True,
+                "cancelable": True
+            }
+        )
+
+    terminal.dispatch_event(
+        "keydown",
+        {
+            "key": "Enter",
+            "code": "Enter",
+            "bubbles": True,
+            "cancelable": True
+        }
+    )
 
 
 def wait_for_terminal_status(page, expected_status, timeout=45_000):
