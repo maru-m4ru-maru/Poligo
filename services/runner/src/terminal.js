@@ -1,14 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
 import Docker from 'dockerode'
+import tar from 'tar-stream'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
 })
 
-const workRoot = process.env.WORK_ROOT || path.join(os.tmpdir(), 'poligo-runner')
 const terminalImage = process.env.TERMINAL_IMAGE || 'node:22-bookworm'
 const maxFiles = Number(process.env.TERMINAL_MAX_FILES || 200)
 const maxBytes = Number(process.env.TERMINAL_MAX_PROJECT_BYTES || 5_000_000)
@@ -100,7 +97,7 @@ async function ensureImage() {
   })
 }
 
-async function writeWorkspace(files) {
+function normalizeFiles(files) {
   if (!files || typeof files !== 'object' || Array.isArray(files)) {
     throw new Error('terminal files must be an object')
   }
@@ -116,128 +113,155 @@ async function writeWorkspace(files) {
   }
 
   let totalBytes = 0
+  const normalized = {}
 
-  await fs.mkdir(workRoot, {
-    recursive: true
-  })
+  for (const [name, content] of entries) {
+    const safePath = normalizeFilePath(name)
 
-  const workspace = await fs.mkdtemp(
-    path.join(workRoot, 'terminal-')
-  )
+    if (typeof content !== 'string') {
+      throw new Error('terminal file content must be text')
+    }
 
-  try {
-    await fs.chmod(workspace, 0o777)
+    totalBytes += Buffer.byteLength(content, 'utf8')
 
-    for (const [name, content] of entries) {
-      const safePath = normalizeFilePath(name)
+    if (totalBytes > maxBytes) {
+      throw new Error('terminal workspace is too large')
+    }
 
-      if (typeof content !== 'string') {
-        throw new Error('terminal file content must be text')
-      }
+    normalized[safePath] = content
+  }
 
-      totalBytes += Buffer.byteLength(content, 'utf8')
+  return normalized
+}
 
-      if (totalBytes > maxBytes) {
-        throw new Error('terminal workspace is too large')
-      }
+async function createWorkspaceArchive(files) {
+  const normalized = normalizeFiles(files)
+  const pack = tar.pack()
+  const directories = new Set()
 
-      const destination = path.join(
-        workspace,
-        ...safePath.split('/')
+  for (const [name, content] of Object.entries(normalized)) {
+    const parts = name.split('/')
+
+    for (let index = 1; index < parts.length; index += 1) {
+      directories.add(
+        parts.slice(0, index).join('/') + '/'
       )
-
-      await fs.mkdir(path.dirname(destination), {
-        recursive: true,
-        mode: 0o777
-      })
-
-      await fs.writeFile(destination, content, {
-        encoding: 'utf8',
-        mode: 0o666
-      })
-
     }
+  }
 
-    const directories = []
-    const visit = async current => {
-      const entries = await fs.readdir(current, {
-        withFileTypes: true
-      })
-
-      for (const entry of entries) {
-        const child = path.join(current, entry.name)
-
-        if (entry.isDirectory()) {
-          directories.push(child)
-          await visit(child)
-        }
-      }
-    }
-
-    await visit(workspace)
-
-    for (const directory of directories) {
-      await fs.chmod(directory, 0o777)
-    }
-
-
-    return workspace
-  } catch (error) {
-    await fs.rm(workspace, {
-      recursive: true,
-      force: true
+  for (const directory of [...directories].sort()) {
+    pack.entry({
+      name: directory,
+      type: 'directory',
+      mode: 0o777
     })
-    throw error
+  }
+
+  for (const [name, content] of Object.entries(normalized)) {
+    pack.entry({
+      name,
+      type: 'file',
+      mode: 0o666,
+      size: Buffer.byteLength(content, 'utf8')
+    }, Buffer.from(content, 'utf8'))
+  }
+
+  pack.finalize()
+
+  const chunks = []
+
+  for await (const chunk of pack) {
+    chunks.push(Buffer.from(chunk))
+  }
+
+  return {
+    normalized,
+    archive: Buffer.concat(chunks)
   }
 }
 
-async function readWorkspace(workspace) {
+function normalizeArchivePath(name) {
+  let value = String(name || '')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '')
+
+  if (value === 'workspace') {
+    return ''
+  }
+
+  if (value.startsWith('workspace/')) {
+    value = value.slice('workspace/'.length)
+  }
+
+  if (
+    !value ||
+    value.includes('\0') ||
+    value.split('/').some(part => part === '..' || part === '.')
+  ) {
+    return ''
+  }
+
+  return value
+}
+
+async function readWorkspaceArchive(container) {
+  const archive = await container.getArchive({
+    path: '/workspace'
+  })
+  const extract = tar.extract()
   const files = {}
   let totalBytes = 0
 
-  async function visit(directory, prefix = '') {
-    const entries = await fs.readdir(directory, {
-      withFileTypes: true
+  return await new Promise((resolve, reject) => {
+    extract.on('entry', (header, stream, next) => {
+      const name = normalizeArchivePath(header.name)
+
+      if (
+        header.type !== 'file' ||
+        !name ||
+        Object.keys(files).length >= maxFiles
+      ) {
+        stream.resume()
+        stream.on('end', next)
+        return
+      }
+
+      const chunks = []
+      let fileBytes = 0
+
+      stream.on('data', chunk => {
+        fileBytes += chunk.length
+        totalBytes += chunk.length
+
+        if (
+          fileBytes > maxBytes ||
+          totalBytes > maxBytes
+        ) {
+          extract.destroy(
+            new Error('terminal workspace is too large')
+          )
+          return
+        }
+
+        chunks.push(Buffer.from(chunk))
+      })
+
+      stream.on('end', () => {
+        files[name] = Buffer.concat(chunks).toString('utf8')
+        next()
+      })
+
+      stream.on('error', reject)
     })
 
-    for (const entry of entries) {
-      if (entry.isSymbolicLink()) {
-        continue
-      }
+    extract.on('finish', () => {
+      resolve(files)
+    })
 
-      const relativePath = prefix
-        ? prefix + '/' + entry.name
-        : entry.name
-
-      const fullPath = path.join(directory, entry.name)
-
-      if (entry.isDirectory()) {
-        await visit(fullPath, relativePath)
-        continue
-      }
-
-      if (!entry.isFile()) {
-        continue
-      }
-
-      if (Object.keys(files).length >= maxFiles) {
-        throw new Error('too many terminal files')
-      }
-
-      const content = await fs.readFile(fullPath)
-      totalBytes += content.length
-
-      if (totalBytes > maxBytes) {
-        throw new Error('terminal workspace is too large')
-      }
-
-      files[relativePath] = content.toString('utf8')
-    }
-  }
-
-  await visit(workspace)
-
-  return files
+    extract.on('error', reject)
+    archive.on('error', reject)
+    archive.pipe(extract)
+  })
 }
 
 async function cleanupSession(session) {
@@ -258,11 +282,6 @@ async function cleanupSession(session) {
       })
     } catch {}
   }
-
-  await fs.rm(session.workspace, {
-    recursive: true,
-    force: true
-  })
 }
 
 async function createTerminal({
@@ -270,18 +289,17 @@ async function createTerminal({
   files
 }) {
   const terminalId = normalizeId(id)
+  const { normalized, archive } =
+    await createWorkspaceArchive(files)
 
   if (sessions.has(terminalId)) {
     throw new Error('terminal id already exists')
   }
 
-  const workspace = await writeWorkspace(files)
-  let container = null
-
   try {
     await ensureImage()
 
-    container = await docker.createContainer({
+    const container = await docker.createContainer({
       Image: terminalImage,
       Cmd: [
         'bash',
@@ -318,10 +336,8 @@ async function createTerminal({
         PidsLimit: pidsLimit,
         CapDrop: ['ALL'],
         SecurityOpt: ['no-new-privileges'],
-        Binds: [
-          workspace + ':/workspace:rw'
-        ],
         Tmpfs: {
+          '/workspace': 'rw,nosuid,nodev,size=128m',
           '/tmp': 'rw,nosuid,nodev,size=64m'
         },
         LogConfig: {
@@ -344,7 +360,6 @@ async function createTerminal({
 
     const session = {
       id: terminalId,
-      workspace,
       container,
       stream,
       socket: null,
@@ -381,11 +396,6 @@ async function createTerminal({
       void container.remove({
         force: true
       }).catch(() => {})
-
-      void fs.rm(workspace, {
-        recursive: true,
-        force: true
-      })
     })
 
     stream.on('error', error => {
@@ -403,30 +413,29 @@ async function createTerminal({
       h: 32
     })
 
+    await container.putArchive(
+      archive,
+      {
+        path: '/workspace'
+      }
+    )
+
     session.stream.write('cd /workspace\n')
 
     return {
       id: terminalId,
       status: 'ready',
-      createdAt: session.createdAt
+      createdAt: session.createdAt,
+      fileCount: Object.keys(normalized).length
     }
   } catch (error) {
-    if (container) {
-      try {
-        await container.kill()
-      } catch {}
+    const session = sessions.get(terminalId)
 
-      try {
-        await container.remove({
-          force: true
-        })
-      } catch {}
+    if (session) {
+      sessions.delete(terminalId)
+      await cleanupSession(session)
     }
 
-    await fs.rm(workspace, {
-      recursive: true,
-      force: true
-    })
     throw error
   }
 }
@@ -448,7 +457,7 @@ export async function getTerminalFiles(id) {
 
   session.lastUsedAt = Date.now()
 
-  return readWorkspace(session.workspace)
+  return readWorkspaceArchive(session.container)
 }
 
 export async function closeTerminal(id) {
