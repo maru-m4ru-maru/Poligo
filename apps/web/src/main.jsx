@@ -84,7 +84,8 @@ const SERVER_LANGUAGES = new Set([
   'kotlin',
   'c',
   'cpp',
-  'csharp'
+  'csharp',
+  'typescript'
 ])
 
 const FILE_ICONS = {
@@ -100,7 +101,8 @@ const FILE_ICONS = {
   kotlin: '/icons/kotlin.svg',
   c: '/icons/c.svg',
   cpp: '/icons/cplusplus.svg',
-  csharp: '/icons/csharp.svg'
+  csharp: '/icons/csharp.svg',
+  typescript: '/icons/typescript.svg'
 }
 
 function getFileMeta(name) {
