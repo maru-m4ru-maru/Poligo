@@ -208,11 +208,6 @@ socket.send(
   })
 )
 
-await waitForOutput(
-  socket,
-  output => output.includes('workspace')
-)
-
 socket.send(
   JSON.stringify({
     type: 'input',
