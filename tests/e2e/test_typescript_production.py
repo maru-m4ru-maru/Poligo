@@ -42,11 +42,12 @@ def create_file(page, path, source):
 
 
 def open_file(page, name):
-    page.get_by_text(
-        name,
-        exact=True
-    ).last.click()
-    page.wait_for_timeout(300)
+    file_button = page.locator(
+        '.explorer-file[title="' + name + '"] .explorer-file-main'
+    )
+    expect(file_button).to_be_visible(timeout=5_000)
+    file_button.click()
+    page.wait_for_timeout(400)
 
 
 def open_debug(page):
