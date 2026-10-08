@@ -365,7 +365,13 @@ async function createTerminal({
         )
         session.socket.close()
       }
+
       sessions.delete(terminalId)
+
+      void container.remove({
+        force: true
+      }).catch(() => {})
+
       void fs.rm(workspace, {
         recursive: true,
         force: true
