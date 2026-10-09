@@ -4295,7 +4295,7 @@ async function handleTerminalClose(request, response, id) {
     return
   }
 
-  const owner = getTerminalOwner(id)
+  const owner = await loadTerminalOwner(id)
 
   if (!owner) {
     send(response, 404, {
@@ -4331,13 +4331,26 @@ async function handleTerminalClose(request, response, id) {
         }
       )
     } catch (error) {
-      send(response, 502, {
-        error: error instanceof Error
-          ? error.message
-          : 'terminal cleanup failed'
-      })
-      return
+      if (!(error instanceof Error) || error.message !== 'terminal session not found') {
+        send(response, 502, {
+          error: error instanceof Error
+            ? error.message
+            : 'terminal cleanup failed'
+        })
+        return
+      }
     }
+  }
+
+  try {
+    await deleteTerminalOwnerRecord(id)
+  } catch (error) {
+    send(response, 502, {
+      error: error instanceof Error
+        ? error.message
+        : 'terminal ownership cleanup failed'
+    })
+    return
   }
 
   terminalOwners.delete(id)
@@ -4358,7 +4371,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   )
   const ticket = requestUrl.searchParams.get('ticket') || ''
   const origin = request.headers.origin || ''
-  const owner = getTerminalOwner(id)
+  const owner = await loadTerminalOwner(id)
   const allowedOrigins = allowedOrigin
     .split(',')
     .map(value => value.trim())
