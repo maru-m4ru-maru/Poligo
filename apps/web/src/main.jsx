@@ -1595,6 +1595,55 @@ function IDE({ projectId }) {
     }))
   }
 
+  function handleTerminalFilesChanged(result) {
+    if (
+      !result ||
+      !result.files ||
+      typeof result.files !== 'object' ||
+      !Array.isArray(result.changedPaths) ||
+      !result.changedPaths.length
+    ) {
+      return
+    }
+
+    const next = { ...filesRef.current }
+    let changed = false
+
+    for (const path of result.changedPaths) {
+      if (typeof path !== 'string') {
+        continue
+      }
+
+      if (Object.prototype.hasOwnProperty.call(result.files, path)) {
+        if (next[path] !== result.files[path]) {
+          next[path] = result.files[path]
+          changed = true
+        }
+      } else if (Object.prototype.hasOwnProperty.call(next, path)) {
+        delete next[path]
+        changed = true
+      }
+    }
+
+    if (!changed) {
+      return
+    }
+
+    filesRef.current = next
+    setFiles(next)
+    setOpenFiles(current => current.filter(path =>
+      Object.prototype.hasOwnProperty.call(next, path)
+    ))
+    setActiveFile(current => {
+      if (Object.prototype.hasOwnProperty.call(next, current)) {
+        return current
+      }
+
+      const fallback = firstFile(next)
+      activeFileRef.current = fallback
+      return fallback
+    })
+  }
 
   function toggleFolder(path) {
     setCollapsedFolders(current => {
@@ -3608,6 +3657,8 @@ function IDE({ projectId }) {
                     apiUrl={API_URL}
                     projectId={currentProjectId}
                     active={bottomOpen && bottomTab === 'terminal'}
+                    files={files}
+                    onFilesChanged={handleTerminalFilesChanged}
                   />
                 </div>
 
