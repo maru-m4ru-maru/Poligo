@@ -110,7 +110,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
             )
           }
 
-          return lines.join('\\n')
+          return lines.join('\n')
         },
         focus() {
           terminal.focus()
@@ -218,7 +218,10 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         return
       }
 
-      if (socket?.readyState === WebSocket.CONNECTING) {
+      if (
+        connectionStatusRef.current === 'connecting' &&
+        (!socket || socket.readyState === WebSocket.CONNECTING)
+      ) {
         if (
           new TextEncoder().encode(pendingInputRef.current + data).byteLength <= 65_536
         ) {
