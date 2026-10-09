@@ -4414,18 +4414,38 @@ async function handleTerminalUpgrade(request, socket, head, id) {
     !owner ||
     !terminalRunnerUrl ||
     !ticket ||
-    owner.websocketTicket !== ticket ||
-    owner.websocketTicketUsed ||
-    owner.websocketTicketExpiresAt <= Date.now()
+    owner.expiresAt <= Date.now()
   ) {
     console.warn('Terminal websocket rejected by ticket', {
       id,
       ownerExists: Boolean(owner),
       ticketPresent: Boolean(ticket),
-      ticketMatches: Boolean(owner && ticket && owner.websocketTicket === ticket),
-      ticketExpired: Boolean(owner && owner.websocketTicketExpiresAt <= Date.now()),
-      ticketUsed: Boolean(owner && owner.websocketTicketUsed),
+      ownerExpired: Boolean(owner && owner.expiresAt <= Date.now()),
       runnerConfigured: Boolean(terminalRunnerUrl)
+    })
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  let ticketConsumed = false
+
+  try {
+    ticketConsumed = await consumeTerminalWebSocketTicket(id, ticket)
+  } catch (error) {
+    console.error('Terminal websocket ticket consumption failed', {
+      id,
+      message: error instanceof Error ? error.message : String(error)
+    })
+    socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  if (!ticketConsumed) {
+    console.warn('Terminal websocket rejected by ticket', {
+      id,
+      ownerExists: true,
+      ticketPresent: true,
+      ticketUsedOrExpired: true
     })
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
@@ -4433,6 +4453,8 @@ async function handleTerminalUpgrade(request, socket, head, id) {
 
   owner.websocketTicketUsed = true
   owner.websocketTicket = ''
+  owner.websocketTicketHash = ''
+  owner.websocketTicketExpiresAt = 0
 
   terminalWebSocketServer.handleUpgrade(
     request,
