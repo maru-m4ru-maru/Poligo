@@ -259,7 +259,7 @@ async function measureWorkspace(session) {
     }
   )
 
-  const bytes = Number(du.stdout.trim().split(/\\s+/)[0])
+  const bytes = Number.parseInt(du.stdout.trim(), 10)
 
   if (!Number.isFinite(bytes) || bytes > maxWorkspaceBytes) {
     throw new Error('terminal workspace storage limit exceeded')
