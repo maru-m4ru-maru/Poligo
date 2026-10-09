@@ -154,18 +154,23 @@ export function mergeTerminalFiles({
     setFile(baselineFiles, path, mergedValue)
   }
 
+  const comparisonFiles = hasClient
+    ? clientFiles
+    : baseFiles
+  const changedPaths = [...new Set([
+    ...Object.keys(comparisonFiles),
+    ...Object.keys(mergedFiles)
+  ])]
+    .filter(path =>
+      getFile(comparisonFiles, path) !== getFile(mergedFiles, path)
+    )
+    .sort()
+
   return {
     files: mergedFiles,
     runnerFiles: { ...mergedFiles },
     baselineFiles: { ...mergedFiles },
-    changedPaths: hasClient
-      ? [...new Set([
-          ...Object.keys(clientFiles),
-          ...Object.keys(mergedFiles)
-        ])]
-          .filter(path => getFile(clientFiles, path) !== getFile(mergedFiles, path))
-          .sort()
-      : [],
+    changedPaths,
     conflicts: conflicts.sort((left, right) =>
       left.path.localeCompare(right.path)
     )
