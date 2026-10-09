@@ -25,6 +25,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
   const socketRef = useRef(null)
   const sessionIdRef = useRef('')
   const connectingRef = useRef(false)
+  const reconnectingRef = useRef(false)
   const activeRef = useRef(active)
   const pendingInputRef = useRef('')
   const connectionStatusRef = useRef('connecting')
@@ -43,6 +44,68 @@ const TerminalPanel = forwardRef(function TerminalPanel(
     connectionStatusRef.current = status
     setConnectionStatus(status)
     setConnectionMessage(message)
+  }
+
+  async function reconnectTerminal() {
+    if (reconnectingRef.current) {
+      return
+    }
+
+    reconnectingRef.current = true
+    updateConnectionStatus('connecting')
+    terminalRef.current?.writeln(
+      '\r\n\x1b[90m[Saving and closing the previous session before reconnecting...]\x1b[0m\r\n'
+    )
+
+    const sessionId = sessionIdRef.current
+
+    try {
+      if (sessionId) {
+        const response = await fetch(
+          apiUrl + '/api/terminal/sessions/' +
+            encodeURIComponent(sessionId),
+          {
+            method: 'DELETE',
+            credentials: 'include'
+          }
+        )
+        const payload = await response.json().catch(() => null)
+
+        if (!response.ok) {
+          throw new Error(
+            payload?.error ||
+            'Could not close the previous terminal session (' +
+              response.status + ').'
+          )
+        }
+
+        sessionIdRef.current = ''
+      }
+
+      const socket = socketRef.current
+
+      if (socket && socket.readyState < WebSocket.CLOSING) {
+        socket.close()
+      }
+
+      socketRef.current = null
+      updateConnectionStatus('connecting')
+      setConnectionAttempt(value => value + 1)
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Previous terminal session cleanup failed.'
+
+      terminalRef.current?.writeln(
+        '\r\n\x1b[31m[Reconnect aborted: ' + message + ']\x1b[0m\r\n'
+      )
+      updateConnectionStatus(
+        'error',
+        'The previous terminal session could not be closed safely: ' + message
+      )
+    } finally {
+      reconnectingRef.current = false
+    }
   }
 
   useImperativeHandle(ref, () => ({
@@ -534,7 +597,11 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         })
 
         socket.addEventListener('error', () => {
-          if (cancelled) {
+          if (
+            cancelled ||
+            reconnectingRef.current ||
+            sessionIdRef.current !== body.id
+          ) {
             return
           }
 
@@ -544,9 +611,16 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         })
 
         socket.addEventListener('close', () => {
-          socketRef.current = null
+          if (socketRef.current === socket) {
+            socketRef.current = null
+          }
 
-          if (!cancelled && connectionStatusRef.current !== 'exited') {
+          if (
+            !cancelled &&
+            !reconnectingRef.current &&
+            sessionIdRef.current === body.id &&
+            connectionStatusRef.current !== 'exited'
+          ) {
             const message = 'Terminal disconnected. Reconnect to start a new session.'
             terminal.write('\r\n\x1b[90m[terminal disconnected]\x1b[0m\r\n')
             updateConnectionStatus('error', message)
@@ -625,10 +699,8 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           </div>
           <button
             type="button"
-            onClick={() => {
-              updateConnectionStatus('connecting')
-              setConnectionAttempt(value => value + 1)
-            }}
+            onClick={() => void reconnectTerminal()}
+            disabled={reconnectingRef.current}
           >
             再接続
           </button>
