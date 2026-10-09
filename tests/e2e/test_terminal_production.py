@@ -165,6 +165,41 @@ def create_project(page):
     return project_id
 
 
+def delete_terminal_session(page, session_id, missing_ok=False):
+    last_error = ""
+
+    for attempt in range(3):
+        try:
+            response = page.request.delete(
+                API_URL + "/api/terminal/sessions/" + session_id,
+                headers=cookie_headers(page.context, page),
+                timeout=20_000
+            )
+
+            if response.status in (200, 204):
+                return True
+
+            if missing_ok and response.status == 404:
+                return True
+
+            last_error = (
+                "HTTP " + str(response.status) + ": " +
+                response.text()[:500]
+            )
+        except Exception as error:
+            last_error = str(error)[:500]
+
+        if attempt < 2:
+            page.wait_for_timeout(300 * (attempt + 1))
+
+    print(
+        "Cleanup terminal failed:",
+        last_error,
+        flush=True
+    )
+    return False
+
+
 def close_terminal(page, missing_ok=False):
     status = terminal_status(page) or {}
     session_id = status.get("sessionId")
@@ -172,33 +207,11 @@ def close_terminal(page, missing_ok=False):
     if not isinstance(session_id, str) or not session_id:
         return missing_ok
 
-    try:
-        response = page.request.delete(
-            API_URL + "/api/terminal/sessions/" + session_id,
-            headers=cookie_headers(page.context, page),
-            timeout=20_000
-        )
-
-        if response.status in (200, 204):
-            return True
-
-        if missing_ok and response.status == 404:
-            return True
-
-        print(
-            "Cleanup terminal status:",
-            response.status,
-            response.text()[:500],
-            flush=True
-        )
-    except Exception as error:
-        print(
-            "Cleanup terminal failed:",
-            str(error)[:500],
-            flush=True
-        )
-
-    return False
+    return delete_terminal_session(
+        page,
+        session_id,
+        missing_ok=missing_ok
+    )
 
 
 def delete_project(page, project_id):
@@ -381,23 +394,10 @@ def test_one_time_websocket_ticket(page, project_id):
 
         print("PASS: WebSocket ticket can only be used once", flush=True)
     finally:
-        try:
-            page.evaluate(
-                """async sessionId => {
-                  await fetch(
-                    '/api/terminal/sessions/' +
-                      encodeURIComponent(sessionId),
-                    {
-                      method: 'DELETE',
-                      credentials: 'include',
-                      keepalive: true
-                    }
-                  )
-                }""",
-                session_id
+        if not delete_terminal_session(page, session_id):
+            raise AssertionError(
+                "WebSocket ticket test session could not be cleaned up"
             )
-        except Exception:
-            pass
 
 
 def main():
