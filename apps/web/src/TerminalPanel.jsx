@@ -287,7 +287,12 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           )
         }
 
-        if (typeof body?.id !== 'string' || !body.id) {
+        if (
+          typeof body?.id !== 'string' ||
+          !body.id ||
+          typeof body?.websocketTicket !== 'string' ||
+          !body.websocketTicket
+        ) {
           throw new Error('terminal service returned an invalid session')
         }
 
@@ -306,11 +311,17 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
         sessionIdRef.current = body.id
 
-        const websocketUrl = (
-          apiUrl || window.location.origin
-        ).replace(/^http/, 'ws') +
+        const websocketBase = (
+          import.meta.env.VITE_TERMINAL_WS_URL ||
+          apiUrl ||
+          window.location.origin
+        ).replace(/\/$/, '')
+
+        const websocketUrl = websocketBase.replace(/^http/, 'ws') +
           '/api/terminal/sessions/' +
-          encodeURIComponent(body.id)
+          encodeURIComponent(body.id) +
+          '?ticket=' +
+          encodeURIComponent(body.websocketTicket)
 
         const socket = new WebSocket(websocketUrl)
         socket.binaryType = 'arraybuffer'
