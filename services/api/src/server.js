@@ -3949,17 +3949,39 @@ const terminalWebSocketServer = new WebSocketServer({
 })
 
 async function handleTerminalUpgrade(request, socket, head, id) {
-  const session = await getSession(request)
+  let session
+
+  try {
+    session = await getSession(request)
+  } catch (error) {
+    console.error('Terminal websocket session lookup failed', {
+      id,
+      message: error instanceof Error ? error.message : String(error)
+    })
+    socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+    return
+  }
 
   if (!session?.user?.id) {
-    socket.destroy()
+    console.warn('Terminal websocket rejected without session', {
+      id,
+      cookiePresent: Boolean(request.headers.cookie),
+      origin: request.headers.origin || ''
+    })
+    socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
     return
   }
 
   const owner = getTerminalOwner(id)
 
   if (!owner || owner.userId !== session.user.id || !runnerUrl) {
-    socket.destroy()
+    console.warn('Terminal websocket access rejected', {
+      id,
+      ownerExists: Boolean(owner),
+      ownerMatches: Boolean(owner && owner.userId === session.user.id),
+      runnerConfigured: Boolean(runnerUrl)
+    })
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
   }
 
@@ -3971,26 +3993,65 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       const runnerSocket = new WebSocket(
         terminalRunnerWebSocketUrl(id),
         {
-          headers: terminalHeaders()
+          headers: terminalHeaders(),
+          handshakeTimeout: 15_000,
+          maxPayload: 1_048_576
         }
       )
 
       const queue = []
+      let runnerReady = false
 
       client.on('message', data => {
         retainTerminal(id)
 
         if (runnerSocket.readyState === WebSocket.OPEN) {
           runnerSocket.send(data)
-        } else {
+        } else if (
+          runnerSocket.readyState === WebSocket.CONNECTING &&
+          queue.length < 128
+        ) {
           queue.push(data)
         }
       })
 
       runnerSocket.on('open', () => {
+        runnerReady = true
+        console.info('Terminal runner websocket connected', { id })
+
         for (const data of queue.splice(0)) {
           runnerSocket.send(data)
         }
+      })
+
+      runnerSocket.on('unexpected-response', (upstreamRequest, response) => {
+        const statusCode = response.statusCode || 0
+        let responseText = ''
+
+        response.on('data', chunk => {
+          if (responseText.length < 1000) {
+            responseText += chunk.toString('utf8').slice(
+              0,
+              1000 - responseText.length
+            )
+          }
+        })
+
+        response.on('end', () => {
+          console.error('Terminal runner websocket handshake rejected', {
+            id,
+            statusCode,
+            response: responseText
+          })
+
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({
+              type: 'error',
+              message: 'Terminal Runner handshake failed (HTTP ' + statusCode + ').'
+            }))
+            client.close(1011, 'runner handshake failed')
+          }
+        })
       })
 
       runnerSocket.on('message', data => {
@@ -4002,31 +4063,47 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       })
 
       runnerSocket.on('error', error => {
+        console.error('Terminal runner websocket error', {
+          id,
+          code: error?.code || '',
+          message: error instanceof Error ? error.message : String(error),
+          runnerReady
+        })
+
         if (client.readyState === WebSocket.OPEN) {
-          client.send(
-            JSON.stringify({
-              type: 'error',
-              message: error instanceof Error
-                ? error.message
-                : 'terminal connection failed'
-            })
-          )
-          client.close()
+          client.send(JSON.stringify({
+            type: 'error',
+            message: error instanceof Error
+              ? error.message
+              : 'terminal connection failed'
+          }))
+          client.close(1011, 'runner connection failed')
         }
       })
 
-      runnerSocket.on('close', () => {
+      runnerSocket.on('close', (code, reason) => {
         if (client.readyState === WebSocket.OPEN) {
-          client.close()
+          client.send(JSON.stringify({
+            type: 'error',
+            message: 'Terminal Runner disconnected (code ' + code + ').'
+          }))
+          client.close(1011, 'runner disconnected')
         }
       })
 
       client.on('close', () => {
         if (runnerSocket.readyState === WebSocket.OPEN) {
           runnerSocket.close()
+        } else if (runnerSocket.readyState === WebSocket.CONNECTING) {
+          runnerSocket.terminate()
         }
 
-        void syncTerminal(id).catch(() => {})
+        void syncTerminal(id).catch(error => {
+          console.error('Terminal sync after websocket close failed', {
+            id,
+            message: error instanceof Error ? error.message : String(error)
+          })
+        })
       })
     }
   )
