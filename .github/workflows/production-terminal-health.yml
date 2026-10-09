@@ -1,0 +1,89 @@
+name: Poligo Production Terminal Health
+run-name: Poligo production terminal health
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "services/api/src/server.js"
+      - "services/runner/**"
+      - "apps/web/src/TerminalPanel.jsx"
+      - ".github/workflows/production-terminal-health.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: poligo-production-terminal-health
+  cancel-in-progress: true
+
+jobs:
+  production-terminal-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Wait for production Runner, API, and web
+        env:
+          POLIGO_RUNNER_URL: https://poligo-terminal-runner.onrender.com
+          POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -e
+
+          for attempt in $(seq 1 240); do
+            runner_ok=0
+            api_ok=0
+            web_ok=0
+
+            if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_RUNNER_URL/health" >/tmp/terminal-runner-health.json; then
+              if python -c "import json; d=json.load(open('/tmp/terminal-runner-health.json')); raise SystemExit(0 if d.get('status') == 'ok' and d.get('service') == 'runner' and d.get('terminalBackend') == 'process' and d.get('terminalReady') is True else 1)"; then
+                runner_ok=1
+              fi
+            fi
+
+            if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_API_URL/api/health" >/tmp/terminal-api-health.json; then
+              if python - "$EXPECTED_COMMIT" <<'PY'
+          import json
+          import sys
+
+          with open("/tmp/terminal-api-health.json", encoding="utf-8") as handle:
+              data = json.load(handle)
+
+          database = data.get("database") or {}
+
+          raise SystemExit(
+              0
+              if data.get("status") == "ok"
+              and data.get("service") == "api"
+              and data.get("runner") is True
+              and data.get("executor") == "runner"
+              and data.get("commit") == sys.argv[1]
+              and database.get("status") == "online"
+              else 1
+          )
+          PY
+              then
+                api_ok=1
+              fi
+            fi
+
+            if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_WEB_URL/" >/tmp/terminal-web.html; then
+              web_ok=1
+            fi
+
+            if [ "$runner_ok" -eq 1 ] && [ "$api_ok" -eq 1 ] && [ "$web_ok" -eq 1 ]; then
+              cat /tmp/terminal-runner-health.json
+              cat /tmp/terminal-api-health.json
+              echo "Production Terminal health: PASS at $EXPECTED_COMMIT"
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "Production Terminal health checks failed." >&2
+          cat /tmp/terminal-runner-health.json 2>/dev/null || true
+          cat /tmp/terminal-api-health.json 2>/dev/null || true
+          exit 1
