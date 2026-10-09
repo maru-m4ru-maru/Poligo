@@ -3698,42 +3698,53 @@ async function deleteTerminalOwnerRecord(id) {
 }
 
 async function expireTerminalOwner(id, owner) {
-  if (owner.cleanupInProgress) {
-    return
+  if (owner.cleanupPromise) {
+    return owner.cleanupPromise
   }
 
   owner.cleanupInProgress = true
-
-  try {
-    if (terminalRunnerUrl) {
-      await runnerTerminalRequest(
-        '/v1/terminals/' + encodeURIComponent(id),
-        {
-          method: 'DELETE'
-        }
-      )
+  owner.cleanupPromise = (async () => {
+    try {
+      if (terminalRunnerUrl) {
+        await runnerTerminalRequest(
+          '/v1/terminals/' + encodeURIComponent(id),
+          {
+            method: 'DELETE'
+          }
+        )
+      }
+    } catch (error) {
+      if (!(error instanceof Error) || error.message !== 'terminal session not found') {
+        owner.cleanupInProgress = false
+        owner.cleanupPromise = null
+        console.error('Terminal expiration cleanup failed', {
+          id,
+          message: error instanceof Error ? error.message : String(error)
+        })
+        return false
+      }
     }
-  } catch (error) {
-    if (!(error instanceof Error) || error.message !== 'terminal session not found') {
+
+    if (terminalOwners.get(id) === owner) {
+      terminalOwners.delete(id)
+    }
+
+    try {
+      await deleteTerminalOwnerRecord(id)
+    } catch (error) {
       owner.cleanupInProgress = false
-      console.error('Terminal expiration cleanup failed', {
+      owner.cleanupPromise = null
+      console.error('Terminal owner record cleanup failed', {
         id,
         message: error instanceof Error ? error.message : String(error)
       })
-      return
+      return false
     }
-  }
 
-  if (terminalOwners.get(id) === owner) {
-    terminalOwners.delete(id)
-  }
+    return true
+  })()
 
-  await deleteTerminalOwnerRecord(id).catch(error => {
-    console.error('Terminal owner record cleanup failed', {
-      id,
-      message: error instanceof Error ? error.message : String(error)
-    })
-  })
+  return owner.cleanupPromise
 }
 
 async function loadTerminalOwner(id) {
@@ -3743,20 +3754,16 @@ async function loadTerminalOwner(id) {
     return cached
   }
 
-  if (cached) {
-    terminalOwners.delete(id)
-  }
-
   const owner = await readStoredTerminalOwner(id)
 
   if (!owner) {
+    terminalOwners.delete(id)
     return null
   }
 
   terminalOwners.set(id, owner)
 
   if (owner.expiresAt <= Date.now()) {
-    void expireTerminalOwner(id, owner)
     return null
   }
 
