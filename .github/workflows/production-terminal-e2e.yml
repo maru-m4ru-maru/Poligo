@@ -1,0 +1,116 @@
+name: Poligo Production Terminal E2E
+run-name: Poligo production Terminal E2E
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/web/src/TerminalPanel.jsx"
+      - "services/api/src/server.js"
+      - "services/runner/**"
+      - "tests/e2e/test_terminal_production.py"
+      - ".github/workflows/production-terminal-e2e.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: poligo-production-terminal-e2e
+  cancel-in-progress: true
+
+jobs:
+  production-terminal-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.63.0
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Wait for production services
+        env:
+          POLIGO_RUNNER_URL: https://poligo-terminal-runner.onrender.com
+          POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -e
+
+          for attempt in $(seq 1 240); do
+            runner_ok=0
+            api_ok=0
+            web_ok=0
+
+            if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_RUNNER_URL/health" >/tmp/poligo-runner-health.json; then
+              if python -c "import json; d=json.load(open('/tmp/poligo-runner-health.json')); raise SystemExit(0 if d.get('status') == 'ok' and d.get('service') == 'runner' and d.get('terminalBackend') == 'process' and d.get('terminalReady') is True else 1)"; then
+                runner_ok=1
+              fi
+            fi
+
+            if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_API_URL/api/health" >/tmp/poligo-api-health.json; then
+              if python - "$EXPECTED_COMMIT" <<'PY'
+          import json
+          import sys
+
+          with open("/tmp/poligo-api-health.json", encoding="utf-8") as handle:
+              data = json.load(handle)
+
+          database = data.get("database") or {}
+
+          raise SystemExit(
+              0
+              if data.get("status") == "ok"
+              and data.get("service") == "api"
+              and data.get("runner") is True
+              and data.get("executor") == "runner"
+              and data.get("commit") == sys.argv[1]
+              and database.get("status") == "online"
+              else 1
+          )
+          PY
+              then
+                api_ok=1
+              fi
+            fi
+
+            if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_WEB_URL/" >/tmp/poligo-web.html; then
+              web_ok=1
+            fi
+
+            if [ "$runner_ok" -eq 1 ] && [ "$api_ok" -eq 1 ] && [ "$web_ok" -eq 1 ]; then
+              cat /tmp/poligo-runner-health.json
+              cat /tmp/poligo-api-health.json
+              echo "Production services healthy at $EXPECTED_COMMIT."
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "Production services did not become healthy at $EXPECTED_COMMIT." >&2
+          cat /tmp/poligo-runner-health.json 2>/dev/null || true
+          cat /tmp/poligo-api-health.json 2>/dev/null || true
+          exit 1
+
+      - name: Run authenticated production Terminal E2E
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          POLIGO_API_URL: https://poligo-api-g0wc.onrender.com
+        run: python -u tests/e2e/test_terminal_production.py
+
+      - name: Upload Terminal failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: poligo-terminal-production-e2e-failure
+          path: poligo-terminal-production-e2e-failure.png
+          if-no-files-found: ignore
