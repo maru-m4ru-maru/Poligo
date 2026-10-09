@@ -582,7 +582,7 @@ def main():
 
             run_command(
                 page,
-                "for i in $(seq 1 20); do if grep -Fxq 'EDITOR_TO_TERMINAL_SYNC_OK' terminal-created.txt; then printf 'EDITOR_TO_TERMINAL_OK\\n'; exit 0; fi; sleep 1; done; printf 'EDITOR_TO_TERMINAL_TIMEOUT\\n'; exit 1",
+                "for i in $(seq 1 20); do if grep -Fxq 'EDITOR_TO_TERMINAL_SYNC_OK' terminal-created.txt; then printf 'EDITOR_TO_TERMINAL_OK\\n'; break; fi; sleep 1; done",
                 "EDITOR_TO_TERMINAL_OK",
                 timeout=25
             )
@@ -710,7 +710,7 @@ def main():
 
             run_command(
                 page,
-                "for i in $(seq 1 20); do if [ ! -e ide-delete-target.txt ]; then printf 'IDE_DELETE_REACHED_TERMINAL\\n'; exit 0; fi; sleep 1; done; printf 'IDE_DELETE_TIMEOUT\\n'; exit 1",
+                "for i in $(seq 1 20); do if [ ! -e ide-delete-target.txt ]; then printf 'IDE_DELETE_REACHED_TERMINAL\\n'; break; fi; sleep 1; done",
                 "IDE_DELETE_REACHED_TERMINAL",
                 timeout=25
             )
