@@ -4,6 +4,7 @@ import { promisify } from 'node:util'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import pty from 'node-pty'
+import tar from 'tar-stream'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = process.env.TERMINAL_RUN_ROOT || '/tmp/poligo-terminal-sessions'
@@ -142,7 +143,8 @@ async function createSystemUser(workspace) {
 
       if (
         message.includes('already exists') ||
-        message.includes('already in use')
+        message.includes('already in use') ||
+        message.includes('is not unique')
       ) {
         continue
       }
@@ -231,116 +233,151 @@ function terminalEnvironment(session) {
   }
 }
 
-async function measureWorkspace(workspace) {
-  const stack = [workspace]
-  let bytes = 0
-  let entries = 0
+function setprivArguments(session, command, args) {
+  return [
+    '--reuid',
+    String(session.uid),
+    '--regid',
+    String(session.uid),
+    '--clear-groups',
+    command,
+    ...args
+  ]
+}
 
-  while (stack.length) {
-    const current = stack.pop()
-    const children = await fs.readdir(current, {
-      withFileTypes: true
-    })
-
-    for (const child of children) {
-      entries += 1
-
-      if (entries > maxWorkspaceEntries) {
-        throw new Error('terminal workspace contains too many files')
-      }
-
-      const target = path.join(current, child.name)
-      const stat = await fs.lstat(target)
-
-      if (stat.isSymbolicLink()) {
-        continue
-      }
-
-      if (stat.isDirectory()) {
-        stack.push(target)
-      } else if (stat.isFile()) {
-        bytes += stat.size
-
-        if (bytes > maxWorkspaceBytes) {
-          throw new Error('terminal workspace storage limit exceeded')
-        }
-      }
+async function measureWorkspace(session) {
+  const du = await execFileAsync(
+    '/usr/bin/setpriv',
+    setprivArguments(session, '/usr/bin/du', [
+      '-sb',
+      session.workspace
+    ]),
+    {
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: 65_536
     }
+  )
+
+  const bytes = Number(du.stdout.trim().split(/\\s+/)[0])
+
+  if (!Number.isFinite(bytes) || bytes > maxWorkspaceBytes) {
+    throw new Error('terminal workspace storage limit exceeded')
+  }
+
+  const entries = await execFileAsync(
+    '/usr/bin/setpriv',
+    setprivArguments(session, '/usr/bin/find', [
+      session.workspace,
+      '-xdev',
+      '-printf',
+      'x'
+    ]),
+    {
+      encoding: 'utf8',
+      timeout: 10_000,
+      maxBuffer: maxWorkspaceEntries + 1
+    }
+  )
+
+  if (entries.stdout.length > maxWorkspaceEntries) {
+    throw new Error('terminal workspace contains too many files')
   }
 
   return {
     bytes,
-    entries
+    entries: entries.stdout.length
   }
 }
 
-async function collectWorkspaceFiles(workspace) {
-  const files = {}
-  const stack = [{
-    absolute: workspace,
-    relative: ''
-  }]
-  let totalBytes = 0
+async function collectWorkspaceFiles(session) {
+  const result = await execFileAsync(
+    '/usr/bin/setpriv',
+    setprivArguments(session, '/bin/tar', [
+      '--exclude=./node_modules',
+      '--exclude=./.git',
+      '--exclude=./.terminal-cache',
+      '--exclude=./.tmp',
+      '--exclude=./.cache',
+      '-cf',
+      '-',
+      '-C',
+      session.workspace,
+      '.'
+    ]),
+    {
+      encoding: 'buffer',
+      timeout: 15_000,
+      maxBuffer: maxProjectBytes + 1_048_576
+    }
+  )
 
-  while (stack.length) {
-    const current = stack.pop()
-    const children = await fs.readdir(current.absolute, {
-      withFileTypes: true
+  return await new Promise((resolve, reject) => {
+    const extract = tar.extract()
+    const files = {}
+    let totalBytes = 0
+
+    extract.on('entry', (header, stream, next) => {
+      const name = String(header.name || '').replace(/^\\.\\//, '')
+
+      if (header.type !== 'file' || !name) {
+        stream.resume()
+        stream.on('end', next)
+        return
+      }
+
+      let safePath
+
+      try {
+        safePath = normalizeFilePath(name)
+      } catch {
+        stream.resume()
+        stream.on('end', next)
+        return
+      }
+
+      const chunks = []
+      let fileBytes = 0
+      let binary = false
+
+      stream.on('data', chunk => {
+        fileBytes += chunk.length
+        totalBytes += chunk.length
+
+        if (
+          fileBytes > maxProjectBytes ||
+          totalBytes > maxProjectBytes ||
+          Object.keys(files).length >= maxFiles
+        ) {
+          extract.destroy(new Error('terminal project files exceed the sync limit'))
+          return
+        }
+
+        if (chunk.includes(0)) {
+          binary = true
+        }
+
+        chunks.push(Buffer.from(chunk))
+      })
+
+      stream.on('end', () => {
+        if (!binary) {
+          files[safePath] = Buffer.concat(chunks).toString('utf8')
+        }
+
+        next()
+      })
+
+      stream.on('error', reject)
     })
 
-    for (const child of children) {
-      if (
-        child.isSymbolicLink() ||
-        (child.isDirectory() && ignoredDirectories.has(child.name))
-      ) {
-        continue
-      }
+    extract.on('finish', () => {
+      resolve(files)
+    })
 
-      const relative = current.relative
-        ? current.relative + '/' + child.name
-        : child.name
-      const absolute = path.join(current.absolute, child.name)
-
-      if (child.isDirectory()) {
-        stack.push({
-          absolute,
-          relative
-        })
-        continue
-      }
-
-      if (!child.isFile()) {
-        continue
-      }
-
-      const safePath = normalizeFilePath(relative)
-      const stat = await fs.lstat(absolute)
-
-      if (!stat.isFile() || stat.isSymbolicLink()) {
-        continue
-      }
-
-      if (Object.keys(files).length >= maxFiles) {
-        throw new Error('terminal workspace contains too many project files')
-      }
-
-      totalBytes += stat.size
-
-      if (totalBytes > maxProjectBytes) {
-        throw new Error('terminal project files exceed the sync limit')
-      }
-
-      const value = await fs.readFile(absolute)
-
-      if (value.includes(0)) {
-        continue
-      }
-
-      files[safePath] = value.toString('utf8')
-    }
-  }
-
-  return files
+    extract.on('error', reject)
+    extract.end(result.stdout)
+  })
 }
 
 async function killUserProcesses(session) {
@@ -395,7 +432,7 @@ const cleanupTimer = setInterval(() => {
       continue
     }
 
-    void measureWorkspace(session.workspace).catch(error => {
+    void measureWorkspace(session).catch(error => {
       appendOutput(
         session,
         '\r\n[terminal stopped] ' +
@@ -513,7 +550,7 @@ export async function createTerminalSession({
       void killUserProcesses(session)
     })
 
-    await measureWorkspace(workspace)
+    await measureWorkspace(session)
 
     return {
       id: terminalId,
@@ -536,7 +573,7 @@ export async function getTerminalFiles(id) {
   }
 
   session.lastUsedAt = Date.now()
-  return collectWorkspaceFiles(session.workspace)
+  return collectWorkspaceFiles(session)
 }
 
 export async function closeTerminal(id) {
