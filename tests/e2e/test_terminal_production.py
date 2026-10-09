@@ -34,7 +34,7 @@ def terminal_text(page):
     )
 
 
-def wait_for_terminal(page, timeout=120, capacity_timeout=900):
+def wait_for_terminal(page, timeout=120, capacity_timeout=900, retry_capacity=True):
     deadline = time.monotonic() + timeout
     capacity_deadline = None
     next_capacity_retry = 0
@@ -56,6 +56,12 @@ def wait_for_terminal(page, timeout=120, capacity_timeout=900):
 
             if title == "Terminal connection unavailable":
                 if "terminal capacity is currently full" in message:
+                    if not retry_capacity:
+                        raise AssertionError(
+                            "Terminal capacity remained full after explicit reconnect: " +
+                            terminal_text(page)[-5000:]
+                        )
+
                     if capacity_deadline is None:
                         capacity_deadline = now + capacity_timeout
                         deadline = capacity_deadline
@@ -680,7 +686,7 @@ def main():
                 "button",
                 name="再接続"
             ).click()
-            wait_for_terminal(page, timeout=30)
+            wait_for_terminal(page, timeout=30, retry_capacity=False)
 
             run_command(
                 page,
