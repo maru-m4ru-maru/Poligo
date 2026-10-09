@@ -3783,10 +3783,6 @@ async function expireTerminalOwner(id, owner) {
       }
     }
 
-    if (terminalOwners.get(id) === owner) {
-      terminalOwners.delete(id)
-    }
-
     try {
       await deleteTerminalOwnerRecord(id)
     } catch (error) {
@@ -3799,6 +3795,10 @@ async function expireTerminalOwner(id, owner) {
       return false
     }
 
+    if (terminalOwners.get(id) === owner) {
+      terminalOwners.delete(id)
+    }
+
     return true
   })()
 
@@ -3806,12 +3806,6 @@ async function expireTerminalOwner(id, owner) {
 }
 
 async function loadTerminalOwner(id) {
-  const cached = terminalOwners.get(id)
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached
-  }
-
   const owner = await readStoredTerminalOwner(id)
 
   if (!owner) {
