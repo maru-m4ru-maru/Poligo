@@ -9,6 +9,7 @@ import {
   decryptProjectSecrets,
   encryptProjectSecrets
 } from './secretStore.js'
+import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -3648,6 +3649,7 @@ function registerTerminal(id, userId, projectId, files, websocketTicket) {
     userId,
     projectId,
     baseFiles: { ...files },
+    syncQueue: null,
     websocketTicket,
     websocketTicketExpiresAt: now + 60_000,
     websocketTicketUsed: false,
@@ -3711,7 +3713,39 @@ async function runnerTerminalRequest(path, options = {}) {
   return body
 }
 
-async function syncTerminal(id) {
+async function syncTerminal(id, clientFiles) {
+  const owner = getTerminalOwner(id)
+
+  if (!owner) {
+    return null
+  }
+
+  const previous = owner.syncQueue || Promise.resolve()
+  let release
+  const gate = new Promise(resolve => {
+    release = resolve
+  })
+  const queued = previous.catch(() => {}).then(() => gate)
+
+  owner.syncQueue = queued
+  await previous.catch(() => {})
+
+  try {
+    if (getTerminalOwner(id) !== owner) {
+      return null
+    }
+
+    return await syncTerminalNow(id, clientFiles)
+  } finally {
+    release()
+
+    if (owner.syncQueue === queued) {
+      owner.syncQueue = null
+    }
+  }
+}
+
+async function syncTerminalNow(id, clientFiles) {
   const owner = getTerminalOwner(id)
 
   if (!owner) {
@@ -3733,53 +3767,64 @@ async function syncTerminal(id) {
       encodeURIComponent(id) +
       '/files'
   )
-
   const runnerFiles = normalizeExecutionFiles(
     result.files || {}
   )
-  const baseFiles = owner.baseFiles || {}
-  const mergedFiles = { ...project.files }
-
-  for (const path of Object.keys(baseFiles)) {
-    const base = baseFiles[path]
-    const current = project.files[path]
-    const next = runnerFiles[path]
-
-    if (next === undefined) {
-      if (current === base) {
-        delete mergedFiles[path]
-      }
-      continue
-    }
-
-    if (next !== base) {
-      mergedFiles[path] = next
-    }
-  }
-
-  for (const [path, content] of Object.entries(runnerFiles)) {
-    if (!Object.prototype.hasOwnProperty.call(baseFiles, path)) {
-      mergedFiles[path] = content
-    }
-  }
-
+  const normalizedClientFiles = clientFiles === undefined
+    ? undefined
+    : normalizeExecutionFiles(clientFiles)
+  const sync = mergeTerminalFiles({
+    baseFiles: owner.baseFiles || {},
+    projectFiles: project.files,
+    runnerFiles,
+    clientFiles: normalizedClientFiles
+  })
   const payload = normalizeProjectPayload({
     name: project.name,
-    files: mergedFiles
+    files: sync.files
   })
 
-  await updateProject(
-    owner.projectId,
-    owner.userId,
-    payload
-  )
+  if (!filesEqual(project.files, payload.files)) {
+    await updateProject(
+      owner.projectId,
+      owner.userId,
+      payload
+    )
+  }
 
-  owner.baseFiles = runnerFiles
+  if (!filesEqual(runnerFiles, sync.runnerFiles)) {
+    await runnerTerminalRequest(
+      '/v1/terminals/' +
+        encodeURIComponent(id) +
+        '/files',
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          files: sync.runnerFiles
+        })
+      }
+    )
+  }
+
+  owner.baseFiles = sync.baselineFiles
   retainTerminal(id)
+
+  const changedFiles = {}
+
+  for (const path of sync.changedPaths) {
+    if (Object.prototype.hasOwnProperty.call(payload.files, path)) {
+      changedFiles[path] = payload.files[path]
+    }
+  }
 
   return {
     projectId: owner.projectId,
-    files: runnerFiles
+    files: changedFiles,
+    changedPaths: sync.changedPaths,
+    conflicts: sync.conflicts
   }
 }
 
@@ -3892,7 +3937,11 @@ async function handleTerminalSync(request, response, id) {
   }
 
   try {
-    const result = await syncTerminal(id)
+    const payload = await readJson(request)
+    const clientFiles = Object.prototype.hasOwnProperty.call(payload, 'files')
+      ? normalizeExecutionFiles(payload.files)
+      : undefined
+    const result = await syncTerminal(id, clientFiles)
 
     send(response, 200, {
       ok: true,
@@ -3935,18 +3984,32 @@ async function handleTerminalClose(request, response, id) {
 
   try {
     await syncTerminal(id)
-  } finally {
-    terminalOwners.delete(id)
+  } catch (error) {
+    send(response, 502, {
+      error: error instanceof Error
+        ? error.message
+        : 'terminal sync failed; session kept alive for recovery'
+    })
+    return
+  }
 
-    if (terminalRunnerUrl) {
-      try {
-        await runnerTerminalRequest(
-          '/v1/terminals/' + encodeURIComponent(id),
-          {
-            method: 'DELETE'
-          }
-        )
-      } catch {}
+  terminalOwners.delete(id)
+
+  if (terminalRunnerUrl) {
+    try {
+      await runnerTerminalRequest(
+        '/v1/terminals/' + encodeURIComponent(id),
+        {
+          method: 'DELETE'
+        }
+      )
+    } catch (error) {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal cleanup failed'
+      })
+      return
     }
   }
 

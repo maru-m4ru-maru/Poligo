@@ -13,7 +13,9 @@ const TerminalPanel = forwardRef(function TerminalPanel(
   {
     apiUrl,
     projectId,
-    active
+    active,
+    files,
+    onFilesChanged
   },
   ref
 ) {
@@ -26,9 +28,16 @@ const TerminalPanel = forwardRef(function TerminalPanel(
   const activeRef = useRef(active)
   const pendingInputRef = useRef('')
   const connectionStatusRef = useRef('connecting')
+  const filesRef = useRef(files || {})
+  const filesChangedCallbackRef = useRef(onFilesChanged)
+  const lastSyncErrorRef = useRef('')
+  const lastConflictSignatureRef = useRef('')
   const [connectionStatus, setConnectionStatus] = useState('connecting')
   const [connectionMessage, setConnectionMessage] = useState('')
   const [connectionAttempt, setConnectionAttempt] = useState(0)
+
+  filesRef.current = files || {}
+  filesChangedCallbackRef.current = onFilesChanged
 
   function updateConnectionStatus(status, message = '') {
     connectionStatusRef.current = status
@@ -354,14 +363,100 @@ const TerminalPanel = forwardRef(function TerminalPanel(
               '/sync',
             {
               method: 'POST',
-              credentials: 'include'
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                files: filesRef.current
+              })
             }
           )
-            .catch(() => {})
+            .then(async response => {
+              const payload = await response.json().catch(() => null)
+
+              if (!response.ok) {
+                throw new Error(
+                  payload?.error ||
+                  'terminal file synchronization failed'
+                )
+              }
+
+              lastSyncErrorRef.current = ''
+
+              if (
+                !payload ||
+                !payload.files ||
+                typeof payload.files !== 'object' ||
+                Array.isArray(payload.files)
+              ) {
+                return
+              }
+
+              filesChangedCallbackRef.current?.({
+                files: payload.files,
+                changedPaths: Array.isArray(payload.changedPaths)
+                  ? payload.changedPaths
+                  : [],
+                conflicts: Array.isArray(payload.conflicts)
+                  ? payload.conflicts
+                  : []
+              })
+
+              const conflicts = Array.isArray(payload.conflicts)
+                ? payload.conflicts
+                : []
+              const conflictSignature = conflicts
+                .map(conflict =>
+                  String(conflict.path || '').replace(/[\u0000-\u001f\u007f]/g, '?') +
+                  ':' +
+                  (Array.isArray(conflict.copies)
+                    ? conflict.copies.join(',')
+                    : '')
+                )
+                .sort()
+                .join('|')
+
+              if (
+                conflictSignature &&
+                conflictSignature !== lastConflictSignatureRef.current
+              ) {
+                const descriptions = conflicts.map(conflict => {
+                  const path = String(conflict.path || '')
+                    .replace(/[\u0000-\u001f\u007f]/g, '?')
+                  const copies = Array.isArray(conflict.copies)
+                    ? conflict.copies
+                        .map(value => String(value).replace(/[\u0000-\u001f\u007f]/g, '?'))
+                    : []
+
+                  return path + (copies.length
+                    ? ' → preserved copy: ' + copies.join(', ')
+                    : '')
+                })
+
+                terminal.writeln(
+                  '\r\n\x1b[33m[File sync conflict] Separate copies were saved: ' +
+                  descriptions.join('; ') +
+                  '. Review the copies in the file explorer.\x1b[0m\r\n'
+                )
+              }
+
+              lastConflictSignatureRef.current = conflictSignature
+            })
+            .catch(() => {
+              if (lastSyncErrorRef.current) {
+                return
+              }
+
+              lastSyncErrorRef.current = 'failed'
+              terminal.writeln(
+                '\r\n\x1b[33m[File synchronization temporarily failed; retrying automatically.]\x1b[0m\r\n'
+              )
+            })
             .finally(() => {
               syncInFlight = false
             })
-        }, 15_000)
+        }, 5_000)
 
         socket.addEventListener('open', () => {
           if (cancelled) {
