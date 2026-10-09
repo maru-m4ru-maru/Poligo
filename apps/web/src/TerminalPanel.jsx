@@ -124,6 +124,13 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         focus() {
           terminal.focus()
         },
+        disconnect() {
+          const socket = socketRef.current
+
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.close(4000, 'E2E forced disconnect')
+          }
+        },
         status() {
           return {
             status: connectionStatusRef.current,
