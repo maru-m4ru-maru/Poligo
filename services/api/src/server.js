@@ -51,6 +51,7 @@ const authHandler = toNodeHandler(auth)
 const executionRateState = new Map()
 const executionOwners = new Map()
 const terminalOwners = new Map()
+const terminalSyncQueues = new Map()
 const TERMINAL_RECORD_TTL_MS = 30 * 60 * 1000
 
 const executionCleanupTimer = setInterval(() => {
@@ -3642,7 +3643,6 @@ function terminalOwnerFromRow(row) {
     userId: row.owner_id,
     projectId: row.project_id,
     baseFiles: decryptProjectSecrets(JSON.parse(row.base_files)),
-    syncQueue: null,
     websocketTicket: '',
     websocketTicketHash: row.websocket_ticket_hash || '',
     websocketTicketExpiresAt: Number(row.ticket_expires_at || 0),
@@ -3819,7 +3819,6 @@ async function loadTerminalOwner(id) {
     cached.userId === owner.userId &&
     cached.projectId === owner.projectId
   ) {
-    owner.syncQueue = cached.syncQueue
     owner.cleanupInProgress = cached.cleanupInProgress
     owner.cleanupPromise = cached.cleanupPromise
   }
@@ -3929,14 +3928,14 @@ async function syncTerminal(id, clientFiles) {
     return null
   }
 
-  const previous = owner.syncQueue || Promise.resolve()
+  const previous = terminalSyncQueues.get(id) || Promise.resolve()
   let release
   const gate = new Promise(resolve => {
     release = resolve
   })
   const queued = previous.catch(() => {}).then(() => gate)
 
-  owner.syncQueue = queued
+  terminalSyncQueues.set(id, queued)
   await previous.catch(() => {})
 
   try {
@@ -3955,8 +3954,8 @@ async function syncTerminal(id, clientFiles) {
   } finally {
     release()
 
-    if (owner.syncQueue === queued) {
-      owner.syncQueue = null
+    if (terminalSyncQueues.get(id) === queued) {
+      terminalSyncQueues.delete(id)
     }
   }
 }
