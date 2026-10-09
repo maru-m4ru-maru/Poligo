@@ -3779,9 +3779,17 @@ async function syncTerminal(id, clientFiles) {
   owner.baseFiles = sync.baselineFiles
   retainTerminal(id)
 
+  const changedFiles = {}
+
+  for (const path of sync.changedPaths) {
+    if (Object.prototype.hasOwnProperty.call(payload.files, path)) {
+      changedFiles[path] = payload.files[path]
+    }
+  }
+
   return {
     projectId: owner.projectId,
-    files: payload.files,
+    files: changedFiles,
     changedPaths: sync.changedPaths,
     conflicts: sync.conflicts
   }
