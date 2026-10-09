@@ -4861,6 +4861,35 @@ const server = http.createServer(async (request, response) => {
   if (
     request.method === 'POST' &&
     request.url.startsWith('/api/terminal/sessions/') &&
+    request.url.endsWith('/reconnect')
+  ) {
+    const id = request.url.slice(
+      '/api/terminal/sessions/'.length,
+      -'/reconnect'.length
+    )
+
+    if (!id || id.includes('/')) {
+      send(response, 400, {
+        error: 'invalid terminal session id'
+      })
+      return
+    }
+
+    try {
+      await handleTerminalReconnect(request, response, id)
+    } catch (error) {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal reconnect failed'
+      })
+    }
+    return
+  }
+
+  if (
+    request.method === 'POST' &&
+    request.url.startsWith('/api/terminal/sessions/') &&
     request.url.endsWith('/sync')
   ) {
     const id = request.url.slice(
