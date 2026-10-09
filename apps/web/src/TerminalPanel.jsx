@@ -25,6 +25,8 @@ const TerminalPanel = forwardRef(function TerminalPanel(
   const socketRef = useRef(null)
   const sessionIdRef = useRef('')
   const connectingRef = useRef(false)
+  const reconnectRequestedRef = useRef(false)
+  const reuseExistingSessionRef = useRef(false)
   const activeRef = useRef(active)
   const pendingInputRef = useRef('')
   const connectionStatusRef = useRef('connecting')
@@ -123,6 +125,9 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         },
         focus() {
           terminal.focus()
+        },
+        disconnect() {
+          socketRef.current?.close(1000, 'E2E disconnect')
         },
         status() {
           return {
@@ -258,7 +263,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         !projectId ||
         !terminalRef.current ||
         connectingRef.current ||
-        sessionIdRef.current
+        (sessionIdRef.current && !reuseExistingSessionRef.current)
       ) {
         return
       }
@@ -273,8 +278,16 @@ const TerminalPanel = forwardRef(function TerminalPanel(
       terminal.writeln('')
 
       try {
-        const response = await fetch(
-          apiUrl + '/api/terminal/sessions',
+        let reconnecting = Boolean(
+          reuseExistingSessionRef.current &&
+          sessionIdRef.current
+        )
+        let response = await fetch(
+          reconnecting
+            ? apiUrl + '/api/terminal/sessions/' +
+              encodeURIComponent(sessionIdRef.current) +
+              '/reconnect'
+            : apiUrl + '/api/terminal/sessions',
           {
             method: 'POST',
             credentials: 'include',
@@ -287,7 +300,36 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           }
         )
 
-        const body = await response.json().catch(() => null)
+        let body = await response.json().catch(() => null)
+
+        if (reconnecting && response.status === 410) {
+          if (cancelled) {
+            return
+          }
+
+          reconnecting = false
+          reuseExistingSessionRef.current = false
+          sessionIdRef.current = ''
+          terminal.writeln(
+            '\r\n\x1b[90m[The previous shell session no longer exists. Starting a new session.]\x1b[0m\r\n'
+          )
+
+          response = await fetch(
+            apiUrl + '/api/terminal/sessions',
+            {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                projectId
+              })
+            }
+          )
+
+          body = await response.json().catch(() => null)
+        }
 
         if (!response.ok) {
           throw new Error(
@@ -305,6 +347,13 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           throw new Error('terminal service returned an invalid session')
         }
 
+        if (
+          reconnecting &&
+          body.id !== sessionIdRef.current
+        ) {
+          throw new Error('terminal reconnect returned a different session')
+        }
+
         if (cancelled) {
           fetch(
             apiUrl + '/api/terminal/sessions/' +
@@ -319,6 +368,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         }
 
         sessionIdRef.current = body.id
+        reuseExistingSessionRef.current = false
 
         const websocketBase = (
           import.meta.env.VITE_TERMINAL_WS_URL ||
@@ -537,6 +587,10 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         })
 
         socket.addEventListener('close', () => {
+          if (socketRef.current !== socket) {
+            return
+          }
+
           socketRef.current = null
 
           if (!cancelled && connectionStatusRef.current !== 'exited') {
@@ -574,6 +628,15 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
       const socket = socketRef.current
       const sessionId = sessionIdRef.current
+      const preserveSession = Boolean(
+        reconnectRequestedRef.current &&
+        sessionId
+      )
+
+      if (preserveSession) {
+        reuseExistingSessionRef.current = true
+        reconnectRequestedRef.current = false
+      }
 
       if (socket) {
         socket.close()
@@ -581,7 +644,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
       socketRef.current = null
 
-      if (sessionId) {
+      if (sessionId && !preserveSession) {
         fetch(
           apiUrl + '/api/terminal/sessions/' +
             encodeURIComponent(sessionId),
@@ -593,7 +656,11 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         ).catch(() => {})
       }
 
-      sessionIdRef.current = ''
+      if (!preserveSession) {
+        sessionIdRef.current = ''
+        reuseExistingSessionRef.current = false
+      }
+
       connectingRef.current = false
     }
   }, [apiUrl, projectId, connectionAttempt])
@@ -619,6 +686,9 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           <button
             type="button"
             onClick={() => {
+              reconnectRequestedRef.current =
+                connectionStatusRef.current === 'error' &&
+                Boolean(sessionIdRef.current)
               updateConnectionStatus('connecting')
               setConnectionAttempt(value => value + 1)
             }}
