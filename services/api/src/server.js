@@ -4010,6 +4010,7 @@ async function handleTerminalCreate(request, response) {
   }
 
   const id = randomUUID()
+  let runnerSessionCreated = false
 
   try {
     const result = await runnerTerminalRequest(
@@ -4025,10 +4026,11 @@ async function handleTerminalCreate(request, response) {
         })
       }
     )
+    runnerSessionCreated = true
 
     const websocketTicket = randomBytes(32).toString('base64url')
 
-    registerTerminal(
+    await registerTerminal(
       id,
       session.user.id,
       project.id,
@@ -4042,7 +4044,16 @@ async function handleTerminalCreate(request, response) {
       status: result.status || 'ready'
     })
   } catch (error) {
-    send(response, 502, {
+    if (runnerSessionCreated) {
+      await runnerTerminalRequest(
+        '/v1/terminals/' + encodeURIComponent(id),
+        {
+          method: 'DELETE'
+        }
+      ).catch(() => {})
+    }
+
+    send(response, error?.statusCode === 429 ? 429 : 502, {
       error: error instanceof Error
         ? error.message
         : 'terminal service failed'
@@ -4060,7 +4071,7 @@ async function handleTerminalSync(request, response, id) {
     return
   }
 
-  const owner = getTerminalOwner(id)
+  const owner = await loadTerminalOwner(id)
 
   if (!owner) {
     send(response, 404, {
