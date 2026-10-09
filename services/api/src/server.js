@@ -3642,10 +3642,139 @@ function terminalHeaders() {
   return headers
 }
 
-function registerTerminal(id, userId, projectId, files, websocketTicket) {
-  const now = Date.now()
+function terminalOwnerFromRow(row) {
+  return {
+    userId: row.owner_id,
+    projectId: row.project_id,
+    baseFiles: decryptProjectSecrets(JSON.parse(row.base_files)),
+    syncQueue: null,
+    websocketTicket: '',
+    websocketTicketExpiresAt: 0,
+    websocketTicketUsed: true,
+    createdAt: Number(row.created_at),
+    expiresAt: Number(row.expires_at),
+    cleanupInProgress: false
+  }
+}
 
-  terminalOwners.set(id, {
+async function readStoredTerminalOwner(id) {
+  const database = getDatabase()
+  const statement = await database.prepare(
+    'SELECT id, owner_id, project_id, base_files, created_at, expires_at FROM terminal_sessions WHERE id = ?'
+  )
+  const rows = await statement.all([id])
+
+  return rows[0] ? terminalOwnerFromRow(rows[0]) : null
+}
+
+async function persistTerminalOwner(id, owner) {
+  const database = getDatabase()
+  const storedFiles = JSON.stringify(encryptProjectSecrets(owner.baseFiles))
+
+  await database.batch([
+    {
+      sql: `INSERT INTO terminal_sessions (
+        id, owner_id, project_id, base_files, created_at, updated_at, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        owner_id = excluded.owner_id,
+        project_id = excluded.project_id,
+        base_files = excluded.base_files,
+        updated_at = excluded.updated_at,
+        expires_at = excluded.expires_at`,
+      args: [
+        id,
+        owner.userId,
+        owner.projectId,
+        storedFiles,
+        owner.createdAt,
+        Date.now(),
+        owner.expiresAt
+      ]
+    }
+  ], 'immediate')
+}
+
+async function deleteTerminalOwnerRecord(id) {
+  const database = getDatabase()
+
+  await database.batch([
+    {
+      sql: 'DELETE FROM terminal_sessions WHERE id = ?',
+      args: [id]
+    }
+  ], 'immediate')
+}
+
+async function expireTerminalOwner(id, owner) {
+  if (owner.cleanupInProgress) {
+    return
+  }
+
+  owner.cleanupInProgress = true
+
+  try {
+    if (terminalRunnerUrl) {
+      await runnerTerminalRequest(
+        '/v1/terminals/' + encodeURIComponent(id),
+        {
+          method: 'DELETE'
+        }
+      )
+    }
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'terminal session not found') {
+      owner.cleanupInProgress = false
+      console.error('Terminal expiration cleanup failed', {
+        id,
+        message: error instanceof Error ? error.message : String(error)
+      })
+      return
+    }
+  }
+
+  if (terminalOwners.get(id) === owner) {
+    terminalOwners.delete(id)
+  }
+
+  await deleteTerminalOwnerRecord(id).catch(error => {
+    console.error('Terminal owner record cleanup failed', {
+      id,
+      message: error instanceof Error ? error.message : String(error)
+    })
+  })
+}
+
+async function loadTerminalOwner(id) {
+  const cached = terminalOwners.get(id)
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached
+  }
+
+  if (cached) {
+    terminalOwners.delete(id)
+  }
+
+  const owner = await readStoredTerminalOwner(id)
+
+  if (!owner) {
+    return null
+  }
+
+  terminalOwners.set(id, owner)
+
+  if (owner.expiresAt <= Date.now()) {
+    void expireTerminalOwner(id, owner)
+    return null
+  }
+
+  return owner
+}
+
+async function registerTerminal(id, userId, projectId, files, websocketTicket) {
+  const now = Date.now()
+  const owner = {
     userId,
     projectId,
     baseFiles: { ...files },
@@ -3654,20 +3783,17 @@ function registerTerminal(id, userId, projectId, files, websocketTicket) {
     websocketTicketExpiresAt: now + 60_000,
     websocketTicketUsed: false,
     createdAt: now,
-    expiresAt: now + TERMINAL_RECORD_TTL_MS
-  })
-}
-
-function getTerminalOwner(id) {
-  const owner = terminalOwners.get(id)
-
-  if (!owner) {
-    return null
+    expiresAt: now + TERMINAL_RECORD_TTL_MS,
+    cleanupInProgress: false
   }
 
-  if (owner.expiresAt <= Date.now()) {
+  terminalOwners.set(id, owner)
+
+  try {
+    await persistTerminalOwner(id, owner)
+  } catch (error) {
     terminalOwners.delete(id)
-    return null
+    throw error
   }
 
   return owner
@@ -3678,6 +3804,25 @@ function retainTerminal(id) {
 
   if (owner) {
     owner.expiresAt = Date.now() + TERMINAL_RECORD_TTL_MS
+  }
+}
+
+async function restoreTerminalOwners() {
+  const database = getDatabase()
+  const statement = await database.prepare(
+    'SELECT id, owner_id, project_id, base_files, created_at, expires_at FROM terminal_sessions'
+  )
+  const rows = await statement.all()
+
+  for (const row of rows) {
+    try {
+      terminalOwners.set(row.id, terminalOwnerFromRow(row))
+    } catch (error) {
+      console.error('Terminal owner record restore failed', {
+        id: row.id,
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
   }
 }
 
