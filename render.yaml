@@ -14,6 +14,8 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://poligo-web-2n2l.onrender.com
+      - key: VITE_TERMINAL_WS_URL
+        value: https://poligo-api-g0wc.onrender.com
 
   - type: web
     name: poligo-api
