@@ -35,3 +35,4 @@ jobs:
       - run: node --check services/runner/src/languages.js
       - run: node --check services/runner/src/executor.js
       - run: node --check services/runner/src/server.js
+      - run: python3 -m py_compile tests/e2e/test_terminal_production.py
