@@ -4172,6 +4172,8 @@ async function handleTerminalCreate(request, response) {
       ).catch(() => {})
     }
 
+    await deleteTerminalOwnerRecord(id).catch(() => {})
+
     send(response, error?.statusCode === 429 ? 429 : 502, {
       error: error instanceof Error
         ? error.message
