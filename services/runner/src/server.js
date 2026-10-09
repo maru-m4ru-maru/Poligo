@@ -204,11 +204,6 @@ const server = http.createServer(async (request, response) => {
 })
 
 server.on('upgrade', (request, socket, head) => {
-  if (!authorized(request)) {
-    socket.destroy()
-    return
-  }
-
   const url = new URL(
     request.url || '/',
     'http://localhost'
@@ -216,14 +211,23 @@ server.on('upgrade', (request, socket, head) => {
   const prefix = '/v1/terminals/'
 
   if (!url.pathname.startsWith(prefix)) {
-    socket.destroy()
+    socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n')
     return
   }
 
   const id = url.pathname.slice(prefix.length)
 
   if (!id || id.includes('/')) {
-    socket.destroy()
+    socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  if (!authorized(request)) {
+    console.warn('Terminal websocket rejected', {
+      id,
+      authorizationHeaderPresent: Boolean(request.headers.authorization)
+    })
+    socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
     return
   }
 
@@ -232,7 +236,18 @@ server.on('upgrade', (request, socket, head) => {
     socket,
     head,
     client => {
-      void attachTerminalSocket(id, client)
+      console.info('Terminal websocket accepted', { id })
+
+      Promise.resolve(attachTerminalSocket(id, client)).catch(error => {
+        console.error('Terminal socket attach failed', {
+          id,
+          message: error instanceof Error ? error.message : String(error)
+        })
+
+        if (client.readyState === 1) {
+          client.close(1011, 'terminal attach failed')
+        }
+      })
     }
   )
 })
