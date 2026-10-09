@@ -87,7 +87,10 @@ export async function initializeDatabase() {
         base_files TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        expires_at INTEGER NOT NULL
+        expires_at INTEGER NOT NULL,
+        websocket_ticket_hash TEXT NOT NULL DEFAULT '',
+        ticket_expires_at INTEGER NOT NULL DEFAULT 0,
+        ticket_used INTEGER NOT NULL DEFAULT 1
       )`,
       'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_owner_project ON terminal_sessions(owner_id, project_id)',
       'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_expires_at ON terminal_sessions(expires_at)'
