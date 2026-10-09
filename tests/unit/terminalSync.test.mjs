@@ -160,6 +160,31 @@ test('conflict copy names avoid collisions and preserve nested paths', () => {
   assert.equal(result.files['src/main.js.poligo-terminal-conflict-1'], 'terminal\n')
 })
 
+test('a retry after project save reuses the existing conflict copy', () => {
+  const baseFiles = { 'main.js': 'base\n' }
+  const runnerFiles = { 'main.js': 'terminal version\n' }
+  const clientFiles = { 'main.js': 'editor version\n' }
+  const first = mergeTerminalFiles({
+    baseFiles,
+    projectFiles: { 'main.js': 'editor version\n' },
+    runnerFiles,
+    clientFiles
+  })
+  const retry = mergeTerminalFiles({
+    baseFiles,
+    projectFiles: first.files,
+    runnerFiles,
+    clientFiles
+  })
+
+  assert.equal(retry.files['main.js'], 'editor version\n')
+  assert.equal(retry.files['main.js.poligo-terminal-conflict'], 'terminal version\n')
+  assert.deepEqual(
+    Object.keys(retry.files).filter(path => path.includes('.poligo-terminal-conflict')),
+    ['main.js.poligo-terminal-conflict']
+  )
+})
+
 test('filesEqual ignores key order and detects content changes', () => {
   assert.equal(filesEqual({ b: '2', a: '1' }, { a: '1', b: '2' }), true)
   assert.equal(filesEqual({ a: '1' }, { a: '2' }), false)
