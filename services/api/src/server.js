@@ -5120,7 +5120,16 @@ server.on('upgrade', (request, socket, head) => {
     socket,
     head,
     id
-  )
+  ).catch(error => {
+    console.error('Terminal websocket upgrade failed', {
+      id,
+      message: error instanceof Error ? error.message : String(error)
+    })
+
+    if (!socket.destroyed) {
+      socket.end('HTTP/1.1 503 Service Unavailable\\r\\nConnection: close\\r\\n\\r\\n')
+    }
+  })
 })
 
 server.listen(port, '0.0.0.0', () => {
