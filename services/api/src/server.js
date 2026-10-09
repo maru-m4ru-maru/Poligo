@@ -77,7 +77,7 @@ const executionCleanupTimer = setInterval(() => {
     if (record.expiresAt <= now) {
       terminalOwners.delete(id)
 
-      if (runnerUrl) {
+      if (terminalRunnerUrl) {
         void runnerTerminalRequest(
           '/v1/terminals/' + encodeURIComponent(id),
           {
