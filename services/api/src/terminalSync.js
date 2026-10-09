@@ -14,7 +14,7 @@ function setFile(files, path, value) {
   }
 }
 
-function createConflictCopyPath(path, source, usedPaths) {
+function createConflictCopyPath(path, source, usedPaths, existingFiles, expectedContent) {
   const separator = path.lastIndexOf('/')
   const directory = separator >= 0 ? path.slice(0, separator + 1) : ''
   const name = separator >= 0 ? path.slice(separator + 1) : path
@@ -29,6 +29,14 @@ function createConflictCopyPath(path, source, usedPaths) {
     }
 
     const candidate = directory + name.slice(0, maximumNameLength) + suffix
+
+    if (
+      hasFile(existingFiles, candidate) &&
+      existingFiles[candidate] === expectedContent
+    ) {
+      return candidate
+    }
+
     const collides = [...usedPaths].some(existing =>
       existing === candidate ||
       existing.startsWith(candidate + '/') ||
@@ -135,10 +143,17 @@ export function mergeTerminalFiles({
     const preservedCopies = []
 
     for (const version of divergentVersions) {
-      const copyPath = createConflictCopyPath(path, version.source, usedPaths)
-      mergedFiles[copyPath] = version.value === undefined
+      const copyValue = version.value === undefined
         ? makeDeletionNotice(path, version.source)
         : version.value
+      const copyPath = createConflictCopyPath(
+        path,
+        version.source,
+        usedPaths,
+        mergedFiles,
+        copyValue
+      )
+      mergedFiles[copyPath] = copyValue
       preservedCopies.push(copyPath)
     }
 
