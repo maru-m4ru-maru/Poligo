@@ -164,3 +164,31 @@ test('filesEqual ignores key order and detects content changes', () => {
   assert.equal(filesEqual({ b: '2', a: '1' }, { a: '1', b: '2' }), true)
   assert.equal(filesEqual({ a: '1' }, { a: '2' }), false)
 })
+
+test('runner changes are returned as a compact diff when no client snapshot is supplied', () => {
+  const result = mergeTerminalFiles({
+    baseFiles: {
+      'main.js': 'base\n',
+      'deleted.txt': 'old file\n'
+    },
+    projectFiles: {
+      'main.js': 'base\n',
+      'deleted.txt': 'old file\n'
+    },
+    runnerFiles: {
+      'main.js': 'changed in terminal\n',
+      'created.txt': 'created in terminal\n'
+    }
+  })
+
+  assert.deepEqual(result.files, {
+    'main.js': 'changed in terminal\n',
+    'created.txt': 'created in terminal\n'
+  })
+  assert.deepEqual(result.changedPaths, [
+    'created.txt',
+    'deleted.txt',
+    'main.js'
+  ])
+  assert.deepEqual(result.runnerFiles, result.files)
+})
