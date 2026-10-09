@@ -76,16 +76,7 @@ const executionCleanupTimer = setInterval(() => {
 
   for (const [id, record] of terminalOwners) {
     if (record.expiresAt <= now) {
-      terminalOwners.delete(id)
-
-      if (terminalRunnerUrl) {
-        void runnerTerminalRequest(
-          '/v1/terminals/' + encodeURIComponent(id),
-          {
-            method: 'DELETE'
-          }
-        ).catch(() => {})
-      }
+      void expireTerminalOwner(id, record)
     }
   }
 }, 60_000)
@@ -3849,17 +3840,19 @@ async function runnerTerminalRequest(path, options = {}) {
   } catch {}
 
   if (!response.ok) {
-    throw new Error(
+    const error = new Error(
       body?.error ||
       'terminal runner request failed'
     )
+    error.statusCode = response.status
+    throw error
   }
 
   return body
 }
 
 async function syncTerminal(id, clientFiles) {
-  const owner = getTerminalOwner(id)
+  const owner = await loadTerminalOwner(id)
 
   if (!owner) {
     return null
@@ -3876,7 +3869,7 @@ async function syncTerminal(id, clientFiles) {
   await previous.catch(() => {})
 
   try {
-    if (getTerminalOwner(id) !== owner) {
+    if (await loadTerminalOwner(id) !== owner) {
       return null
     }
 
@@ -3891,7 +3884,7 @@ async function syncTerminal(id, clientFiles) {
 }
 
 async function syncTerminalNow(id, clientFiles) {
-  const owner = getTerminalOwner(id)
+  const owner = await loadTerminalOwner(id)
 
   if (!owner) {
     return null
@@ -3904,6 +3897,7 @@ async function syncTerminalNow(id, clientFiles) {
 
   if (!project) {
     terminalOwners.delete(id)
+    await deleteTerminalOwnerRecord(id).catch(() => {})
     return null
   }
 
@@ -3956,6 +3950,7 @@ async function syncTerminalNow(id, clientFiles) {
 
   owner.baseFiles = sync.baselineFiles
   retainTerminal(id)
+  await persistTerminalOwner(id, owner)
 
   const changedFiles = {}
 
