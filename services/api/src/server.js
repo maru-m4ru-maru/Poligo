@@ -3836,6 +3836,7 @@ async function registerTerminal(id, userId, projectId, files, websocketTicket) {
     baseFiles: { ...files },
     syncQueue: null,
     websocketTicket,
+    websocketTicketHash: hashWebSocketTicket(websocketTicket),
     websocketTicketExpiresAt: now + 60_000,
     websocketTicketUsed: false,
     createdAt: now,
@@ -3866,7 +3867,7 @@ function retainTerminal(id) {
 async function restoreTerminalOwners() {
   const database = getDatabase()
   const statement = await database.prepare(
-    'SELECT id, owner_id, project_id, base_files, created_at, expires_at FROM terminal_sessions'
+    'SELECT id, owner_id, project_id, base_files, created_at, expires_at, websocket_ticket_hash, ticket_expires_at, ticket_used FROM terminal_sessions'
   )
   const rows = await statement.all()
 
