@@ -3696,6 +3696,33 @@ async function persistTerminalOwner(id, owner) {
   ], 'immediate')
 }
 
+async function updateTerminalOwnerRecord(id, owner) {
+  const database = getDatabase()
+  const now = Date.now()
+  const storedFiles = JSON.stringify(encryptProjectSecrets(owner.baseFiles))
+  const result = await database.execute({
+    sql: `UPDATE terminal_sessions
+      SET base_files = ?, updated_at = ?, expires_at = ?
+      WHERE id = ?
+        AND owner_id = ?
+        AND project_id = ?
+        AND expires_at > ?`,
+    args: [
+      storedFiles,
+      now,
+      owner.expiresAt,
+      id,
+      owner.userId,
+      owner.projectId,
+      now
+    ]
+  })
+
+  if (Number(result.rowsAffected) !== 1) {
+    throw new Error('terminal session registry record is no longer active')
+  }
+}
+
 async function issueTerminalWebSocketTicket(id, owner) {
   const database = getDatabase()
   const ticket = randomBytes(32).toString('base64url')
@@ -4042,7 +4069,7 @@ async function syncTerminalNow(id, clientFiles) {
 
   owner.baseFiles = sync.baselineFiles
   retainTerminal(id)
-  await persistTerminalOwner(id, owner)
+  await updateTerminalOwnerRecord(id, owner)
 
   const changedFiles = {}
 
