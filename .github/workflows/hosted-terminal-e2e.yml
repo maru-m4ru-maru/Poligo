@@ -8,6 +8,7 @@ on:
     paths:
       - "services/runner/**"
       - "tests/e2e/test_terminal_runner_process.mjs"
+      - "render.yaml"
       - ".github/workflows/hosted-terminal-e2e.yml"
   workflow_dispatch:
 
