@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
@@ -3639,13 +3639,18 @@ function terminalHeaders() {
   return headers
 }
 
-function registerTerminal(id, userId, projectId, files) {
+function registerTerminal(id, userId, projectId, files, websocketTicket) {
+  const now = Date.now()
+
   terminalOwners.set(id, {
     userId,
     projectId,
     baseFiles: { ...files },
-    createdAt: Date.now(),
-    expiresAt: Date.now() + TERMINAL_RECORD_TTL_MS
+    websocketTicket,
+    websocketTicketExpiresAt: now + 60_000,
+    websocketTicketUsed: false,
+    createdAt: now,
+    expiresAt: now + TERMINAL_RECORD_TTL_MS
   })
 }
 
@@ -3834,15 +3839,19 @@ async function handleTerminalCreate(request, response) {
       }
     )
 
+    const websocketTicket = randomBytes(32).toString('base64url')
+
     registerTerminal(
       id,
       session.user.id,
       project.id,
-      project.files
+      project.files,
+      websocketTicket
     )
 
     send(response, 202, {
       id,
+      websocketTicket,
       status: result.status || 'ready'
     })
   } catch (error) {
@@ -3949,41 +3958,52 @@ const terminalWebSocketServer = new WebSocketServer({
 })
 
 async function handleTerminalUpgrade(request, socket, head, id) {
-  let session
-
-  try {
-    session = await getSession(request)
-  } catch (error) {
-    console.error('Terminal websocket session lookup failed', {
-      id,
-      message: error instanceof Error ? error.message : String(error)
-    })
-    socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
-    return
-  }
-
-  if (!session?.user?.id) {
-    console.warn('Terminal websocket rejected without session', {
-      id,
-      cookiePresent: Boolean(request.headers.cookie),
-      origin: request.headers.origin || ''
-    })
-    socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
-    return
-  }
-
+  const requestUrl = new URL(
+    request.url || '/',
+    'http://localhost'
+  )
+  const ticket = requestUrl.searchParams.get('ticket') || ''
+  const origin = request.headers.origin || ''
   const owner = getTerminalOwner(id)
+  const allowedOrigins = allowedOrigin
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+  const originAllowed = allowedOrigins.includes('*') ||
+    allowedOrigins.includes(origin)
 
-  if (!owner || owner.userId !== session.user.id || !runnerUrl) {
-    console.warn('Terminal websocket access rejected', {
+  if (!originAllowed) {
+    console.warn('Terminal websocket rejected by origin policy', {
+      id,
+      origin
+    })
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  if (
+    !owner ||
+    !runnerUrl ||
+    !ticket ||
+    owner.websocketTicket !== ticket ||
+    owner.websocketTicketUsed ||
+    owner.websocketTicketExpiresAt <= Date.now()
+  ) {
+    console.warn('Terminal websocket rejected by ticket', {
       id,
       ownerExists: Boolean(owner),
-      ownerMatches: Boolean(owner && owner.userId === session.user.id),
+      ticketPresent: Boolean(ticket),
+      ticketMatches: Boolean(owner && ticket && owner.websocketTicket === ticket),
+      ticketExpired: Boolean(owner && owner.websocketTicketExpiresAt <= Date.now()),
+      ticketUsed: Boolean(owner && owner.websocketTicketUsed),
       runnerConfigured: Boolean(runnerUrl)
     })
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
   }
+
+  owner.websocketTicketUsed = true
+  owner.websocketTicket = ''
 
   terminalWebSocketServer.handleUpgrade(
     request,
