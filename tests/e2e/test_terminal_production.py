@@ -165,12 +165,12 @@ def create_project(page):
     return project_id
 
 
-def close_terminal(page):
+def close_terminal(page, missing_ok=False):
     status = terminal_status(page) or {}
     session_id = status.get("sessionId")
 
     if not isinstance(session_id, str) or not session_id:
-        return False
+        return missing_ok
 
     try:
         response = page.request.delete(
@@ -180,6 +180,9 @@ def close_terminal(page):
         )
 
         if response.status in (200, 204):
+            return True
+
+        if missing_ok and response.status == 404:
             return True
 
         print(
@@ -784,7 +787,7 @@ def main():
             raise
         finally:
             if project_id:
-                close_terminal(page)
+                close_terminal(page, missing_ok=True)
                 delete_project(page, project_id)
             context.close()
             browser.close()
