@@ -616,7 +616,7 @@ def main():
             print("STEP: terminal edits propagate back into the IDE", flush=True)
             run_command(
                 page,
-                "printf 'TERMINAL_TO_EDITOR_SYNC_OK' > terminal-created.txt && printf 'TERMINAL_TO_EDITOR_WRITE_OK\\\\n'",
+                "printf 'TERMINAL_TO_EDITOR_SYNC_OK' > terminal-created.txt && printf 'TERMINAL_TO_EDITOR_WRITE_OK\\n'",
                 "TERMINAL_TO_EDITOR_WRITE_OK"
             )
 
@@ -645,7 +645,7 @@ def main():
             print("STEP: terminal deletion propagates to the IDE", flush=True)
             run_command(
                 page,
-                "rm terminal-created.txt && printf 'TERMINAL_DELETE_SENT\\\\n'",
+                "rm terminal-created.txt && printf 'TERMINAL_DELETE_SENT\\n'",
                 "TERMINAL_DELETE_SENT"
             )
 
@@ -658,7 +658,7 @@ def main():
             print("STEP: IDE deletion propagates to the terminal", flush=True)
             run_command(
                 page,
-                "printf 'IDE_DELETE_TARGET' > ide-delete-target.txt && printf 'IDE_DELETE_TARGET_CREATED\\\\n'",
+                "printf 'IDE_DELETE_TARGET' > ide-delete-target.txt && printf 'IDE_DELETE_TARGET_CREATED\\n'",
                 "IDE_DELETE_TARGET_CREATED"
             )
 
@@ -686,7 +686,7 @@ def main():
 
             run_command(
                 page,
-                "for i in $(seq 1 20); do if [ ! -e ide-delete-target.txt ]; then printf 'IDE_DELETE_REACHED_TERMINAL\\\\n'; exit 0; fi; sleep 1; done; printf 'IDE_DELETE_TIMEOUT\\\\n'; exit 1",
+                "for i in $(seq 1 20); do if [ ! -e ide-delete-target.txt ]; then printf 'IDE_DELETE_REACHED_TERMINAL\\n'; exit 0; fi; sleep 1; done; printf 'IDE_DELETE_TIMEOUT\\n'; exit 1",
                 "IDE_DELETE_REACHED_TERMINAL",
                 timeout=25
             )
