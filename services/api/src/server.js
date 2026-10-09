@@ -3854,7 +3854,6 @@ async function registerTerminal(id, userId, projectId, files, websocketTicket) {
     userId,
     projectId,
     baseFiles: { ...files },
-    syncQueue: null,
     websocketTicket,
     websocketTicketHash: hashWebSocketTicket(websocketTicket),
     websocketTicketExpiresAt: now + 60_000,
@@ -4280,10 +4279,12 @@ async function handleTerminalReconnect(request, response, id) {
       status: 'ready'
     })
   } catch (error) {
-    send(response, 502, {
-      error: error instanceof Error
-        ? error.message
-        : 'terminal session recovery could not be saved'
+    const message = error instanceof Error
+      ? error.message
+      : 'terminal session recovery could not be saved'
+
+    send(response, message === 'terminal session registry record is no longer active' ? 410 : 502, {
+      error: message
     })
   }
 }
