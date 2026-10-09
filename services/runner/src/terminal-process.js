@@ -318,7 +318,10 @@ async function collectWorkspaceFiles(session) {
     let totalBytes = 0
 
     extract.on('entry', (header, stream, next) => {
-      const name = String(header.name || '').replace(/^\\.\\//, '')
+      const rawName = String(header.name || '')
+      const name = rawName.startsWith('./')
+        ? rawName.slice(2)
+        : rawName
 
       if (header.type !== 'file' || !name) {
         stream.resume()
