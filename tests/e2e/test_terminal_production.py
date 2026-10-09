@@ -161,9 +161,37 @@ def create_project(page):
         "() => Boolean(window.__POLIGO_E2E_TERMINAL__)",
         timeout=10_000
     )
-    wait_for_terminal(page)
 
     return project_id
+
+
+def close_terminal(page):
+    status = terminal_status(page) or {}
+    session_id = status.get("sessionId")
+
+    if not isinstance(session_id, str) or not session_id:
+        return
+
+    try:
+        response = page.request.delete(
+            API_URL + "/api/terminal/sessions/" + session_id,
+            headers=cookie_headers(page.context, page),
+            timeout=20_000
+        )
+
+        if response.status not in (200, 204, 404):
+            print(
+                "Cleanup terminal status:",
+                response.status,
+                response.text()[:500],
+                flush=True
+            )
+    except Exception as error:
+        print(
+            "Cleanup terminal failed:",
+            str(error)[:500],
+            flush=True
+        )
 
 
 def delete_project(page, project_id):
@@ -407,6 +435,7 @@ def main():
 
             print("STEP: create project and connect PTY", flush=True)
             project_id = create_project(page)
+            wait_for_terminal(page)
 
             status = terminal_status(page)
             if not status or not status.get("sessionId"):
@@ -616,6 +645,7 @@ def main():
             raise
         finally:
             if project_id:
+                close_terminal(page)
                 delete_project(page, project_id)
             context.close()
             browser.close()
