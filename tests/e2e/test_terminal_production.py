@@ -165,12 +165,12 @@ def create_project(page):
     return project_id
 
 
-def close_terminal(page):
+def close_terminal(page, missing_ok=False):
     status = terminal_status(page) or {}
     session_id = status.get("sessionId")
 
     if not isinstance(session_id, str) or not session_id:
-        return
+        return missing_ok
 
     try:
         response = page.request.delete(
@@ -179,19 +179,26 @@ def close_terminal(page):
             timeout=20_000
         )
 
-        if response.status not in (200, 204, 404):
-            print(
-                "Cleanup terminal status:",
-                response.status,
-                response.text()[:500],
-                flush=True
-            )
+        if response.status in (200, 204):
+            return True
+
+        if missing_ok and response.status == 404:
+            return True
+
+        print(
+            "Cleanup terminal status:",
+            response.status,
+            response.text()[:500],
+            flush=True
+        )
     except Exception as error:
         print(
             "Cleanup terminal failed:",
             str(error)[:500],
             flush=True
         )
+
+    return False
 
 
 def delete_project(page, project_id):
@@ -582,6 +589,134 @@ def main():
 
             print("PASS: editor content reaches the live terminal", flush=True)
 
+            print("STEP: verify editor changes persist to project storage", flush=True)
+            deadline = time.monotonic() + 30
+            persisted_editor_value = False
+
+            while time.monotonic() < deadline:
+                response = page.request.get(
+                    API_URL + "/api/projects/" + project_id,
+                    headers=cookie_headers(context, page),
+                    timeout=20_000
+                )
+
+                if 200 <= response.status < 300:
+                    files = response.json().get("files") or {}
+
+                    if files.get("terminal-created.txt") == "EDITOR_TO_TERMINAL_SYNC_OK":
+                        persisted_editor_value = True
+                        break
+
+                page.wait_for_timeout(500)
+
+            if not persisted_editor_value:
+                raise AssertionError(
+                    "Editor change did not persist to project storage"
+                )
+
+            print("PASS: editor change persisted to project storage", flush=True)
+
+            print("STEP: terminal edits propagate back into the IDE", flush=True)
+            run_command(
+                page,
+                "printf 'TERMINAL_TO_EDITOR_SYNC_OK' > terminal-created.txt && printf 'TERMINAL_TO_EDITOR_WRITE_OK\\n'",
+                "TERMINAL_TO_EDITOR_WRITE_OK"
+            )
+
+            editor = page.locator(".monaco-editor").last
+            expect(editor).to_contain_text(
+                "TERMINAL_TO_EDITOR_SYNC_OK",
+                timeout=30_000
+            )
+
+            response = page.request.get(
+                API_URL + "/api/projects/" + project_id,
+                headers=cookie_headers(context, page),
+                timeout=20_000
+            )
+
+            if (
+                not 200 <= response.status < 300 or
+                (response.json().get("files") or {}).get("terminal-created.txt") != "TERMINAL_TO_EDITOR_SYNC_OK"
+            ):
+                raise AssertionError(
+                    "Terminal change did not persist to project storage"
+                )
+
+            print("PASS: terminal change propagated to IDE and storage", flush=True)
+
+            print("STEP: reconnect and restore synchronized terminal files", flush=True)
+            if not close_terminal(page):
+                raise AssertionError(
+                    "Terminal session could not be closed before reconnect testing"
+                )
+
+            overlay = page.locator(".terminal-connection-overlay")
+            expect(overlay).to_be_visible(timeout=15_000)
+            overlay.get_by_role(
+                "button",
+                name="再接続"
+            ).click()
+            wait_for_terminal(page, timeout=30)
+
+            run_command(
+                page,
+                "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'RECONNECTED_FILE_OK\\n'",
+                "RECONNECTED_FILE_OK"
+            )
+            print("PASS: reconnect restored synchronized terminal files", flush=True)
+
+            print("STEP: terminal deletion propagates to the IDE", flush=True)
+            run_command(
+                page,
+                "rm terminal-created.txt && printf 'TERMINAL_DELETE_SENT\\n'",
+                "TERMINAL_DELETE_SENT"
+            )
+
+            expect(
+                page.get_by_role("button", name="terminal-created.txt", exact=True)
+            ).to_have_count(0, timeout=30_000)
+
+            print("PASS: terminal deletion removed the IDE file", flush=True)
+
+            print("STEP: IDE deletion propagates to the terminal", flush=True)
+            run_command(
+                page,
+                "printf 'IDE_DELETE_TARGET' > ide-delete-target.txt && printf 'IDE_DELETE_TARGET_CREATED\\n'",
+                "IDE_DELETE_TARGET_CREATED"
+            )
+
+            delete_target = page.get_by_role(
+                "button",
+                name="ide-delete-target.txt",
+                exact=True
+            )
+            expect(delete_target).to_be_visible(timeout=30_000)
+
+            delete_target_row = page.locator(".explorer-file").filter(
+                has=delete_target
+            )
+            delete_target_row.get_by_role(
+                "button",
+                name="ファイルを削除"
+            ).click()
+            page.get_by_role(
+                "button",
+                name="Delete",
+                exact=True
+            ).click()
+
+            expect(delete_target).to_have_count(0, timeout=10_000)
+
+            run_command(
+                page,
+                "for i in $(seq 1 20); do if [ ! -e ide-delete-target.txt ]; then printf 'IDE_DELETE_REACHED_TERMINAL\\n'; exit 0; fi; sleep 1; done; printf 'IDE_DELETE_TIMEOUT\\n'; exit 1",
+                "IDE_DELETE_REACHED_TERMINAL",
+                timeout=25
+            )
+
+            print("PASS: IDE deletion removed the terminal file", flush=True)
+
             print("STEP: shell status and Ctrl+C", flush=True)
             run_command(
                 page,
@@ -633,6 +768,13 @@ def main():
                 raise AssertionError("Terminal scroll output was incomplete")
             print("PASS: resize and scroll output", flush=True)
 
+            print("STEP: release the primary terminal slot", flush=True)
+            if not close_terminal(page):
+                raise AssertionError(
+                    "Primary terminal session could not be closed before ticket security testing"
+                )
+            print("PASS: primary terminal slot released", flush=True)
+
             print("STEP: WebSocket ticket security", flush=True)
             test_one_time_websocket_ticket(page, project_id)
 
@@ -645,7 +787,7 @@ def main():
             raise
         finally:
             if project_id:
-                close_terminal(page)
+                close_terminal(page, missing_ok=True)
                 delete_project(page, project_id)
             context.close()
             browser.close()
