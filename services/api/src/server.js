@@ -3700,25 +3700,41 @@ async function issueTerminalWebSocketTicket(id, owner) {
   const database = getDatabase()
   const ticket = randomBytes(32).toString('base64url')
   const now = Date.now()
-
-  owner.websocketTicket = ticket
-  owner.websocketTicketHash = hashWebSocketTicket(ticket)
-  owner.websocketTicketExpiresAt = now + 60_000
-  owner.websocketTicketUsed = false
-  owner.expiresAt = now + TERMINAL_RECORD_TTL_MS
-
-  await persistTerminalOwner(id, owner)
-  await database.execute({
+  const ticketHash = hashWebSocketTicket(ticket)
+  const ticketExpiresAt = now + 60_000
+  const sessionExpiresAt = now + TERMINAL_RECORD_TTL_MS
+  const result = await database.execute({
     sql: `UPDATE terminal_sessions
-      SET websocket_ticket_hash = ?, ticket_expires_at = ?, ticket_used = 0, updated_at = ?
-      WHERE id = ?`,
+      SET websocket_ticket_hash = ?,
+        ticket_expires_at = ?,
+        ticket_used = 0,
+        expires_at = ?,
+        updated_at = ?
+      WHERE id = ?
+        AND owner_id = ?
+        AND project_id = ?
+        AND expires_at > ?`,
     args: [
-      owner.websocketTicketHash,
-      owner.websocketTicketExpiresAt,
+      ticketHash,
+      ticketExpiresAt,
+      sessionExpiresAt,
       now,
-      id
+      id,
+      owner.userId,
+      owner.projectId,
+      now
     ]
   })
+
+  if (Number(result.rowsAffected) !== 1) {
+    throw new Error('terminal session registry record is no longer active')
+  }
+
+  owner.websocketTicket = ticket
+  owner.websocketTicketHash = ticketHash
+  owner.websocketTicketExpiresAt = ticketExpiresAt
+  owner.websocketTicketUsed = false
+  owner.expiresAt = sessionExpiresAt
 
   return ticket
 }
