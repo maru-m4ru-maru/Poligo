@@ -427,7 +427,7 @@ def main():
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
                 text = terminal_text(page)
-                if "/poligo-terminal-sessions/" in text:
+                if any(line.strip() == "/workspace" for line in text.splitlines()):
                     break
                 page.wait_for_timeout(200)
             else:
