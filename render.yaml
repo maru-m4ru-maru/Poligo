@@ -34,7 +34,7 @@ services:
       - key: POLIGO_ENCRYPTION_KEY
         sync: false
       - key: RUNNER_URL
-        sync: false
+        value: https://poligo-terminal-runner.onrender.com
       - key: RUNNER_TOKEN
         sync: false
       - key: CORS_ORIGIN
