@@ -170,7 +170,7 @@ def close_terminal(page):
     session_id = status.get("sessionId")
 
     if not isinstance(session_id, str) or not session_id:
-        return
+        return False
 
     try:
         response = page.request.delete(
@@ -179,19 +179,23 @@ def close_terminal(page):
             timeout=20_000
         )
 
-        if response.status not in (200, 204, 404):
-            print(
-                "Cleanup terminal status:",
-                response.status,
-                response.text()[:500],
-                flush=True
-            )
+        if response.status in (200, 204):
+            return True
+
+        print(
+            "Cleanup terminal status:",
+            response.status,
+            response.text()[:500],
+            flush=True
+        )
     except Exception as error:
         print(
             "Cleanup terminal failed:",
             str(error)[:500],
             flush=True
         )
+
+    return False
 
 
 def delete_project(page, project_id):
@@ -632,6 +636,13 @@ def main():
             if "SCROLL_LINE_80" not in text:
                 raise AssertionError("Terminal scroll output was incomplete")
             print("PASS: resize and scroll output", flush=True)
+
+            print("STEP: release the primary terminal slot", flush=True)
+            if not close_terminal(page):
+                raise AssertionError(
+                    "Primary terminal session could not be closed before ticket security testing"
+                )
+            print("PASS: primary terminal slot released", flush=True)
 
             print("STEP: WebSocket ticket security", flush=True)
             test_one_time_websocket_ticket(page, project_id)
