@@ -5144,7 +5144,7 @@ server.on('upgrade', (request, socket, head) => {
     })
 
     if (!socket.destroyed) {
-      socket.end('HTTP/1.1 503 Service Unavailable\\r\\nConnection: close\\r\\n\\r\\n')
+      socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n')
     }
   })
 })
