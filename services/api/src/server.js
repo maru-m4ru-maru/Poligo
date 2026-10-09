@@ -4241,30 +4241,24 @@ async function handleTerminalReconnect(request, response, id) {
     return
   }
 
-  const now = Date.now()
-  owner.websocketTicket = randomBytes(32).toString('base64url')
-  owner.websocketTicketExpiresAt = now + 60_000
-  owner.websocketTicketUsed = false
-  owner.expiresAt = now + TERMINAL_RECORD_TTL_MS
   owner.cleanupInProgress = false
   owner.cleanupPromise = null
 
   try {
-    await persistTerminalOwner(id, owner)
+    const websocketTicket = await issueTerminalWebSocketTicket(id, owner)
+
+    send(response, 200, {
+      id,
+      websocketTicket,
+      status: 'ready'
+    })
   } catch (error) {
     send(response, 502, {
       error: error instanceof Error
         ? error.message
         : 'terminal session recovery could not be saved'
     })
-    return
   }
-
-  send(response, 200, {
-    id,
-    websocketTicket: owner.websocketTicket,
-    status: 'ready'
-  })
 }
 
 async function handleTerminalSync(request, response, id) {
