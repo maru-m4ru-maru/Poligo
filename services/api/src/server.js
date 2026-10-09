@@ -4068,6 +4068,177 @@ async function handleTerminalCreate(request, response) {
   }
 }
 
+async function handleTerminalReconnect(request, response, id) {
+  const session = await getSession(request)
+
+  if (!session?.user?.id) {
+    send(response, 401, {
+      error: 'authentication required'
+    })
+    return
+  }
+
+  if (!terminalRunnerUrl) {
+    send(response, 503, {
+      error: 'terminal service is not configured'
+    })
+    return
+  }
+
+  const payload = await readJson(request)
+
+  if (typeof payload.projectId !== 'string' || !payload.projectId) {
+    send(response, 400, {
+      error: 'project id is required'
+    })
+    return
+  }
+
+  const project = await getProjectById(
+    payload.projectId,
+    session.user.id
+  )
+
+  if (!project) {
+    send(response, 404, {
+      error: 'project not found'
+    })
+    return
+  }
+
+  let owner = await loadTerminalOwner(id)
+
+  if (owner) {
+    if (owner.userId !== session.user.id) {
+      send(response, 403, {
+        error: 'terminal access denied'
+      })
+      return
+    }
+
+    if (owner.projectId !== project.id) {
+      send(response, 403, {
+        error: 'terminal project access denied'
+      })
+      return
+    }
+  } else {
+    const storedOwner = await readStoredTerminalOwner(id)
+
+    if (storedOwner) {
+      if (storedOwner.userId !== session.user.id) {
+        send(response, 403, {
+          error: 'terminal access denied'
+        })
+        return
+      }
+
+      if (storedOwner.projectId !== project.id) {
+        send(response, 403, {
+          error: 'terminal project access denied'
+        })
+        return
+      }
+
+      const cleaned = await expireTerminalOwner(id, terminalOwners.get(id) || storedOwner)
+
+      send(response, cleaned ? 410 : 502, {
+        error: cleaned
+          ? 'terminal session expired; start a new session'
+          : 'terminal session cleanup is still pending'
+      })
+      return
+    }
+
+    try {
+      await runnerTerminalRequest(
+        '/v1/terminals/' + encodeURIComponent(id) + '/files'
+      )
+    } catch (error) {
+      if (
+        error?.statusCode === 404 ||
+        (error instanceof Error && error.message === 'terminal session not found')
+      ) {
+        send(response, 410, {
+          error: 'terminal session no longer exists; start a new session'
+        })
+      } else {
+        send(response, 502, {
+          error: error instanceof Error
+            ? error.message
+            : 'terminal service failed'
+        })
+      }
+      return
+    }
+
+    try {
+      owner = await registerTerminal(
+        id,
+        session.user.id,
+        project.id,
+        project.files,
+        ''
+      )
+    } catch (error) {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal session recovery failed'
+      })
+      return
+    }
+  }
+
+  try {
+    await runnerTerminalRequest(
+      '/v1/terminals/' + encodeURIComponent(id) + '/files'
+    )
+  } catch (error) {
+    if (
+      error?.statusCode === 404 ||
+      (error instanceof Error && error.message === 'terminal session not found')
+    ) {
+      await expireTerminalOwner(id, owner)
+      send(response, 410, {
+        error: 'terminal session no longer exists; start a new session'
+      })
+    } else {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal service failed'
+      })
+    }
+    return
+  }
+
+  const now = Date.now()
+  owner.websocketTicket = randomBytes(32).toString('base64url')
+  owner.websocketTicketExpiresAt = now + 60_000
+  owner.websocketTicketUsed = false
+  owner.expiresAt = now + TERMINAL_RECORD_TTL_MS
+  owner.cleanupInProgress = false
+  owner.cleanupPromise = null
+
+  try {
+    await persistTerminalOwner(id, owner)
+  } catch (error) {
+    send(response, 502, {
+      error: error instanceof Error
+        ? error.message
+        : 'terminal session recovery could not be saved'
+    })
+    return
+  }
+
+  send(response, 200, {
+    id,
+    websocketTicket: owner.websocketTicket,
+    status: 'ready'
+  })
+}
+
 async function handleTerminalSync(request, response, id) {
   const session = await getSession(request)
 
