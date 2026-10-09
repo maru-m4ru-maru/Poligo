@@ -5094,7 +5094,9 @@ server.listen(port, '0.0.0.0', () => {
 
       if (initialized) {
         await initializeAuthDatabase()
+        await restoreTerminalOwners()
         console.log('Poligo authentication database ready')
+        console.log('Poligo terminal sessions restored')
       }
     })
     .catch(error => {
