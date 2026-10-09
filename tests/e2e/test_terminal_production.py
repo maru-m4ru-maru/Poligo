@@ -34,10 +34,13 @@ def terminal_text(page):
     )
 
 
-def wait_for_terminal(page, timeout=120):
+def wait_for_terminal(page, timeout=120, capacity_timeout=900):
     deadline = time.monotonic() + timeout
+    capacity_deadline = None
+    next_capacity_retry = 0
 
     while time.monotonic() < deadline:
+        now = time.monotonic()
         status = terminal_status(page)
 
         if status and status.get("status") == "connected":
@@ -52,6 +55,27 @@ def wait_for_terminal(page, timeout=120):
             ).inner_text()
 
             if title == "Terminal connection unavailable":
+                if "terminal capacity is currently full" in message:
+                    if capacity_deadline is None:
+                        capacity_deadline = now + capacity_timeout
+                        deadline = capacity_deadline
+                        print(
+                            "Terminal slots are full; retrying for up to " +
+                            str(capacity_timeout) + " seconds.",
+                            flush=True
+                        )
+
+                    if now >= next_capacity_retry:
+                        page.get_by_role(
+                            "button",
+                            name="再接続"
+                        ).click()
+                        next_capacity_retry = now + 5
+                    else:
+                        page.wait_for_timeout(250)
+
+                    continue
+
                 raise AssertionError(
                     "Terminal connection error: " + message +
                     "\\nTerminal output:\\n" + terminal_text(page)[-5000:] +

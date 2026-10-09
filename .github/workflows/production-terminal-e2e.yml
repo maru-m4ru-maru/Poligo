@@ -21,12 +21,12 @@ on:
 
 concurrency:
   group: poligo-production-terminal-e2e
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   production-terminal-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
