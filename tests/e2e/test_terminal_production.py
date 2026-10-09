@@ -44,16 +44,19 @@ def wait_for_terminal(page, timeout=120):
             return status
 
         if page.locator(".terminal-connection-overlay").count():
+            title = page.locator(
+                ".terminal-connection-title"
+            ).inner_text()
             message = page.locator(
                 ".terminal-connection-message"
             ).inner_text()
-            if "Terminal connection unavailable" in page.locator(
-                ".terminal-connection-title"
-            ).inner_text():
-                if time.monotonic() + 3 >= deadline:
-                    raise AssertionError(
-                        "Terminal connection error: " + message
-                    )
+
+            if title == "Terminal connection unavailable":
+                raise AssertionError(
+                    "Terminal connection error: " + message +
+                    "\\nTerminal output:\\n" + terminal_text(page)[-5000:] +
+                    "\\nTerminal status: " + str(status)
+                )
 
         page.wait_for_timeout(250)
 
