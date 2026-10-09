@@ -523,6 +523,36 @@ def main():
 
             print("PASS: terminal file synchronization to project storage", flush=True)
 
+            print("STEP: terminal-created file appears in the IDE explorer", flush=True)
+            terminal_created_file = page.get_by_role(
+                "button",
+                name="terminal-created.txt",
+                exact=True
+            )
+            expect(terminal_created_file).to_be_visible(timeout=20_000)
+            terminal_created_file.click()
+
+            editor = page.locator(".monaco-editor").last
+            expect(editor).to_contain_text(
+                "TERMINAL_FILE_SYNC_OK",
+                timeout=10_000
+            )
+            print("PASS: terminal-created file appears in the editor", flush=True)
+
+            print("STEP: editor changes reach the live terminal", flush=True)
+            editor.click(position={"x": 80, "y": 18})
+            page.keyboard.press("Control+A")
+            page.keyboard.type("EDITOR_TO_TERMINAL_SYNC_OK", delay=1)
+
+            run_command(
+                page,
+                "for i in $(seq 1 20); do if grep -Fxq 'EDITOR_TO_TERMINAL_SYNC_OK' terminal-created.txt; then printf 'EDITOR_TO_TERMINAL_OK\\n'; exit 0; fi; sleep 1; done; printf 'EDITOR_TO_TERMINAL_TIMEOUT\\n'; exit 1",
+                "EDITOR_TO_TERMINAL_OK",
+                timeout=25
+            )
+
+            print("PASS: editor content reaches the live terminal", flush=True)
+
             print("STEP: shell status and Ctrl+C", flush=True)
             run_command(
                 page,
