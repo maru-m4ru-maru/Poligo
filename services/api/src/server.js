@@ -13,6 +13,8 @@ import {
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
 const runnerToken = process.env.RUNNER_TOKEN || ''
+const terminalRunnerUrl = process.env.TERMINAL_RUNNER_URL || runnerUrl
+const terminalRunnerToken = process.env.TERMINAL_RUNNER_TOKEN || runnerToken
 const judge0Url = (process.env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/$/, '')
 const allowedOrigin = process.env.CORS_ORIGIN || '*'
 const openRouterApiKey = process.env.OPENROUTER_API_KEY || ''
@@ -3624,7 +3626,7 @@ async function handleAdminUsersRequest(request, response) {
 }
 
 function terminalRunnerWebSocketUrl(id) {
-  return runnerUrl.replace(/^http/, 'ws').replace(/\/$/, '') +
+  return terminalRunnerUrl.replace(/^http/, 'ws').replace(/\/$/, '') +
     '/v1/terminals/' +
     encodeURIComponent(id)
 }
@@ -3632,8 +3634,8 @@ function terminalRunnerWebSocketUrl(id) {
 function terminalHeaders() {
   const headers = {}
 
-  if (runnerToken) {
-    headers.Authorization = 'Bearer ' + runnerToken
+  if (terminalRunnerToken) {
+    headers.Authorization = 'Bearer ' + terminalRunnerToken
   }
 
   return headers
@@ -3678,12 +3680,12 @@ function retainTerminal(id) {
 }
 
 async function runnerTerminalRequest(path, options = {}) {
-  if (!runnerUrl) {
+  if (!terminalRunnerUrl) {
     throw new Error('terminal service is not configured')
   }
 
   const response = await fetch(
-    runnerUrl.replace(/\/$/, '') + path,
+    terminalRunnerUrl.replace(/\/$/, '') + path,
     {
       ...options,
       headers: {
@@ -3791,7 +3793,7 @@ async function handleTerminalCreate(request, response) {
     return
   }
 
-  if (!runnerUrl) {
+  if (!terminalRunnerUrl) {
     send(response, 503, {
       error: 'terminal service is not configured'
     })
@@ -3936,7 +3938,7 @@ async function handleTerminalClose(request, response, id) {
   } finally {
     terminalOwners.delete(id)
 
-    if (runnerUrl) {
+    if (terminalRunnerUrl) {
       try {
         await runnerTerminalRequest(
           '/v1/terminals/' + encodeURIComponent(id),
@@ -3983,7 +3985,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
 
   if (
     !owner ||
-    !runnerUrl ||
+    !terminalRunnerUrl ||
     !ticket ||
     owner.websocketTicket !== ticket ||
     owner.websocketTicketUsed ||
@@ -3996,7 +3998,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       ticketMatches: Boolean(owner && ticket && owner.websocketTicket === ticket),
       ticketExpired: Boolean(owner && owner.websocketTicketExpiresAt <= Date.now()),
       ticketUsed: Boolean(owner && owner.websocketTicketUsed),
-      runnerConfigured: Boolean(runnerUrl)
+      runnerConfigured: Boolean(terminalRunnerUrl)
     })
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
@@ -4363,6 +4365,7 @@ const server = http.createServer(async (request, response) => {
       service: 'api',
       commit: process.env.RENDER_GIT_COMMIT || '',
       runner: Boolean(runnerUrl),
+      terminalRunner: Boolean(terminalRunnerUrl),
       executor: runnerUrl ? 'runner' : 'judge0',
       database: getDatabaseStatus()
     })
