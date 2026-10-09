@@ -3993,8 +3993,6 @@ async function handleTerminalClose(request, response, id) {
     return
   }
 
-  terminalOwners.delete(id)
-
   if (terminalRunnerUrl) {
     try {
       await runnerTerminalRequest(
@@ -4012,6 +4010,8 @@ async function handleTerminalClose(request, response, id) {
       return
     }
   }
+
+  terminalOwners.delete(id)
 
   send(response, 200, {
     ok: true
