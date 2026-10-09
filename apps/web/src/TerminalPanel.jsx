@@ -185,7 +185,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
       if (socket?.readyState === WebSocket.CONNECTING) {
         if (
-          Buffer.byteLength(pendingInputRef.current + data, 'utf8') <= 65_536
+          new TextEncoder().encode(pendingInputRef.current + data).byteLength <= 65_536
         ) {
           pendingInputRef.current += data
         } else {
