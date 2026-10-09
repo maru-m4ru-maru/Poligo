@@ -186,6 +186,185 @@ def delete_project(page, project_id):
         )
 
 
+def probe_terminal_ticket(page, session_id, ticket):
+    return page.evaluate(
+        """async ({ apiUrl, sessionId, ticket }) => {
+          const url = apiUrl.replace(/^http/, 'ws') +
+            '/api/terminal/sessions/' +
+            encodeURIComponent(sessionId) +
+            '?ticket=' + encodeURIComponent(ticket)
+
+          return await new Promise(resolve => {
+            const socket = new WebSocket(url)
+            let output = ''
+            let opened = false
+            let complete = false
+
+            function finish(value) {
+              if (complete) return
+              complete = true
+              clearTimeout(timeout)
+              try {
+                socket.close()
+              } catch {}
+              resolve(value)
+            }
+
+            const timeout = setTimeout(() => {
+              finish({
+                opened,
+                prompt: output.includes('@poligo:'),
+                output: output.slice(-2000),
+                timedOut: true
+              })
+            }, 12_000)
+
+            socket.addEventListener('open', () => {
+              opened = true
+            })
+
+            socket.addEventListener('message', event => {
+              if (typeof event.data !== 'string') return
+
+              let payload
+              try {
+                payload = JSON.parse(event.data)
+              } catch {
+                output += event.data
+                return
+              }
+
+              if (payload.type === 'output') {
+                output += payload.data || ''
+
+                if (output.includes('@poligo:')) {
+                  finish({
+                    opened,
+                    prompt: true,
+                    output: output.slice(-2000),
+                    timedOut: false
+                  })
+                }
+              }
+            })
+
+            socket.addEventListener('error', () => {
+              window.setTimeout(() => {
+                finish({
+                  opened,
+                  prompt: output.includes('@poligo:'),
+                  output: output.slice(-2000),
+                  timedOut: false
+                })
+              }, 200)
+            })
+
+            socket.addEventListener('close', () => {
+              if (!complete) {
+                finish({
+                  opened,
+                  prompt: output.includes('@poligo:'),
+                  output: output.slice(-2000),
+                  timedOut: false
+                })
+              }
+            })
+          })
+        }""",
+        {
+            "apiUrl": API_URL,
+            "sessionId": session_id,
+            "ticket": ticket
+        }
+    )
+
+
+def test_one_time_websocket_ticket(page, project_id):
+    response = page.evaluate(
+        """async projectId => {
+          const response = await fetch('/api/terminal/sessions', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ projectId })
+          })
+
+          return {
+            status: response.status,
+            body: await response.json().catch(() => null)
+          }
+        }""",
+        project_id
+    )
+
+    body = response.get("body") or {}
+
+    if (
+        response.get("status") != 202 or
+        not body.get("id") or
+        not body.get("websocketTicket")
+    ):
+        raise AssertionError(
+            "Could not create ticket test session: " + str(response)
+        )
+
+    session_id = body["id"]
+    ticket = body["websocketTicket"]
+
+    try:
+        invalid = probe_terminal_ticket(
+            page,
+            session_id,
+            "invalid-" + uuid.uuid4().hex
+        )
+
+        if invalid.get("opened"):
+            raise AssertionError(
+                "Terminal accepted an invalid WebSocket ticket"
+            )
+
+        print("PASS: invalid WebSocket ticket rejected", flush=True)
+
+        first = probe_terminal_ticket(page, session_id, ticket)
+
+        if not first.get("opened") or not first.get("prompt"):
+            raise AssertionError(
+                "Valid WebSocket ticket did not open a working shell: " +
+                str(first)
+            )
+
+        print("PASS: valid short-lived WebSocket ticket accepted", flush=True)
+
+        reused = probe_terminal_ticket(page, session_id, ticket)
+
+        if reused.get("opened"):
+            raise AssertionError(
+                "Terminal WebSocket ticket could be reused"
+            )
+
+        print("PASS: WebSocket ticket can only be used once", flush=True)
+    finally:
+        try:
+            page.evaluate(
+                """async sessionId => {
+                  await fetch(
+                    '/api/terminal/sessions/' +
+                      encodeURIComponent(sessionId),
+                    {
+                      method: 'DELETE',
+                      credentials: 'include',
+                      keepalive: true
+                    }
+                  )
+                }""",
+                session_id
+            )
+        except Exception:
+            pass
+
+
 def main():
     suffix = uuid.uuid4().hex
     email = "poligo-terminal-e2e-" + suffix + "@example.invalid"
@@ -394,6 +573,9 @@ def main():
             if "SCROLL_LINE_80" not in text:
                 raise AssertionError("Terminal scroll output was incomplete")
             print("PASS: resize and scroll output", flush=True)
+
+            print("STEP: WebSocket ticket security", flush=True)
+            test_one_time_websocket_ticket(page, project_id)
 
             print("HOSTED TERMINAL PRODUCTION E2E: PASS", flush=True)
         except Exception:
