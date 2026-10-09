@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "services/api/src/server.js"
+      - "render.yaml"
       - "services/runner/**"
       - "apps/web/src/TerminalPanel.jsx"
       - ".github/workflows/production-terminal-health.yml"
