@@ -8,6 +8,8 @@ on:
     paths:
       - "apps/web/src/TerminalPanel.jsx"
       - "services/api/src/server.js"
+      - "services/api/src/terminalSync.js"
+      - "tests/unit/terminalSync.test.mjs"
       - "render.yaml"
       - "services/runner/**"
       - "tests/e2e/test_terminal_production.py"
