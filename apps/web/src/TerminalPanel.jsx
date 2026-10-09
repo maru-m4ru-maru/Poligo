@@ -2,7 +2,8 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useRef
+  useRef,
+  useState
 } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -23,6 +24,17 @@ const TerminalPanel = forwardRef(function TerminalPanel(
   const sessionIdRef = useRef('')
   const connectingRef = useRef(false)
   const activeRef = useRef(active)
+  const pendingInputRef = useRef('')
+  const connectionStatusRef = useRef('connecting')
+  const [connectionStatus, setConnectionStatus] = useState('connecting')
+  const [connectionMessage, setConnectionMessage] = useState('')
+  const [connectionAttempt, setConnectionAttempt] = useState(0)
+
+  function updateConnectionStatus(status, message = '') {
+    connectionStatusRef.current = status
+    setConnectionStatus(status)
+    setConnectionMessage(message)
+  }
 
   useImperativeHandle(ref, () => ({
     write(value) {
@@ -101,13 +113,11 @@ const TerminalPanel = forwardRef(function TerminalPanel(
       const socket = socketRef.current
 
       if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(
-          JSON.stringify({
-            type: 'resize',
-            cols: terminal.cols,
-            rows: terminal.rows
-          })
-        )
+        socket.send(JSON.stringify({
+          type: 'resize',
+          cols: terminal.cols,
+          rows: terminal.rows
+        }))
       }
     })
 
@@ -124,6 +134,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
       socketRef.current = null
       sessionIdRef.current = ''
+      pendingInputRef.current = ''
       terminal.dispose()
       terminalRef.current = null
       fitRef.current = null
@@ -164,16 +175,23 @@ const TerminalPanel = forwardRef(function TerminalPanel(
     const dispose = terminal.onData(data => {
       const socket = socketRef.current
 
-      if (socket?.readyState !== WebSocket.OPEN) {
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+          type: 'input',
+          data
+        }))
         return
       }
 
-      socket.send(
-        JSON.stringify({
-          type: 'input',
-          data
-        })
-      )
+      if (socket?.readyState === WebSocket.CONNECTING) {
+        if (
+          Buffer.byteLength(pendingInputRef.current + data, 'utf8') <= 65_536
+        ) {
+          pendingInputRef.current += data
+        } else {
+          terminal.write('\r\n\x1b[33m[input buffer full]\x1b[0m\r\n')
+        }
+      }
     })
 
     return () => {
@@ -183,6 +201,9 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
   useEffect(() => {
     let cancelled = false
+    let keepaliveTimer = null
+    let syncTimer = null
+    let syncInFlight = false
 
     async function connect() {
       if (
@@ -197,8 +218,11 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
       connectingRef.current = true
       const terminal = terminalRef.current
+      pendingInputRef.current = ''
+      updateConnectionStatus('connecting')
       terminal.clear()
       terminal.writeln('\x1b[90mPoligo Terminal\x1b[0m')
+      terminal.writeln('Connecting to terminal service...')
       terminal.writeln('')
 
       try {
@@ -223,6 +247,10 @@ const TerminalPanel = forwardRef(function TerminalPanel(
             body?.error ||
             response.status + ' ' + response.statusText
           )
+        }
+
+        if (typeof body?.id !== 'string' || !body.id) {
+          throw new Error('terminal service returned an invalid session')
         }
 
         if (cancelled) {
@@ -250,7 +278,49 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         socket.binaryType = 'arraybuffer'
         socketRef.current = socket
 
+        keepaliveTimer = window.setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+              type: 'ping'
+            }))
+          }
+        }, 25_000)
+
+        syncTimer = window.setInterval(() => {
+          const sessionId = sessionIdRef.current
+
+          if (
+            cancelled ||
+            !sessionId ||
+            syncInFlight
+          ) {
+            return
+          }
+
+          syncInFlight = true
+
+          fetch(
+            apiUrl + '/api/terminal/sessions/' +
+              encodeURIComponent(sessionId) +
+              '/sync',
+            {
+              method: 'POST',
+              credentials: 'include'
+            }
+          )
+            .catch(() => {})
+            .finally(() => {
+              syncInFlight = false
+            })
+        }, 15_000)
+
         socket.addEventListener('open', () => {
+          if (cancelled) {
+            socket.close()
+            return
+          }
+
+          updateConnectionStatus('connected')
           const fit = fitRef.current
 
           if (fit) {
@@ -260,13 +330,19 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           }
 
           if (socket.readyState === WebSocket.OPEN) {
-            socket.send(
-              JSON.stringify({
-                type: 'resize',
-                cols: terminal.cols,
-                rows: terminal.rows
-              })
-            )
+            socket.send(JSON.stringify({
+              type: 'resize',
+              cols: terminal.cols,
+              rows: terminal.rows
+            }))
+
+            if (pendingInputRef.current) {
+              socket.send(JSON.stringify({
+                type: 'input',
+                data: pendingInputRef.current
+              }))
+              pendingInputRef.current = ''
+            }
           }
         })
 
@@ -294,45 +370,45 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           }
 
           if (payload.type === 'exit') {
-            terminal.write(
-              '\r\n\\x1b[90m[terminal exited]\x1b[0m\r\n'
-            )
+            terminal.write('\r\n\x1b[90m[terminal exited]\x1b[0m\r\n')
+            updateConnectionStatus('exited', 'The shell session has ended.')
             return
           }
 
           if (payload.type === 'error') {
-            terminal.write(
-              '\r\n\\x1b[31m' +
-              String(payload.message || 'terminal error') +
-              '\\x1b[0m\r\n'
-            )
+            const message = String(payload.message || 'terminal error')
+            terminal.write('\r\n\x1b[31m' + message + '\x1b[0m\r\n')
+            updateConnectionStatus('error', message)
           }
         })
 
         socket.addEventListener('error', () => {
-          terminal.write(
-            '\r\n\\x1b[31m[terminal connection error]\\x1b[0m\r\n'
-          )
+          if (cancelled) {
+            return
+          }
+
+          const message = 'Terminal connection failed.'
+          terminal.write('\r\n\x1b[31m[' + message + ']\x1b[0m\r\n')
+          updateConnectionStatus('error', message)
         })
 
         socket.addEventListener('close', () => {
-          if (!cancelled) {
-            terminal.write(
-              '\r\n\\x1b[90m[terminal disconnected]\\x1b[0m\r\n'
-            )
-          }
-
           socketRef.current = null
+
+          if (!cancelled && connectionStatusRef.current !== 'exited') {
+            const message = 'Terminal disconnected. Reconnect to start a new session.'
+            terminal.write('\r\n\x1b[90m[terminal disconnected]\x1b[0m\r\n')
+            updateConnectionStatus('error', message)
+          }
         })
       } catch (error) {
         if (!cancelled) {
-          terminal.write(
-            '\r\n\\x1b[31m' +
-            (error instanceof Error
-              ? error.message
-              : 'terminal connection failed') +
-            '\\x1b[0m\r\n'
-          )
+          const message = error instanceof Error
+            ? error.message
+            : 'terminal connection failed'
+
+          terminal.write('\r\n\x1b[31m' + message + '\x1b[0m\r\n')
+          updateConnectionStatus('error', message)
         }
       } finally {
         connectingRef.current = false
@@ -343,6 +419,14 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
     return () => {
       cancelled = true
+
+      if (keepaliveTimer !== null) {
+        window.clearInterval(keepaliveTimer)
+      }
+
+      if (syncTimer !== null) {
+        window.clearInterval(syncTimer)
+      }
 
       const socket = socketRef.current
       const sessionId = sessionIdRef.current
@@ -368,15 +452,38 @@ const TerminalPanel = forwardRef(function TerminalPanel(
       sessionIdRef.current = ''
       connectingRef.current = false
     }
-  }, [apiUrl, projectId])
+  }, [apiUrl, projectId, connectionAttempt])
 
   return (
-    <div
-      ref={containerRef}
-      className="terminal"
-      tabIndex={0}
-      onClick={() => terminalRef.current?.focus()}
-    />
+    <div className="terminal-host">
+      <div
+        ref={containerRef}
+        className="terminal"
+        tabIndex={0}
+        onClick={() => terminalRef.current?.focus()}
+      />
+      {['error', 'exited'].includes(connectionStatus) && (
+        <div className="terminal-connection-overlay">
+          <div className="terminal-connection-title">
+            {connectionStatus === 'exited'
+              ? 'Terminal session ended'
+              : 'Terminal connection unavailable'}
+          </div>
+          <div className="terminal-connection-message">
+            {connectionMessage || 'Reconnect to start a new terminal session.'}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              updateConnectionStatus('connecting')
+              setConnectionAttempt(value => value + 1)
+            }}
+          >
+            再接続
+          </button>
+        </div>
+      )}
+    </div>
   )
 })
 
