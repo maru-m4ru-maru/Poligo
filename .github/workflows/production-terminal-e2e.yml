@@ -12,6 +12,7 @@ on:
       - "services/runner/**"
       - "tests/e2e/test_terminal_production.py"
       - ".github/workflows/production-terminal-e2e.yml"
+      - ".github/workflows/production-terminal-health.yml"
   workflow_dispatch:
 
 concurrency:

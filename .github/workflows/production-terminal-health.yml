@@ -11,6 +11,7 @@ on:
       - "services/runner/**"
       - "apps/web/src/TerminalPanel.jsx"
       - ".github/workflows/production-terminal-health.yml"
+      - ".github/workflows/production-terminal-e2e.yml"
   workflow_dispatch:
 
 concurrency:
