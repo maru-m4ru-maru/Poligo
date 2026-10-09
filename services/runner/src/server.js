@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { existsSync } from 'node:fs'
 import { WebSocketServer } from 'ws'
 const terminalBackend = process.env.TERMINAL_BACKEND === 'process'
   ? await import('./terminal-process.js')
@@ -61,7 +62,7 @@ const server = http.createServer(async (request, response) => {
       terminalBackend: process.env.TERMINAL_BACKEND === 'process' ? 'process' : 'docker',
       terminalReady: process.env.TERMINAL_BACKEND === 'process'
         ? process.getuid?.() === 0
-        : Boolean(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
+        : existsSync(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
     })
     return
   }
@@ -90,10 +91,17 @@ const server = http.createServer(async (request, response) => {
 
       send(response, 202, session)
     } catch (error) {
-      send(response, 400, {
-        error: error instanceof Error
-          ? error.message
-          : 'invalid terminal request'
+      const message = error instanceof Error
+        ? error.message
+        : 'invalid terminal request'
+      const status = message.includes('capacity is currently full')
+        ? 429
+        : message.includes('too large') || message.includes('too many')
+          ? 413
+          : 400
+
+      send(response, status, {
+        error: message
       })
     }
 
