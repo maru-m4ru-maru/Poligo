@@ -3806,11 +3806,22 @@ async function expireTerminalOwner(id, owner) {
 }
 
 async function loadTerminalOwner(id) {
+  const cached = terminalOwners.get(id)
   const owner = await readStoredTerminalOwner(id)
 
   if (!owner) {
     terminalOwners.delete(id)
     return null
+  }
+
+  if (
+    cached &&
+    cached.userId === owner.userId &&
+    cached.projectId === owner.projectId
+  ) {
+    owner.syncQueue = cached.syncQueue
+    owner.cleanupInProgress = cached.cleanupInProgress
+    owner.cleanupPromise = cached.cleanupPromise
   }
 
   terminalOwners.set(id, owner)
@@ -3929,7 +3940,14 @@ async function syncTerminal(id, clientFiles) {
   await previous.catch(() => {})
 
   try {
-    if (await loadTerminalOwner(id) !== owner) {
+    const currentOwner = await loadTerminalOwner(id)
+
+    if (
+      !currentOwner ||
+      currentOwner.userId !== owner.userId ||
+      currentOwner.projectId !== owner.projectId ||
+      currentOwner.expiresAt <= Date.now()
+    ) {
       return null
     }
 
