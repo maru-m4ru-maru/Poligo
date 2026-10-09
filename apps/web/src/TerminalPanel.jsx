@@ -95,6 +95,36 @@ const TerminalPanel = forwardRef(function TerminalPanel(
     terminalRef.current = terminal
     fitRef.current = fit
 
+    const e2eEnabled = new URLSearchParams(window.location.search).get('e2e') === '1' ||
+      sessionStorage.getItem('poligo-e2e') === '1'
+
+    if (e2eEnabled) {
+      window.__POLIGO_E2E_TERMINAL__ = {
+        readText() {
+          const buffer = terminal.buffer.active
+          const lines = []
+
+          for (let index = 0; index < buffer.length; index += 1) {
+            lines.push(
+              buffer.getLine(index)?.translateToString(true) || ''
+            )
+          }
+
+          return lines.join('\\n')
+        },
+        focus() {
+          terminal.focus()
+        },
+        status() {
+          return {
+            status: connectionStatusRef.current,
+            socketReadyState: socketRef.current?.readyState ?? -1,
+            sessionId: sessionIdRef.current
+          }
+        }
+      }
+    }
+
     const resizeObserver = new ResizeObserver(() => {
       if (!activeRef.current) {
         return
@@ -135,6 +165,11 @@ const TerminalPanel = forwardRef(function TerminalPanel(
       socketRef.current = null
       sessionIdRef.current = ''
       pendingInputRef.current = ''
+
+      if (window.__POLIGO_E2E_TERMINAL__?.status) {
+        delete window.__POLIGO_E2E_TERMINAL__
+      }
+
       terminal.dispose()
       terminalRef.current = null
       fitRef.current = null
