@@ -4140,7 +4140,10 @@ async function handleTerminalReconnect(request, response, id) {
         return
       }
 
-      const cleaned = await expireTerminalOwner(id, terminalOwners.get(id) || storedOwner)
+      const cleaned = await expireTerminalOwner(
+        id,
+        terminalOwners.get(id) || storedOwner
+      )
 
       send(response, cleaned ? 410 : 502, {
         error: cleaned
@@ -4150,44 +4153,10 @@ async function handleTerminalReconnect(request, response, id) {
       return
     }
 
-    try {
-      await runnerTerminalRequest(
-        '/v1/terminals/' + encodeURIComponent(id) + '/files'
-      )
-    } catch (error) {
-      if (
-        error?.statusCode === 404 ||
-        (error instanceof Error && error.message === 'terminal session not found')
-      ) {
-        send(response, 410, {
-          error: 'terminal session no longer exists; start a new session'
-        })
-      } else {
-        send(response, 502, {
-          error: error instanceof Error
-            ? error.message
-            : 'terminal service failed'
-        })
-      }
-      return
-    }
-
-    try {
-      owner = await registerTerminal(
-        id,
-        session.user.id,
-        project.id,
-        project.files,
-        ''
-      )
-    } catch (error) {
-      send(response, 502, {
-        error: error instanceof Error
-          ? error.message
-          : 'terminal session recovery failed'
-      })
-      return
-    }
+    send(response, 410, {
+      error: 'terminal session ownership could not be verified; start a new session'
+    })
+    return
   }
 
   try {
