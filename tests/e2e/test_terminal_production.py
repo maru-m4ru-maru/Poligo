@@ -642,6 +642,27 @@ def main():
 
             print("PASS: terminal change propagated to IDE and storage", flush=True)
 
+            print("STEP: reconnect and restore synchronized terminal files", flush=True)
+            if not close_terminal(page):
+                raise AssertionError(
+                    "Terminal session could not be closed before reconnect testing"
+                )
+
+            overlay = page.locator(".terminal-connection-overlay")
+            expect(overlay).to_be_visible(timeout=15_000)
+            overlay.get_by_role(
+                "button",
+                name="再接続"
+            ).click()
+            wait_for_terminal(page, timeout=30)
+
+            run_command(
+                page,
+                "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'RECONNECTED_FILE_OK\\n'",
+                "RECONNECTED_FILE_OK"
+            )
+            print("PASS: reconnect restored synchronized terminal files", flush=True)
+
             print("STEP: terminal deletion propagates to the IDE", flush=True)
             run_command(
                 page,
