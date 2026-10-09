@@ -3649,6 +3649,7 @@ function registerTerminal(id, userId, projectId, files, websocketTicket) {
     userId,
     projectId,
     baseFiles: { ...files },
+    syncQueue: null,
     websocketTicket,
     websocketTicketExpiresAt: now + 60_000,
     websocketTicketUsed: false,
@@ -3713,6 +3714,38 @@ async function runnerTerminalRequest(path, options = {}) {
 }
 
 async function syncTerminal(id, clientFiles) {
+  const owner = getTerminalOwner(id)
+
+  if (!owner) {
+    return null
+  }
+
+  const previous = owner.syncQueue || Promise.resolve()
+  let release
+  const gate = new Promise(resolve => {
+    release = resolve
+  })
+  const queued = previous.catch(() => {}).then(() => gate)
+
+  owner.syncQueue = queued
+  await previous.catch(() => {})
+
+  try {
+    if (getTerminalOwner(id) !== owner) {
+      return null
+    }
+
+    return await syncTerminalNow(id, clientFiles)
+  } finally {
+    release()
+
+    if (owner.syncQueue === queued) {
+      owner.syncQueue = null
+    }
+  }
+}
+
+async function syncTerminalNow(id, clientFiles) {
   const owner = getTerminalOwner(id)
 
   if (!owner) {
