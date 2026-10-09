@@ -1,11 +1,15 @@
 import http from 'node:http'
 import { WebSocketServer } from 'ws'
-import {
+const terminalBackend = process.env.TERMINAL_BACKEND === 'process'
+  ? await import('./terminal-process.js')
+  : await import('./terminal.js')
+
+const {
   attachTerminalSocket,
   closeTerminal,
   createTerminalSession,
   getTerminalFiles
-} from './terminal.js'
+} = terminalBackend
 import { enqueueJob, getJob, listExecutionLanguages } from './executor.js'
 
 const port = Number(process.env.PORT || 10001)
@@ -45,14 +49,19 @@ function authorized(request) {
 }
 
 const terminalWebSocketServer = new WebSocketServer({
-  noServer: true
+  noServer: true,
+  maxPayload: 1_048_576
 })
 
 const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
     send(response, 200, {
       status: 'ok',
-      service: 'runner'
+      service: 'runner',
+      terminalBackend: process.env.TERMINAL_BACKEND === 'process' ? 'process' : 'docker',
+      terminalReady: process.env.TERMINAL_BACKEND === 'process'
+        ? process.getuid?.() === 0
+        : Boolean(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
     })
     return
   }
