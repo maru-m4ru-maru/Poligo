@@ -1,5 +1,5 @@
 import http from 'node:http'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
@@ -3633,6 +3633,10 @@ function terminalHeaders() {
   return headers
 }
 
+function hashWebSocketTicket(ticket) {
+  return createHash('sha256').update(ticket).digest('hex')
+}
+
 function terminalOwnerFromRow(row) {
   return {
     userId: row.owner_id,
@@ -3640,18 +3644,20 @@ function terminalOwnerFromRow(row) {
     baseFiles: decryptProjectSecrets(JSON.parse(row.base_files)),
     syncQueue: null,
     websocketTicket: '',
-    websocketTicketExpiresAt: 0,
-    websocketTicketUsed: true,
+    websocketTicketHash: row.websocket_ticket_hash || '',
+    websocketTicketExpiresAt: Number(row.ticket_expires_at || 0),
+    websocketTicketUsed: Number(row.ticket_used) !== 0,
     createdAt: Number(row.created_at),
     expiresAt: Number(row.expires_at),
-    cleanupInProgress: false
+    cleanupInProgress: false,
+    cleanupPromise: null
   }
 }
 
 async function readStoredTerminalOwner(id) {
   const database = getDatabase()
   const statement = await database.prepare(
-    'SELECT id, owner_id, project_id, base_files, created_at, expires_at FROM terminal_sessions WHERE id = ?'
+    'SELECT id, owner_id, project_id, base_files, created_at, expires_at, websocket_ticket_hash, ticket_expires_at, ticket_used FROM terminal_sessions WHERE id = ?'
   )
   const rows = await statement.all([id])
 
@@ -3665,8 +3671,9 @@ async function persistTerminalOwner(id, owner) {
   await database.batch([
     {
       sql: `INSERT INTO terminal_sessions (
-        id, owner_id, project_id, base_files, created_at, updated_at, expires_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        id, owner_id, project_id, base_files, created_at, updated_at, expires_at,
+        websocket_ticket_hash, ticket_expires_at, ticket_used
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         owner_id = excluded.owner_id,
         project_id = excluded.project_id,
@@ -3680,10 +3687,61 @@ async function persistTerminalOwner(id, owner) {
         storedFiles,
         owner.createdAt,
         Date.now(),
-        owner.expiresAt
+        owner.expiresAt,
+        owner.websocketTicketHash || (owner.websocketTicket ? hashWebSocketTicket(owner.websocketTicket) : ''),
+        owner.websocketTicketExpiresAt || 0,
+        owner.websocketTicketUsed ? 1 : 0
       ]
     }
   ], 'immediate')
+}
+
+async function issueTerminalWebSocketTicket(id, owner) {
+  const database = getDatabase()
+  const ticket = randomBytes(32).toString('base64url')
+  const now = Date.now()
+
+  owner.websocketTicket = ticket
+  owner.websocketTicketHash = hashWebSocketTicket(ticket)
+  owner.websocketTicketExpiresAt = now + 60_000
+  owner.websocketTicketUsed = false
+  owner.expiresAt = now + TERMINAL_RECORD_TTL_MS
+
+  await persistTerminalOwner(id, owner)
+  await database.execute({
+    sql: `UPDATE terminal_sessions
+      SET websocket_ticket_hash = ?, ticket_expires_at = ?, ticket_used = 0, updated_at = ?
+      WHERE id = ?`,
+    args: [
+      owner.websocketTicketHash,
+      owner.websocketTicketExpiresAt,
+      now,
+      id
+    ]
+  })
+
+  return ticket
+}
+
+async function consumeTerminalWebSocketTicket(id, ticket) {
+  const database = getDatabase()
+  const now = Date.now()
+  const result = await database.execute({
+    sql: `UPDATE terminal_sessions
+      SET websocket_ticket_hash = '', ticket_expires_at = 0, ticket_used = 1, updated_at = ?
+      WHERE id = ?
+        AND websocket_ticket_hash = ?
+        AND ticket_used = 0
+        AND ticket_expires_at > ?`,
+    args: [
+      now,
+      id,
+      hashWebSocketTicket(ticket),
+      now
+    ]
+  })
+
+  return Number(result.rowsAffected) === 1
 }
 
 async function deleteTerminalOwnerRecord(id) {
