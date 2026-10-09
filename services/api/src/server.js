@@ -4024,14 +4024,17 @@ async function handleTerminalUpgrade(request, socket, head, id) {
 
       client.on('message', data => {
         retainTerminal(id)
+        const message = Buffer.isBuffer(data)
+          ? data.toString('utf8')
+          : String(data)
 
         if (runnerSocket.readyState === WebSocket.OPEN) {
-          runnerSocket.send(data)
+          runnerSocket.send(message)
         } else if (
           runnerSocket.readyState === WebSocket.CONNECTING &&
           queue.length < 128
         ) {
-          queue.push(data)
+          queue.push(message)
         }
       })
 
@@ -4039,8 +4042,8 @@ async function handleTerminalUpgrade(request, socket, head, id) {
         runnerReady = true
         console.info('Terminal runner websocket connected', { id })
 
-        for (const data of queue.splice(0)) {
-          runnerSocket.send(data)
+        for (const message of queue.splice(0)) {
+          runnerSocket.send(message)
         }
       })
 
@@ -4076,9 +4079,12 @@ async function handleTerminalUpgrade(request, socket, head, id) {
 
       runnerSocket.on('message', data => {
         retainTerminal(id)
+        const message = Buffer.isBuffer(data)
+          ? data.toString('utf8')
+          : String(data)
 
         if (client.readyState === WebSocket.OPEN) {
-          client.send(data)
+          client.send(message)
         }
       })
 
