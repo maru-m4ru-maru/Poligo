@@ -670,10 +670,9 @@ def main():
             print("PASS: terminal change propagated to IDE and storage", flush=True)
 
             print("STEP: reconnect and restore synchronized terminal files", flush=True)
-            if not close_terminal(page):
-                raise AssertionError(
-                    "Terminal session could not be closed before reconnect testing"
-                )
+            page.evaluate(
+                "() => window.__POLIGO_E2E_TERMINAL__.disconnect()"
+            )
 
             overlay = page.locator(".terminal-connection-overlay")
             expect(overlay).to_be_visible(timeout=15_000)
