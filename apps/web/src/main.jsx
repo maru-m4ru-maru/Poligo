@@ -22,6 +22,7 @@ import Dashboard from './Dashboard'
 import HomePage from './HomePage'
 import TermsPage from './TermsPage'
 import AccountPage from './AccountPage'
+import AdminPage from './AdminPage'
 import TerminalPanel from './TerminalPanel'
 
 const DEFAULT_FILES = {
@@ -3888,6 +3889,7 @@ function getRoutePath() {
   if (
     hashPath === '/dashboard' ||
     hashPath === '/account' ||
+    hashPath === '/admin' ||
     hashPath === '/ide' ||
     /^\/ide\/[^/]+$/.test(hashPath)
   ) {
@@ -3901,6 +3903,7 @@ function navigate(path) {
   if (
     path === '/dashboard' ||
     path === '/account' ||
+    path === '/admin' ||
     path === '/ide' ||
     path.startsWith('/ide/')
   ) {
@@ -3987,6 +3990,10 @@ function AppRouter() {
 
   if (accountPath) {
     return <AccountPage session={session} />
+  }
+
+  if (pathname === '/admin') {
+    return <AdminPage session={session} />
   }
 
   if (idePath) {
