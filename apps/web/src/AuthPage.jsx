@@ -79,7 +79,7 @@ export default function AuthPage({ mode }) {
         <form className="auth-page-form" onSubmit={submit}>
           {isSignUp && (
             <label>
-              <span>表示名</span>
+              <span>ユーザー名</span>
               <input
                 value={name}
                 onChange={event => setName(event.target.value)}
