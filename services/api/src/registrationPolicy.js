@@ -51,6 +51,10 @@ export function normalizeEmailAddress(value) {
 
   const topLevelDomain = domain.split('.').at(-1)
 
+  if (['invalid', 'test', 'example', 'localhost'].includes(topLevelDomain)) {
+    throw new Error('メールアドレスの形式が正しくありません。')
+  }
+
   if (
     topLevelDomain.length < 2 ||
     (!/^[a-z]{2,63}$/i.test(topLevelDomain) &&
