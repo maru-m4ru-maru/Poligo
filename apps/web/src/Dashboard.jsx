@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { authClient } from './auth-client'
 import { deleteProject } from './projectStore'
+import AnnouncementsPanel from './AnnouncementsPanel'
 
 const TEMPLATES = [
   {
@@ -762,6 +763,7 @@ export default function Dashboard({ session }) {
         </header>
 
         <div className="stack-dashboard-content">
+          <AnnouncementsPanel />
           <section className="stack-welcome">
             <div>
               <span className="stack-eyebrow">POLIGO CLOUD</span>
