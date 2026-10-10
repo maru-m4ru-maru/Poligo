@@ -719,11 +719,44 @@ def main():
                 flush=True
             )
 
-            overlay.get_by_role(
-                "button",
-                name="再接続"
-            ).click()
-            wait_for_terminal(page, timeout=30, retry_capacity=False)
+            reconnect_responses = []
+
+            def capture_terminal_response(response):
+                path = response.url.split("?", 1)[0]
+                if not (
+                    path.endswith("/reconnect") or
+                    path.endswith("/api/terminal/sessions")
+                ):
+                    return
+
+                try:
+                    body = response.text()[:1000]
+                except Exception as error:
+                    body = "response body unavailable: " + str(error)
+
+                entry = {
+                    "method": response.request.method,
+                    "status": response.status,
+                    "url": path,
+                    "body": body
+                }
+                reconnect_responses.append(entry)
+                print("TERMINAL HTTP RESPONSE: " + repr(entry), flush=True)
+
+            page.on("response", capture_terminal_response)
+            try:
+                overlay.get_by_role(
+                    "button",
+                    name="再接続"
+                ).click()
+                wait_for_terminal(page, timeout=30, retry_capacity=False)
+            except Exception as error:
+                raise AssertionError(
+                    str(error) + "\\nTerminal HTTP responses: " +
+                    repr(reconnect_responses)
+                ) from error
+            finally:
+                page.remove_listener("response", capture_terminal_response)
 
             reconnected_status = terminal_status(page) or {}
 
