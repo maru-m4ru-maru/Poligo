@@ -669,7 +669,7 @@ export async function updateTerminalFiles(id, files) {
 
   await executeAsSession(
     session,
-    '/usr/bin/node',
+    process.execPath,
     ['-e', workspaceSyncScript],
     JSON.stringify({
       root: session.workspace,
