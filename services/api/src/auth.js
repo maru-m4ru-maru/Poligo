@@ -266,7 +266,9 @@ export async function initializeAuthDatabase() {
       args: ['code-maru@outlook.jp']
     },
     {
-      sql: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_user_username_nocase ON "user"(username COLLATE NOCASE) WHERE username IS NOT NULL AND username != ""'
+      sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_username_nocase
+        ON "user"(username COLLATE NOCASE)
+        WHERE username IS NOT NULL AND username != ''`
     },
     {
       sql: 'CREATE INDEX IF NOT EXISTS idx_user_bans_banned_at ON user_bans(banned_at)'
@@ -278,4 +280,23 @@ export async function initializeAuthDatabase() {
       sql: 'CREATE INDEX IF NOT EXISTS idx_announcements_target_user ON announcements(target_user_id)'
     }
   ], 'immediate')
+
+  const duplicateEmails = await database.prepare(
+    `SELECT lower(email) AS normalized_email
+     FROM "user"
+     GROUP BY lower(email)
+     HAVING COUNT(*) > 1
+     LIMIT 1`
+  )
+  const duplicateEmailRows = await duplicateEmails.all()
+
+  if (duplicateEmailRows.length) {
+    console.warn('A case-insensitive email index was not created because duplicate email addresses already exist.')
+  } else {
+    await database.execute({
+      sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email_nocase
+        ON "user"(email COLLATE NOCASE)`,
+      args: []
+    })
+  }
 }
