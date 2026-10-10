@@ -5629,13 +5629,16 @@ server.on('upgrade', (request, socket, head) => {
 async function cleanupDisposableE2EAccountsOnStartup() {
   const database = getDatabase()
   const userRowsStatement = await database.prepare(
-    'SELECT id, email FROM "user" WHERE lower(email) LIKE ?'
+    'SELECT id, email FROM "user"'
   )
-  const userRows = await userRowsStatement.all(['%@example.invalid'])
+  const userRows = await userRowsStatement.all()
   const disposablePattern = /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i
+  const exampleInvalidRows = userRows.filter(row =>
+    String(row.email || '').trim().toLowerCase().endsWith('@example.invalid')
+  )
   const candidates = userRows.filter(row => {
     const id = String(row.id || '')
-    const email = String(row.email || '').toLowerCase()
+    const email = String(row.email || '').trim().toLowerCase()
 
     return disposablePattern.test(email) &&
       !adminUserIds.has(id) &&
@@ -5653,7 +5656,12 @@ async function cleanupDisposableE2EAccountsOnStartup() {
   }
 
   console.log('Disposable E2E cleanup started', {
-    eligibleAccounts: totals.eligibleAccounts
+    totalUsers: userRows.length,
+    exampleInvalidUsers: exampleInvalidRows.length,
+    eligibleAccounts: totals.eligibleAccounts,
+    exampleInvalidEmailSamples: exampleInvalidRows
+      .slice(0, 12)
+      .map(row => String(row.email || '').trim().toLowerCase())
   })
 
   for (const user of candidates) {
