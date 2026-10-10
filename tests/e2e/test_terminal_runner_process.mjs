@@ -506,6 +506,98 @@ async function run() {
     throw new Error('modified file was not included in the sync snapshot')
   }
 
+  const shellExit = await new Promise((resolve, reject) => {
+    let settled = false
+
+    const timeout = setTimeout(() => {
+      finish(new Error('shell exit event timed out'))
+    }, 10_000)
+
+    function finish(error, payload) {
+      if (settled) {
+        return
+      }
+
+      settled = true
+      clearTimeout(timeout)
+      first.off('message', onMessage)
+      first.off('error', onError)
+
+      if (error) {
+        reject(error)
+      } else {
+        resolve(payload)
+      }
+    }
+
+    function onMessage(message) {
+      let payload
+
+      try {
+        payload = JSON.parse(message.toString('utf8'))
+      } catch {
+        return
+      }
+
+      if (payload.type === 'exit') {
+        finish(null, payload)
+      }
+    }
+
+    function onError(error) {
+      finish(error)
+    }
+
+    first.on('message', onMessage)
+    first.on('error', onError)
+    first.send(JSON.stringify({
+      type: 'input',
+      data: 'exit\\n'
+    }))
+  })
+
+  if (!shellExit || !Number.isInteger(shellExit.code)) {
+    throw new Error('shell exit status was not reported')
+  }
+
+  let exitedStatus = null
+  const exitDeadline = Date.now() + 5_000
+
+  while (Date.now() < exitDeadline) {
+    const snapshot = await request('/v1/terminals')
+    exitedStatus = snapshot.body?.terminals?.find(item => item.id === firstId)
+
+    if (
+      exitedStatus?.exited === true &&
+      exitedStatus.connected === false &&
+      typeof exitedStatus.disconnectedAt === 'string'
+    ) {
+      break
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+
+  if (
+    !exitedStatus ||
+    exitedStatus.exited !== true ||
+    exitedStatus.connected !== false ||
+    typeof exitedStatus.disconnectedAt !== 'string'
+  ) {
+    throw new Error('exited shell was not marked as disconnected')
+  }
+
+  const filesAfterExit = await request(
+    '/v1/terminals/' + encodeURIComponent(firstId) + '/files'
+  )
+
+  if (
+    filesAfterExit.status !== 200 ||
+    filesAfterExit.body?.files?.['generated/output.txt'] !== 'FILE_SYNC_OKUPDATED_VALUE'
+  ) {
+    throw new Error('terminal files were not preserved after the shell exited')
+  }
+
   await closeSession(secondId)
   await closeSession(firstId)
 

@@ -3842,7 +3842,13 @@ async function expireTerminalOwner(id, owner) {
       return false
     }
 
-    if (terminalOwners.get(id) === owner) {
+    const currentOwner = terminalOwners.get(id)
+
+    if (
+      currentOwner &&
+      currentOwner.userId === owner.userId &&
+      currentOwner.projectId === owner.projectId
+    ) {
       terminalOwners.delete(id)
     }
 
@@ -4103,20 +4109,33 @@ async function reclaimDisconnectedTerminalForCapacity() {
   const now = Date.now()
   const candidates = (Array.isArray(snapshot.terminals) ? snapshot.terminals : [])
     .filter(terminal => {
+      if (typeof terminal?.id !== 'string') {
+        return false
+      }
+
+      if (terminal.exited === true) {
+        return true
+      }
+
       if (
-        typeof terminal?.id !== 'string' ||
-        typeof terminal.disconnectedAt !== 'string'
+        terminal.connected !== false ||
+        typeof terminal.disconnectedAt !== 'string' ||
+        typeof terminal.lastUsedAt !== 'string'
       ) {
         return false
       }
 
       const disconnectedAt = Date.parse(terminal.disconnectedAt)
+      const lastUsedAt = Date.parse(terminal.lastUsedAt)
 
       return Number.isFinite(disconnectedAt) &&
-        now - disconnectedAt >= TERMINAL_CAPACITY_RECLAIM_IDLE_MS
+        Number.isFinite(lastUsedAt) &&
+        now - disconnectedAt >= TERMINAL_CAPACITY_RECLAIM_IDLE_MS &&
+        now - lastUsedAt >= TERMINAL_CAPACITY_RECLAIM_IDLE_MS
     })
     .sort((left, right) =>
-      Date.parse(left.disconnectedAt) - Date.parse(right.disconnectedAt)
+      Date.parse(left.lastUsedAt || left.disconnectedAt) -
+      Date.parse(right.lastUsedAt || right.disconnectedAt)
     )
 
   for (const candidate of candidates) {
@@ -4399,6 +4418,51 @@ async function handleTerminalReconnect(request, response, id) {
           : 'terminal service failed'
       })
     }
+    return
+  }
+
+  let runnerSnapshot
+
+  try {
+    runnerSnapshot = await runnerTerminalRequest('/v1/terminals')
+  } catch (error) {
+    send(response, 502, {
+      error: error instanceof Error
+        ? error.message
+        : 'terminal session state could not be checked'
+    })
+    return
+  }
+
+  const runnerSession = (Array.isArray(runnerSnapshot.terminals)
+    ? runnerSnapshot.terminals
+    : []
+  ).find(item => item.id === id)
+
+  if (!runnerSession || runnerSession.exited === true) {
+    if (runnerSession?.exited === true) {
+      try {
+        await syncTerminal(id)
+      } catch (error) {
+        send(response, 502, {
+          error: error instanceof Error
+            ? error.message
+            : 'terminal files could not be saved after shell exit'
+        })
+        return
+      }
+    }
+
+    const cleaned = await expireTerminalOwner(
+      id,
+      terminalOwners.get(id) || owner
+    )
+
+    send(response, cleaned ? 410 : 502, {
+      error: cleaned
+        ? 'terminal shell has ended; start a new session'
+        : 'terminal session cleanup is still pending'
+    })
     return
   }
 

@@ -549,6 +549,7 @@ export async function createTerminalSession({
           type: 'exit',
           code: exitCode
         }))
+        session.socket.close(1000, 'terminal process exited')
       }
 
       void killUserProcesses(session)

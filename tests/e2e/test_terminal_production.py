@@ -780,6 +780,45 @@ def main():
                 flush=True
             )
 
+            print("STEP: recover after the shell process exits", flush=True)
+            before_exit_status = terminal_status(page) or {}
+            before_exit_session_id = before_exit_status.get("sessionId")
+
+            page.evaluate(
+                "() => window.__POLIGO_E2E_TERMINAL__.focus()"
+            )
+            page.keyboard.type("exit", delay=1)
+            page.keyboard.press("Enter")
+
+            overlay = page.locator(".terminal-connection-overlay")
+            expect(overlay).to_be_visible(timeout=15_000)
+            overlay.get_by_role(
+                "button",
+                name="再接続"
+            ).click()
+            wait_for_terminal(page, timeout=60, retry_capacity=False)
+
+            after_exit_status = terminal_status(page) or {}
+
+            if (
+                not before_exit_session_id or
+                not after_exit_status.get("sessionId") or
+                after_exit_status.get("sessionId") == before_exit_session_id
+            ):
+                raise AssertionError(
+                    "Terminal did not create a replacement session after the shell exited"
+                )
+
+            run_command(
+                page,
+                "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'SHELL_EXIT_RECOVERY_OK\\n'",
+                "SHELL_EXIT_RECOVERY_OK"
+            )
+            print(
+                "PASS: exited shell was replaced and synchronized files were retained",
+                flush=True
+            )
+
             print("STEP: recover after the previous Runner session was removed", flush=True)
             stale_status = terminal_status(page) or {}
             stale_session_id = stale_status.get("sessionId")
