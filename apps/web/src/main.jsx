@@ -24,6 +24,7 @@ import TermsPage from './TermsPage'
 import AccountPage from './AccountPage'
 import AdminPage from './AdminPage'
 import TerminalPanel from './TerminalPanel'
+import { getExecutionLanguage } from './executionLanguage'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -41,6 +42,8 @@ const FILE_META = {
   css: { language: 'css', kind: 'css' },
   js: { language: 'javascript', kind: 'js' },
   jsx: { language: 'javascript', kind: 'js' },
+  mjs: { language: 'javascript', kind: 'js' },
+  cjs: { language: 'javascript', kind: 'js' },
   ts: { language: 'typescript', kind: 'typescript' },
   tsx: { language: 'typescript', kind: 'typescript' },
   py: { language: 'python', kind: 'python' },
@@ -78,6 +81,7 @@ function isSecretEnvFile(path) {
 
 const SERVER_LANGUAGES = new Set([
   'python',
+  'node',
   'java',
   'go',
   'rust',
@@ -1096,6 +1100,7 @@ function IDE({ projectId }) {
 
   const { data: session } = authClient.useSession()
   const currentLanguage = getFileMeta(activeFile).language
+  const executionLanguage = getExecutionLanguage(files, activeFile, currentLanguage)
   const currentValue = files[activeFile] ?? ''
 
   const fileTree = useMemo(() => buildFileTree(files), [files])
@@ -1367,7 +1372,7 @@ function IDE({ projectId }) {
   }, [activeView, currentProjectId])
 
   useEffect(() => {
-    const serverLanguage = isServerLanguage(getFileMeta(activeFileRef.current).language)
+    const serverLanguage = isServerLanguage(executionLanguage)
     const prompt = serverLanguage ? 'stdin> ' : '$ '
 
     setTerminalLines([
@@ -1386,7 +1391,7 @@ function IDE({ projectId }) {
   )
 
   useEffect(() => {
-    const nextMode = isServerLanguage(currentLanguage)
+    const nextMode = isServerLanguage(executionLanguage)
       ? 'stdin'
       : 'shell'
 
@@ -1402,7 +1407,7 @@ function IDE({ projectId }) {
       '',
       nextMode === 'stdin' ? 'stdin> ' : '$ '
     ])
-  }, [currentLanguage])
+  }, [executionLanguage])
 
   useEffect(() => {
     setEditorMarkers([])
@@ -2613,7 +2618,7 @@ function IDE({ projectId }) {
   }
 
   function handleTerminalKeyDown(event) {
-    const serverLanguage = isServerLanguage(currentLanguage)
+    const serverLanguage = isServerLanguage(executionLanguage)
     const prompt = serverLanguage ? 'stdin> ' : '$ '
 
     if (event.key === 'Enter') {
@@ -2709,7 +2714,7 @@ function IDE({ projectId }) {
   }
 
   async function runProject() {
-    const serverExecution = SERVER_LANGUAGES.has(currentLanguage)
+    const serverExecution = SERVER_LANGUAGES.has(executionLanguage)
 
     setBottomOpen(true)
     setBottomTab(serverExecution ? 'debug' : 'terminal')
@@ -2736,7 +2741,7 @@ function IDE({ projectId }) {
     setDebugOutput({
       status: 'queued',
       file: activeFile,
-      language: currentLanguage,
+      language: executionLanguage,
       stdout: '',
       stderr: '',
       exitCode: null,
@@ -2762,7 +2767,7 @@ function IDE({ projectId }) {
       setDebugOutput({
         status: 'failed',
         file: activeFile,
-        language: currentLanguage,
+        language: executionLanguage,
         stdout: '',
         stderr: '',
         exitCode: null,
@@ -2778,7 +2783,7 @@ function IDE({ projectId }) {
         method: 'POST',
         body: JSON.stringify({
           projectId: currentProjectId,
-          language: currentLanguage,
+          language: executionLanguage,
           entrypoint: activeFile,
           stdin: executionStdin,
           args: parsedArgs,
@@ -2830,7 +2835,7 @@ function IDE({ projectId }) {
           setDebugOutput({
             status: status.status,
             file: activeFile,
-            language: currentLanguage,
+            language: executionLanguage,
             stdout: nextResult.stdout || '',
             stderr: nextResult.stderr || '',
             exitCode: nextResult.exitCode ?? null,
@@ -2870,7 +2875,7 @@ function IDE({ projectId }) {
       setDebugOutput({
         status: 'timeout',
         file: activeFile,
-        language: currentLanguage,
+        language: executionLanguage,
         stdout: '',
         stderr: timeoutResult.stderr,
         exitCode: null,
@@ -2889,7 +2894,7 @@ function IDE({ projectId }) {
       setDebugOutput({
         status: 'failed',
         file: activeFile,
-        language: currentLanguage,
+        language: executionLanguage,
         stdout: '',
         stderr: '',
         exitCode: null,
@@ -3620,8 +3625,8 @@ function IDE({ projectId }) {
               <div className="bottom-tabs">
                 {[
                   ['terminal', 'ターミナル'],
-                  ...(SERVER_LANGUAGES.has(currentLanguage)
-                    ? [['debug', currentLanguage === 'python' ? 'Python Debug' : 'Debug']]
+                  ...(SERVER_LANGUAGES.has(executionLanguage)
+                    ? [['debug', executionLanguage === 'node' ? 'Node.js Debug' : executionLanguage === 'python' ? 'Python Debug' : 'Debug']]
                     : []),
                   ['problems', '問題']
                 ].map(([id, label]) => (
@@ -3671,7 +3676,7 @@ function IDE({ projectId }) {
                 >
                   <div className="debug-toolbar">
                     <span className="debug-title">
-                      {currentLanguage === 'python' ? 'Python Debug' : 'Debug'}
+                      {executionLanguage === 'node' ? 'Node.js Debug' : executionLanguage === 'python' ? 'Python Debug' : 'Debug'}
                     </span>
                     <span className={'debug-status debug-status-' + debugOutput.status}>
                       {debugOutput.status === 'running' && '実行中'}

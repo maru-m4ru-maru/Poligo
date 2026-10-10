@@ -37,6 +37,28 @@ const TEMPLATES = [
     }
   },
   {
+    id: 'nodejs',
+    title: 'Node.js',
+    subtitle: 'Node.js 24',
+    type: 'Node.js',
+    categories: ['人気', 'バックエンド', 'ネイティブ言語'],
+    files: {
+      'main.js': 'import process from "node:process"\n\nconst name = process.argv[2] || "World"\nconsole.log(`Hello, ${name} from Node.js ${process.versions.node}`)\nconsole.log("Current directory:", process.cwd())',
+      'package.json': JSON.stringify({
+        name: 'poligo-node-app',
+        version: '1.0.0',
+        private: true,
+        type: 'module',
+        scripts: {
+          start: 'node main.js'
+        },
+        poligo: {
+          runtime: 'node'
+        }
+      }, null, 2)
+    }
+  },
+  {
     id: 'typescript',
     title: 'TypeScript',
     subtitle: 'TypeScript',
@@ -224,6 +246,7 @@ function getWorkspaceId() {
 const TEMPLATE_ICONS = {
   HTML: '/icons/html5.svg',
   Python: '/icons/python.svg',
+  'Node.js': '/icons/nodejs.svg',
   'C++': '/icons/cplusplus.svg',
   C: '/icons/c.svg',
   Java: '/icons/java.svg',

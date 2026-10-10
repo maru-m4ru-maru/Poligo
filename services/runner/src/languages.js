@@ -8,6 +8,15 @@ const languages = {
       ...(args || [])
     ]
   },
+  node: {
+    image: process.env.NODE_IMAGE || 'node:24.21.0-bookworm-slim',
+    entrypoint: 'main.js',
+    command: (file, files, args) => [
+      'node',
+      '/workspace/' + file,
+      ...(args || [])
+    ]
+  },
   c: {
     image: process.env.GCC_IMAGE || 'gcc:16.2.0-trixie',
     entrypoint: 'main.c',
