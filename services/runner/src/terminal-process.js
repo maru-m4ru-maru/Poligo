@@ -530,16 +530,29 @@ export async function createTerminalSession({
     throw new Error('hosted terminal backend requires a root-managed runner container')
   }
 
+  const terminalId = normalizeId(id)
+  let existing = sessions.get(terminalId)
+
+  if (existing && !existing.closing && !existing.exited) {
+    return {
+      id: terminalId,
+      status: 'ready',
+      createdAt: new Date(existing.createdAt).toISOString(),
+      backend: 'process',
+      reused: true
+    }
+  }
+
+  if (existing) {
+    await cleanupSession(existing)
+    existing = null
+  }
+
   if (sessions.size >= maxSessions) {
     throw new Error('terminal capacity is currently full')
   }
 
-  const terminalId = normalizeId(id)
   const normalized = normalizeFiles(files)
-
-  if (sessions.has(terminalId)) {
-    throw new Error('terminal id already exists')
-  }
 
   await fs.mkdir(workspaceRoot, {
     recursive: true,
