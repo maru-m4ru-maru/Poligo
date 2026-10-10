@@ -3536,6 +3536,165 @@ async function handleAdminUsersRequest(request, response) {
   }
 
   if (
+    request.method === 'DELETE' &&
+    parts.length === 4 &&
+    parts[2] === 'users'
+  ) {
+    const userId = parts[3]
+
+    if (userId === session.user.id) {
+      throw new Error('cannot delete own account')
+    }
+
+    const userStatement = await database.prepare(
+      'SELECT id, name, email FROM "user" WHERE id = ?'
+    )
+    const users = await userStatement.all([userId])
+    const target = users[0]
+
+    if (!target) {
+      send(response, 404, {
+        error: 'user not found'
+      })
+      return
+    }
+
+    const email = String(target.email || '').toLowerCase()
+    const isAdmin =
+      adminUserIds.has(target.id) ||
+      adminEmails.has(email)
+
+    if (isAdmin) {
+      throw new Error('test account deletion cannot target an administrator')
+    }
+
+    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i.test(email)) {
+      throw new Error('test account deletion is restricted to generated disposable accounts')
+    }
+
+    const databaseSessionStatement = await database.prepare(
+      'SELECT id FROM terminal_sessions WHERE owner_id = ?'
+    )
+    const terminalSessions = await databaseSessionStatement.all([userId])
+
+    for (const terminalSession of terminalSessions) {
+      const terminalId = String(terminalSession.id)
+      const owner = terminalOwners.get(terminalId)
+
+      if (owner) {
+        const cleaned = await expireTerminalOwner(terminalId, owner)
+
+        if (!cleaned) {
+          throw new Error('test account terminal cleanup failed')
+        }
+      } else {
+        try {
+          if (terminalRunnerUrl) {
+            await runnerTerminalRequest(
+              '/v1/terminals/' + encodeURIComponent(terminalId),
+              {
+                method: 'DELETE'
+              }
+            )
+          }
+        } catch (error) {
+          const message = error instanceof Error
+            ? error.message.toLowerCase()
+            : String(error).toLowerCase()
+
+          if (
+            !message.includes('terminal session not found') &&
+            !message.includes('404')
+          ) {
+            throw new Error('test account terminal cleanup failed')
+          }
+        }
+
+        await deleteTerminalOwnerRecord(terminalId)
+      }
+    }
+
+    const projectCountRows = await database.prepare(
+      'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
+    )
+    const projectCountResult = await projectCountRows.all([userId])
+    const deletedProjectCount = Number(projectCountResult[0]?.count || 0)
+
+    const projectFileCountRows = await database.prepare(
+      `SELECT COUNT(*) AS count
+       FROM project_files
+       WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
+    )
+    const projectFileCountResult = await projectFileCountRows.all([userId])
+    const deletedProjectFileCount = Number(projectFileCountResult[0]?.count || 0)
+
+    const projectCommitCountRows = await database.prepare(
+      'SELECT COUNT(*) AS count FROM project_commits WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)'
+    )
+    const projectCommitCountResult = await projectCommitCountRows.all([userId])
+    const deletedProjectCommitCount = Number(projectCommitCountResult[0]?.count || 0)
+
+    await database.batch([
+      {
+        sql: `DELETE FROM project_commit_files
+              WHERE commit_id IN (
+                SELECT id FROM project_commits
+                WHERE project_id IN (
+                  SELECT id FROM projects WHERE owner_id = ?
+                )
+              )`,
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM project_commits WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM project_files WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM projects WHERE owner_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM terminal_sessions WHERE owner_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM user_storage_limits WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM "session" WHERE userId = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM "account" WHERE userId = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM "verification" WHERE identifier = ?',
+        args: [target.email]
+      },
+      {
+        sql: 'DELETE FROM "user" WHERE id = ?',
+        args: [userId]
+      }
+    ], 'immediate')
+
+    send(response, 200, {
+      ok: true,
+      deletedUserId: userId,
+      deletedProjectCount,
+      deletedProjectFileCount,
+      deletedProjectCommitCount,
+      deletedTerminalSessionCount: terminalSessions.length
+    })
+    return
+  }
+
+  if (
     request.method === 'PUT' &&
     parts.length === 5 &&
     parts[2] === 'users' &&
@@ -5094,7 +5253,12 @@ const server = http.createServer(async (request, response) => {
             ? 403
             : message.includes('storage limit')
               ? 400
-              : 500
+              : message === 'cannot delete own account' ||
+                  message.includes('test account deletion')
+                ? 403
+                : message.includes('test account terminal cleanup failed')
+                  ? 503
+                  : 500
 
       send(response, status, {
         error: message
