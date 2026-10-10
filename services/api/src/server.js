@@ -4369,68 +4369,120 @@ async function runnerTerminalRequest(path, options = {}) {
 
   const method = requestOptions.method || 'GET'
   const shouldLog = path === '/v1/terminals'
+  const retryable =
+    method === 'GET' ||
+    (method === 'POST' && path === '/v1/terminals')
   const startedAt = Date.now()
+  let lastError = null
 
-  if (shouldLog) {
-    console.info('Terminal Runner request started', {
-      method,
-      path,
-      timeoutMs
-    })
-  }
+  for (let attempt = 0; attempt < (retryable ? 3 : 1); attempt += 1) {
+    let response
 
-  let response
-
-  try {
-    response = await fetch(
-      terminalRunnerUrl.replace(/\/$/, '') + path,
-      {
-        ...requestOptions,
-        signal: requestOptions.signal || AbortSignal.timeout(timeoutMs),
-        headers: {
-          ...terminalHeaders(),
-          ...(requestOptions.headers || {})
+    try {
+      response = await fetch(
+        terminalRunnerUrl.replace(/\/$/, '') + path,
+        {
+          ...requestOptions,
+          signal: requestOptions.signal || AbortSignal.timeout(timeoutMs),
+          headers: {
+            ...terminalHeaders(),
+            ...(requestOptions.headers || {})
+          }
         }
+      )
+    } catch (error) {
+      lastError = new Error(
+        'terminal runner network request failed: ' +
+        (error instanceof Error ? error.message : String(error))
+      )
+
+      if (!retryable || attempt >= 2) {
+        if (shouldLog) {
+          console.error('Terminal Runner request failed', {
+            method,
+            path,
+            elapsedMs: Date.now() - startedAt,
+            attempts: attempt + 1,
+            message: lastError.message
+          })
+        }
+
+        throw lastError
       }
-    )
-  } catch (error) {
+
+      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)))
+      continue
+    }
+
+    let rawBody = ''
+
+    try {
+      rawBody = await response.text()
+    } catch {}
+
+    let body = null
+    let validJson = false
+
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody)
+        validJson = true
+      } catch {}
+    }
+
+    if (!response.ok || !validJson) {
+      const detail = typeof body?.error === 'string'
+        ? body.error
+        : rawBody
+          ? rawBody.replace(/\s+/g, ' ').slice(0, 220)
+          : 'empty response body'
+      const message = !response.ok
+        ? 'terminal runner request failed (HTTP ' + response.status + '): ' + detail
+        : 'terminal runner returned invalid JSON (HTTP ' + response.status + '): ' + detail
+      const error = new Error(message)
+      error.statusCode = response.status
+      lastError = error
+
+      if (shouldLog) {
+        console.warn('Terminal Runner request returned an invalid response', {
+          method,
+          path,
+          status: response.status,
+          attempt: attempt + 1,
+          elapsedMs: Date.now() - startedAt,
+          detail
+        })
+      }
+
+      const temporaryFailure = [502, 503, 504].includes(response.status)
+      const retryInvalidResponse = !validJson && retryable
+
+      if (
+        retryable &&
+        attempt < 2 &&
+        (temporaryFailure || retryInvalidResponse)
+      ) {
+        await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)))
+        continue
+      }
+
+      throw error
+    }
+
     if (shouldLog) {
-      console.error('Terminal Runner request failed', {
+      console.info('Terminal Runner request completed', {
         method,
         path,
-        elapsedMs: Date.now() - startedAt,
-        message: error instanceof Error ? error.message : String(error)
+        status: response.status,
+        attempts: attempt + 1,
+        elapsedMs: Date.now() - startedAt
       })
     }
 
-    throw error
+    return body
   }
 
-  let body = {}
-
-  try {
-    body = await response.json()
-  } catch {}
-
-  if (shouldLog) {
-    console.info('Terminal Runner request completed', {
-      method,
-      path,
-      status: response.status,
-      elapsedMs: Date.now() - startedAt
-    })
-  }
-
-  if (!response.ok) {
-    const error = new Error(
-      body?.error ||
-      'terminal runner request failed'
-    )
-    error.statusCode = response.status
-    throw error
-  }
-
-  return body
+  throw lastError || new Error('terminal runner request failed')
 }
 
 async function syncTerminal(id, clientFiles) {
