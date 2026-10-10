@@ -4190,6 +4190,18 @@ async function reclaimDisconnectedTerminalForCapacity() {
     }
   }
 
+  const terminals = Array.isArray(snapshot.terminals)
+    ? snapshot.terminals
+    : []
+
+  console.warn('Terminal capacity remains full after reclamation', {
+    sessionCount: terminals.length,
+    connectedCount: terminals.filter(item => item.connected === true).length,
+    disconnectedCount: terminals.filter(item => item.connected === false).length,
+    exitedCount: terminals.filter(item => item.exited === true).length,
+    idleReclaimableCount: candidates.length
+  })
+
   return false
 }
 
