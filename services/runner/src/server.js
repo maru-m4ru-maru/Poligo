@@ -10,6 +10,7 @@ const {
   closeTerminal,
   createTerminalSession,
   getTerminalFiles,
+  updateTerminalFiles,
   listTerminals
 } = terminalBackend
 import { enqueueJob, getJob, listExecutionLanguages } from './executor.js'
@@ -151,6 +152,48 @@ const server = http.createServer(async (request, response) => {
         error: error instanceof Error
           ? error.message
           : 'terminal session not found'
+      })
+    }
+
+    return
+  }
+
+  if (
+    request.method === 'PUT' &&
+    requestPath.startsWith('/v1/terminals/') &&
+    requestPath.endsWith('/files')
+  ) {
+    const id = requestPath.slice(
+      '/v1/terminals/'.length,
+      -'/files'.length
+    )
+
+    if (!id || id.includes('/')) {
+      send(response, 400, {
+        error: 'invalid terminal session id'
+      })
+      return
+    }
+
+    try {
+      const payload = await readJson(request)
+      await updateTerminalFiles(id, payload.files)
+
+      send(response, 200, {
+        ok: true
+      })
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'terminal workspace update failed'
+      const status = message === 'terminal session not found'
+        ? 404
+        : message.includes('too large') || message.includes('too many')
+          ? 413
+          : 400
+
+      send(response, status, {
+        error: message
       })
     }
 

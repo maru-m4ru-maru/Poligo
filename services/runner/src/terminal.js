@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { PassThrough } from 'node:stream'
 import Docker from 'dockerode'
 import tar from 'tar-stream'
+import { workspaceSyncScript } from './workspace-sync.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -35,17 +36,24 @@ function normalizeFilePath(value) {
   if (
     typeof value !== 'string' ||
     !value ||
+    value.length > 240 ||
     value.includes('\0') ||
     value.startsWith('/') ||
     value.includes('\\') ||
-    value.split('/').some(part => part === '..' || part === '.')
+    value.split('/').some(part =>
+      !part ||
+      part === '..' ||
+      part === '.' ||
+      part === '.terminal-cache' ||
+      part === '.tmp' ||
+      part === '.cache'
+    )
   ) {
     throw new Error('invalid file path')
   }
 
   return value
 }
-
 function normalizeId(value) {
   if (
     typeof value !== 'string' ||
@@ -255,6 +263,11 @@ async function readWorkspaceArchive(container) {
   const exec = await container.exec({
     Cmd: [
       'tar',
+      '--exclude=./node_modules',
+      '--exclude=./.git',
+      '--exclude=./.terminal-cache',
+      '--exclude=./.tmp',
+      '--exclude=./.cache',
       '-cf',
       '-',
       '-C',
@@ -326,6 +339,7 @@ async function readWorkspaceArchive(container) {
 
           const chunks = []
           let fileBytes = 0
+          let binary = false
 
           entryStream.on('data', chunk => {
             fileBytes += chunk.length
@@ -341,11 +355,18 @@ async function readWorkspaceArchive(container) {
               return
             }
 
+            if (chunk.includes(0)) {
+              binary = true
+            }
+
             chunks.push(Buffer.from(chunk))
           })
 
           entryStream.on('end', () => {
-            files[name] = Buffer.concat(chunks).toString('utf8')
+            if (!binary) {
+              files[name] = Buffer.concat(chunks).toString('utf8')
+            }
+
             next()
           })
 
@@ -396,6 +417,57 @@ async function cleanupSession(session) {
         force: true
       })
     } catch {}
+  }
+}
+
+async function runWorkspaceSync(container, payload) {
+  const exec = await container.exec({
+    Cmd: [
+      'node',
+      '-e',
+      workspaceSyncScript
+    ],
+    AttachStdin: true,
+    AttachStdout: true,
+    AttachStderr: true,
+    Tty: false
+  })
+  const stream = await exec.start({
+    hijack: true,
+    stdin: true
+  })
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  let errorOutput = ''
+  stdout.on('data', () => {})
+  stderr.on('data', chunk => {
+    errorOutput = (errorOutput + chunk.toString('utf8')).slice(-4096)
+  })
+
+  const exitCodePromise = new Promise((resolve, reject) => {
+    stream.on('end', async () => {
+      try {
+        const result = await exec.inspect()
+        resolve(result.ExitCode ?? 0)
+      } catch (error) {
+        reject(error)
+      }
+    })
+
+    stream.on('error', reject)
+  })
+
+  docker.modem.demuxStream(stream, stdout, stderr)
+  stream.write(JSON.stringify(payload))
+  stream.end()
+
+  const exitCode = await exitCodePromise
+
+  if (exitCode !== 0) {
+    throw new Error(
+      errorOutput.trim() ||
+      'terminal workspace update failed with exit code ' + exitCode
+    )
   }
 }
 
@@ -572,6 +644,28 @@ export async function getTerminalFiles(id) {
   session.lastUsedAt = Date.now()
 
   return readWorkspaceArchive(session.container)
+}
+
+export async function updateTerminalFiles(id, files) {
+  const session = getTerminal(id)
+
+  if (!session) {
+    throw new Error('terminal session not found')
+  }
+
+  const normalized = normalizeFiles(files)
+  const currentFiles = await readWorkspaceArchive(session.container)
+  const deletions = Object.keys(currentFiles).filter(
+    name => !Object.prototype.hasOwnProperty.call(normalized, name)
+  )
+
+  await runWorkspaceSync(session.container, {
+    root: '/workspace',
+    files: normalized,
+    deletions
+  })
+
+  session.lastUsedAt = Date.now()
 }
 
 export async function closeTerminal(id) {

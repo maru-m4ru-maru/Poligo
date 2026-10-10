@@ -436,6 +436,56 @@ async function run() {
     throw new Error('terminal file collection failed: ' + files.text)
   }
 
+  const updateFiles = {
+    ...files.body.files,
+    'main.js': 'EDITOR_SYNC_SOURCE_OK\n',
+    'editor-added.txt': 'EDITOR_SYNC_ADDED_OK\n'
+  }
+  delete updateFiles['nested/source.txt']
+  delete updateFiles['private.txt']
+
+  const update = await request(
+    '/v1/terminals/' + encodeURIComponent(firstId) + '/files',
+    {
+      method: 'PUT'
+    },
+    {
+      files: updateFiles
+    }
+  )
+
+  if (update.status !== 200 || update.body?.ok !== true) {
+    throw new Error('terminal workspace update failed: ' + update.text)
+  }
+
+  const updatedFiles = await request(
+    '/v1/terminals/' + encodeURIComponent(firstId) + '/files'
+  )
+
+  if (
+    updatedFiles.status !== 200 ||
+    updatedFiles.body?.files?.['main.js'] !== 'EDITOR_SYNC_SOURCE_OK\n' ||
+    updatedFiles.body?.files?.['editor-added.txt'] !== 'EDITOR_SYNC_ADDED_OK\n' ||
+    'nested/source.txt' in updatedFiles.body?.files ||
+    'private.txt' in updatedFiles.body?.files
+  ) {
+    throw new Error('terminal workspace update did not reconcile files: ' + updatedFiles.text)
+  }
+
+  const liveUpdate = await sendAndWait(
+    first,
+    'cat main.js; cat editor-added.txt\n',
+    output => output.includes('EDITOR_SYNC_SOURCE_OK') &&
+      output.includes('EDITOR_SYNC_ADDED_OK')
+  )
+
+  if (
+    !liveUpdate.includes('EDITOR_SYNC_SOURCE_OK') ||
+    !liveUpdate.includes('EDITOR_SYNC_ADDED_OK')
+  ) {
+    throw new Error('IDE file changes were not visible to the live shell')
+  }
+
   const interrupted = await new Promise((resolve, reject) => {
     let output = ''
     const timeout = setTimeout(() => {

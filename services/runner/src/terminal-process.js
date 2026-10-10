@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import pty from 'node-pty'
 import tar from 'tar-stream'
+import { workspaceSyncScript } from './workspace-sync.js'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = process.env.TERMINAL_RUN_ROOT || '/tmp/poligo-terminal-sessions'
@@ -243,6 +244,78 @@ function setprivArguments(session, command, args) {
     command,
     ...args
   ]
+}
+
+function executeAsSession(session, command, args, input, timeoutMs = 15_000) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      '/usr/bin/setpriv',
+      setprivArguments(session, command, args),
+      {
+        cwd: session.workspace,
+        env: terminalEnvironment(session),
+        stdio: ['pipe', 'pipe', 'pipe']
+      }
+    )
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+    let timeout = null
+
+    function finish(error, value) {
+      if (settled) {
+        return
+      }
+
+      settled = true
+
+      if (timeout !== null) {
+        clearTimeout(timeout)
+      }
+
+      if (error) {
+        reject(error)
+      } else {
+        resolve(value)
+      }
+    }
+
+    child.stdout.on('data', chunk => {
+      stdout = (stdout + chunk.toString('utf8')).slice(-65_536)
+    })
+
+    child.stderr.on('data', chunk => {
+      stderr = (stderr + chunk.toString('utf8')).slice(-65_536)
+    })
+
+    child.on('error', finish)
+
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        finish(null, stdout)
+        return
+      }
+
+      finish(new Error(
+        stderr.trim() ||
+        'terminal workspace update failed with exit code ' +
+          String(code === null ? signal : code)
+      ))
+    })
+
+    child.stdin.on('error', error => {
+      if (error.code !== 'EPIPE') {
+        finish(error)
+      }
+    })
+
+    timeout = setTimeout(() => {
+      child.kill('SIGKILL')
+      finish(new Error('terminal workspace update timed out'))
+    }, timeoutMs)
+
+    child.stdin.end(input)
+  })
 }
 
 async function measureWorkspace(session) {
@@ -579,6 +652,34 @@ export async function getTerminalFiles(id) {
 
   session.lastUsedAt = Date.now()
   return collectWorkspaceFiles(session)
+}
+
+export async function updateTerminalFiles(id, files) {
+  const session = sessions.get(normalizeId(id))
+
+  if (!session || session.closing) {
+    throw new Error('terminal session not found')
+  }
+
+  const normalized = normalizeFiles(files)
+  const currentFiles = await collectWorkspaceFiles(session)
+  const deletions = Object.keys(currentFiles).filter(
+    name => !Object.prototype.hasOwnProperty.call(normalized, name)
+  )
+
+  await executeAsSession(
+    session,
+    '/usr/bin/node',
+    ['-e', workspaceSyncScript],
+    JSON.stringify({
+      root: session.workspace,
+      files: normalized,
+      deletions
+    })
+  )
+
+  await measureWorkspace(session)
+  session.lastUsedAt = Date.now()
 }
 
 export async function closeTerminal(id) {
