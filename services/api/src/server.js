@@ -3696,25 +3696,28 @@ async function updateTerminalOwnerRecord(id, owner) {
   const database = getDatabase()
   const now = Date.now()
   const storedFiles = JSON.stringify(encryptProjectSecrets(owner.baseFiles))
-  const result = await database.execute({
-    sql: `UPDATE terminal_sessions
-      SET base_files = ?, updated_at = ?, expires_at = ?
-      WHERE id = ?
-        AND owner_id = ?
-        AND project_id = ?
-        AND expires_at > ?`,
-    args: [
-      storedFiles,
-      now,
-      owner.expiresAt,
-      id,
-      owner.userId,
-      owner.projectId,
-      now
-    ]
-  })
+  const results = await database.batch([
+    {
+      sql: `UPDATE terminal_sessions
+        SET base_files = ?, updated_at = ?, expires_at = ?
+        WHERE id = ?
+          AND owner_id = ?
+          AND project_id = ?
+          AND expires_at > ?`,
+      args: [
+        storedFiles,
+        now,
+        owner.expiresAt,
+        id,
+        owner.userId,
+        owner.projectId,
+        now
+      ]
+    }
+  ], 'immediate')
+  const result = results[0]
 
-  if (Number(result.rowsAffected) !== 1) {
+  if (Number(result?.rowsAffected) !== 1) {
     throw new Error('terminal session registry record is no longer active')
   }
 }
@@ -3726,30 +3729,33 @@ async function issueTerminalWebSocketTicket(id, owner) {
   const ticketHash = hashWebSocketTicket(ticket)
   const ticketExpiresAt = now + 60_000
   const sessionExpiresAt = now + TERMINAL_RECORD_TTL_MS
-  const result = await database.execute({
-    sql: `UPDATE terminal_sessions
-      SET websocket_ticket_hash = ?,
-        ticket_expires_at = ?,
-        ticket_used = 0,
-        expires_at = ?,
-        updated_at = ?
-      WHERE id = ?
-        AND owner_id = ?
-        AND project_id = ?
-        AND expires_at > ?`,
-    args: [
-      ticketHash,
-      ticketExpiresAt,
-      sessionExpiresAt,
-      now,
-      id,
-      owner.userId,
-      owner.projectId,
-      now
-    ]
-  })
+  const results = await database.batch([
+    {
+      sql: `UPDATE terminal_sessions
+        SET websocket_ticket_hash = ?,
+          ticket_expires_at = ?,
+          ticket_used = 0,
+          expires_at = ?,
+          updated_at = ?
+        WHERE id = ?
+          AND owner_id = ?
+          AND project_id = ?
+          AND expires_at > ?`,
+      args: [
+        ticketHash,
+        ticketExpiresAt,
+        sessionExpiresAt,
+        now,
+        id,
+        owner.userId,
+        owner.projectId,
+        now
+      ]
+    }
+  ], 'immediate')
+  const result = results[0]
 
-  if (Number(result.rowsAffected) !== 1) {
+  if (Number(result?.rowsAffected) !== 1) {
     throw new Error('terminal session registry record is no longer active')
   }
 
@@ -3765,22 +3771,24 @@ async function issueTerminalWebSocketTicket(id, owner) {
 async function consumeTerminalWebSocketTicket(id, ticket) {
   const database = getDatabase()
   const now = Date.now()
-  const result = await database.execute({
-    sql: `UPDATE terminal_sessions
-      SET websocket_ticket_hash = '', ticket_expires_at = 0, ticket_used = 1, updated_at = ?
-      WHERE id = ?
-        AND websocket_ticket_hash = ?
-        AND ticket_used = 0
-        AND ticket_expires_at > ?`,
-    args: [
-      now,
-      id,
-      hashWebSocketTicket(ticket),
-      now
-    ]
-  })
+  const results = await database.batch([
+    {
+      sql: `UPDATE terminal_sessions
+        SET websocket_ticket_hash = '', ticket_expires_at = 0, ticket_used = 1, updated_at = ?
+        WHERE id = ?
+          AND websocket_ticket_hash = ?
+          AND ticket_used = 0
+          AND ticket_expires_at > ?`,
+      args: [
+        now,
+        id,
+        hashWebSocketTicket(ticket),
+        now
+      ]
+    }
+  ], 'immediate')
 
-  return Number(result.rowsAffected) === 1
+  return Number(results[0]?.rowsAffected) === 1
 }
 
 async function deleteTerminalOwnerRecord(id) {
