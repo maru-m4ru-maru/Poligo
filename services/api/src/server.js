@@ -5620,20 +5620,28 @@ const server = http.createServer(async (request, response) => {
   }
 
   if ((request.method === 'GET' || request.method === 'HEAD') && request.url === '/api/health') {
+    const databaseStatus = getDatabaseStatus()
+    const databaseHealthy =
+      databaseInitializationComplete &&
+      databaseStatus.status === 'online' &&
+      !databaseInitializationError
+
     send(response, 200, {
-      status: databaseInitializationComplete ? 'ok' : 'degraded',
+      status: databaseHealthy ? 'ok' : 'degraded',
       service: 'api',
       commit: process.env.RENDER_GIT_COMMIT || '',
       runner: Boolean(runnerUrl),
       terminalRunner: Boolean(terminalRunnerUrl),
       executor: runnerUrl ? 'runner' : 'judge0',
       database: {
-        ...getDatabaseStatus(),
-        initialization: databaseInitializationComplete
-          ? 'ready'
-          : databaseInitializationError
+        ...databaseStatus,
+        initialization: !databaseInitializationComplete
+          ? databaseInitializationError
             ? 'failed'
             : 'pending'
+          : databaseInitializationError
+            ? 'degraded'
+            : 'ready'
       }
     })
     return
@@ -6184,19 +6192,20 @@ server.listen(port, '0.0.0.0', () => {
   console.log('Poligo API listening on ' + port)
 
   databaseInitializationPromise = (async () => {
-    const initialized = await initializeDatabase()
+    const projectDatabaseInitialized = await initializeDatabase()
+    let projectDatabaseError = null
 
-    if (!initialized) {
+    if (projectDatabaseInitialized) {
+      console.log('Poligo project database ready')
+    } else {
       const databaseStatus = getDatabaseStatus()
-      throw new Error(
-        databaseStatus.error ||
+      projectDatabaseError = databaseStatus.error ||
         (databaseStatus.status === 'not_configured'
           ? 'Turso database is not configured'
           : 'Project database initialization did not complete')
-      )
-    }
 
-    console.log('Poligo database ready')
+      console.error('Poligo project database initialization failed: ' + projectDatabaseError)
+    }
 
     await initializeAuthDatabase()
     await restoreTerminalOwners()
@@ -6208,7 +6217,7 @@ server.listen(port, '0.0.0.0', () => {
     }
 
     databaseInitializationComplete = true
-    databaseInitializationError = null
+    databaseInitializationError = projectDatabaseError
     return true
   })().catch(error => {
     databaseInitializationComplete = false
