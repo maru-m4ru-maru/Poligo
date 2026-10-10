@@ -56,7 +56,12 @@ const terminalWebSocketServer = new WebSocketServer({
 })
 
 const server = http.createServer(async (request, response) => {
-  if (request.method === 'GET' && request.url === '/health') {
+  const requestPath = new URL(
+    request.url || '/',
+    'http://localhost'
+  ).pathname.replace(/\/+$/, '') || '/'
+
+  if (request.method === 'GET' && requestPath === '/health') {
     send(response, 200, {
       status: 'ok',
       service: 'runner',
@@ -75,7 +80,7 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
-  if (request.method === 'GET' && request.url === '/v1/languages') {
+  if (request.method === 'GET' && requestPath === '/v1/languages') {
     send(response, 200, {
       languages: listExecutionLanguages()
     })
@@ -84,17 +89,23 @@ const server = http.createServer(async (request, response) => {
 
   if (
     request.method === 'GET' &&
-    request.url === '/v1/terminals'
+    requestPath === '/v1/terminals'
   ) {
+    const terminals = listTerminals()
+
+    console.info('Runner terminal list requested', {
+      terminalCount: terminals.length
+    })
+
     send(response, 200, {
-      terminals: listTerminals()
+      terminals
     })
     return
   }
 
   if (
     request.method === 'POST' &&
-    request.url === '/v1/terminals'
+    requestPath === '/v1/terminals'
   ) {
     try {
       const payload = await readJson(request)
@@ -121,10 +132,10 @@ const server = http.createServer(async (request, response) => {
 
   if (
     request.method === 'GET' &&
-    request.url.startsWith('/v1/terminals/') &&
-    request.url.endsWith('/files')
+    requestPath.startsWith('/v1/terminals/') &&
+    requestPath.endsWith('/files')
   ) {
-    const id = request.url.slice(
+    const id = requestPath.slice(
       '/v1/terminals/'.length,
       -'/files'.length
     )
@@ -148,9 +159,9 @@ const server = http.createServer(async (request, response) => {
 
   if (
     request.method === 'DELETE' &&
-    request.url.startsWith('/v1/terminals/')
+    requestPath.startsWith('/v1/terminals/')
   ) {
-    const id = request.url.slice('/v1/terminals/'.length)
+    const id = requestPath.slice('/v1/terminals/'.length)
 
     try {
       await closeTerminal(id)
@@ -169,7 +180,7 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
-  if (request.method === 'POST' && request.url === '/v1/run') {
+  if (request.method === 'POST' && requestPath === '/v1/run') {
     try {
       const payload = await readJson(request)
       const job = enqueueJob(payload)
@@ -187,8 +198,8 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
-  if (request.method === 'GET' && request.url.startsWith('/v1/runs/')) {
-    const id = request.url.slice('/v1/runs/'.length)
+  if (request.method === 'GET' && requestPath.startsWith('/v1/runs/')) {
+    const id = requestPath.slice('/v1/runs/'.length)
     const job = getJob(id)
 
     if (!job) {
@@ -207,6 +218,13 @@ const server = http.createServer(async (request, response) => {
       result: job.result
     })
     return
+  }
+
+  if (requestPath.startsWith('/v1/terminals')) {
+    console.warn('Runner terminal route not found', {
+      method: request.method,
+      path: requestPath
+    })
   }
 
   send(response, 404, {
