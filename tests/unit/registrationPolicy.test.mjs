@@ -36,6 +36,8 @@ test('rejects malformed email addresses', () => {
     'person@@example.com',
     'person..dots@example.com',
     'person@example',
+    'person@example.invalid',
+    'person@example.test',
     'person@example..com',
     'person@-example.com',
     'person@example.c'
