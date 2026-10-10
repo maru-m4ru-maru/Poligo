@@ -5626,6 +5626,179 @@ server.on('upgrade', (request, socket, head) => {
   })
 })
 
+async function cleanupDisposableE2EAccountsOnStartup() {
+  const database = getDatabase()
+  const userRowsStatement = await database.prepare(
+    'SELECT id, email FROM "user" WHERE lower(email) LIKE ?'
+  )
+  const userRows = await userRowsStatement.all(['%@example.invalid'])
+  const disposablePattern = /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i
+  const candidates = userRows.filter(row => {
+    const id = String(row.id || '')
+    const email = String(row.email || '').toLowerCase()
+
+    return disposablePattern.test(email) &&
+      !adminUserIds.has(id) &&
+      !adminEmails.has(email)
+  })
+
+  const totals = {
+    eligibleAccounts: candidates.length,
+    deletedAccounts: 0,
+    deletedProjects: 0,
+    deletedProjectFiles: 0,
+    deletedProjectCommits: 0,
+    deletedTerminalSessions: 0,
+    failedAccounts: 0
+  }
+
+  console.log('Disposable E2E cleanup started', {
+    eligibleAccounts: totals.eligibleAccounts
+  })
+
+  for (const user of candidates) {
+    const userId = String(user.id)
+    const terminalSessionStatement = await database.prepare(
+      'SELECT id FROM terminal_sessions WHERE owner_id = ?'
+    )
+    const terminalSessions = await terminalSessionStatement.all([userId])
+    let terminalCleanupSucceeded = true
+
+    for (const terminalSession of terminalSessions) {
+      const terminalId = String(terminalSession.id)
+      const owner = terminalOwners.get(terminalId)
+
+      if (owner) {
+        const cleaned = await expireTerminalOwner(terminalId, owner)
+
+        if (!cleaned) {
+          terminalCleanupSucceeded = false
+          break
+        }
+      } else {
+        try {
+          if (terminalRunnerUrl) {
+            await runnerTerminalRequest(
+              '/v1/terminals/' + encodeURIComponent(terminalId),
+              {
+                method: 'DELETE'
+              }
+            )
+          } else {
+            terminalCleanupSucceeded = false
+            break
+          }
+        } catch (error) {
+          const message = error instanceof Error
+            ? error.message.toLowerCase()
+            : String(error).toLowerCase()
+
+          if (
+            message.includes('terminal session not found') ||
+            message.includes('404')
+          ) {
+            continue
+          }
+
+          terminalCleanupSucceeded = false
+          console.error('Disposable E2E terminal cleanup failed', {
+            message
+          })
+          break
+        }
+
+        await deleteTerminalOwnerRecord(terminalId)
+      }
+    }
+
+    if (!terminalCleanupSucceeded) {
+      totals.failedAccounts += 1
+      console.error('Disposable E2E account was retained because terminal cleanup failed')
+      continue
+    }
+
+    const projectCountRows = await database.prepare(
+      'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
+    )
+    const projectCountResult = await projectCountRows.all([userId])
+    const projectFilesCountRows = await database.prepare(
+      `SELECT COUNT(*) AS count
+       FROM project_files
+       WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)`
+    )
+    const projectFilesCountResult = await projectFilesCountRows.all([userId])
+    const projectCommitsCountRows = await database.prepare(
+      'SELECT COUNT(*) AS count FROM project_commits WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)'
+    )
+    const projectCommitsCountResult = await projectCommitsCountRows.all([userId])
+
+    await database.batch([
+      {
+        sql: `DELETE FROM project_commit_files
+              WHERE commit_id IN (
+                SELECT id FROM project_commits
+                WHERE project_id IN (
+                  SELECT id FROM projects WHERE owner_id = ?
+                )
+              )`,
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM project_commits WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM project_files WHERE project_id IN (SELECT id FROM projects WHERE owner_id = ?)',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM projects WHERE owner_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM terminal_sessions WHERE owner_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM user_storage_limits WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM "session" WHERE userId = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM "account" WHERE userId = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM "verification" WHERE identifier = ?',
+        args: [user.email]
+      },
+      {
+        sql: 'DELETE FROM "user" WHERE id = ?',
+        args: [userId]
+      }
+    ], 'immediate')
+
+    totals.deletedAccounts += 1
+    totals.deletedProjects += Number(projectCountResult[0]?.count || 0)
+    totals.deletedProjectFiles += Number(projectFilesCountResult[0]?.count || 0)
+    totals.deletedProjectCommits += Number(projectCommitsCountResult[0]?.count || 0)
+    totals.deletedTerminalSessions += terminalSessions.length
+  }
+
+  console.log('Disposable E2E cleanup finished', totals)
+
+  if (totals.failedAccounts > 0) {
+    console.error('Disposable E2E cleanup left accounts untouched after terminal cleanup errors', {
+      failedAccounts: totals.failedAccounts
+    })
+  }
+
+  return totals
+}
+
 server.listen(port, '0.0.0.0', () => {
   console.log('Poligo API listening on ' + port)
 
@@ -5638,6 +5811,10 @@ server.listen(port, '0.0.0.0', () => {
         await restoreTerminalOwners()
         console.log('Poligo authentication database ready')
         console.log('Poligo terminal sessions restored')
+
+        if (process.env.POLIGO_CLEANUP_DISPOSABLE_E2E_ACCOUNTS_ON_START === '1') {
+          await cleanupDisposableE2EAccountsOnStartup()
+        }
       }
     })
     .catch(error => {
