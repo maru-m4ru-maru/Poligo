@@ -4249,7 +4249,14 @@ async function reclaimDisconnectedTerminalForCapacity() {
 async function handleTerminalCreate(request, response) {
   const startedAt = Date.now()
   let phase = 'authenticate'
-  console.info('Terminal create started')
+  console.info('Terminal create started', {
+    terminalRunnerHost: terminalRunnerUrl
+      ? new URL(terminalRunnerUrl).host
+      : '',
+    executionRunnerHost: runnerUrl
+      ? new URL(runnerUrl).host
+      : ''
+  })
 
   const session = await getSession(request)
 
