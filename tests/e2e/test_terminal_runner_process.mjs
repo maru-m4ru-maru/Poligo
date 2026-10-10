@@ -552,7 +552,7 @@ async function run() {
     first.on('error', onError)
     first.send(JSON.stringify({
       type: 'input',
-      data: 'exit\\n'
+      data: 'exit\n'
     }))
   })
 
