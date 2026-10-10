@@ -675,11 +675,11 @@ def main():
 
             print("PASS: terminal change propagated to IDE and storage", flush=True)
 
-            print("STEP: reconnect and restore synchronized terminal files", flush=True)
-            disconnected_status = terminal_status(page) or {}
-            disconnected_session_id = disconnected_status.get("sessionId")
+            print("STEP: reconnect the existing terminal session", flush=True)
+            original_status = terminal_status(page) or {}
+            original_session_id = original_status.get("sessionId")
 
-            if not disconnected_session_id:
+            if not original_session_id:
                 raise AssertionError(
                     "Active terminal session ID was unavailable before disconnect"
                 )
@@ -690,7 +690,7 @@ def main():
             def observe_disconnected_sync(request):
                 if (
                     monitor_disconnected_sync and
-                    "/api/terminal/sessions/" + disconnected_session_id + "/sync"
+                    "/api/terminal/sessions/" + original_session_id + "/sync"
                     in request.url
                 ):
                     sync_requests_after_disconnect.append(request.url)
@@ -725,14 +725,24 @@ def main():
             ).click()
             wait_for_terminal(page, timeout=30, retry_capacity=False)
 
+            reconnected_status = terminal_status(page) or {}
+
+            if reconnected_status.get("sessionId") != original_session_id:
+                raise AssertionError(
+                    "Reconnect created a new session instead of reusing the existing session"
+                )
+
             run_command(
                 page,
                 "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'RECONNECTED_FILE_OK\\n'",
                 "RECONNECTED_FILE_OK"
             )
-            print("PASS: reconnect restored synchronized terminal files", flush=True)
+            print(
+                "PASS: reconnect reused the existing session and retained synchronized files",
+                flush=True
+            )
 
-            print("STEP: reconnect when the previous session was already removed", flush=True)
+            print("STEP: recover after the previous Runner session was removed", flush=True)
             stale_status = terminal_status(page) or {}
             stale_session_id = stale_status.get("sessionId")
 
@@ -759,13 +769,21 @@ def main():
             ).click()
             wait_for_terminal(page, timeout=30, retry_capacity=False)
 
+            recovered_status = terminal_status(page) or {}
+            recovered_session_id = recovered_status.get("sessionId")
+
+            if not recovered_session_id or recovered_session_id == stale_session_id:
+                raise AssertionError(
+                    "Terminal did not create a replacement session after the old Runner session was removed"
+                )
+
             run_command(
                 page,
                 "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'RECONNECTED_AFTER_EXPIRED_SESSION_OK\\n'",
                 "RECONNECTED_AFTER_EXPIRED_SESSION_OK"
             )
             print(
-                "PASS: reconnect recovered after the previous session had already been removed",
+                "PASS: reconnect recovered after the previous Runner session was removed",
                 flush=True
             )
 
