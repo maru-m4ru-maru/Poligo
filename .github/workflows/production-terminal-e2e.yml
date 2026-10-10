@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: poligo-production-terminal-e2e
+  group: poligo-production-terminal-e2e-v2
   cancel-in-progress: true
 
 jobs:
