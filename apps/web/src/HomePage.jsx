@@ -40,9 +40,6 @@ export default function HomePage({ session }) {
           <button onClick={() => navigate('/terms')}>
             利用規約
           </button>
-          <a href="https://poligo1.statuspage.io/" target="_blank" rel="noreferrer">
-            ステータス
-          </a>
           {session?.user ? (
             <>
               <button onClick={() => navigate('/dashboard')}>ダッシュボード</button>
@@ -157,7 +154,6 @@ export default function HomePage({ session }) {
       <footer className="home-footer">
         <span>© Poligo</span>
         <div>
-          <a href="https://poligo1.statuspage.io/" target="_blank" rel="noreferrer">システムステータス</a>
           <button onClick={() => navigate('/signin')}>サインイン</button>
         </div>
       </footer>
