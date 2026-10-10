@@ -19,8 +19,11 @@ function createDatabase(initialColumns, options = {}) {
         }
       }
     },
-    async execute(statement) {
-      assert.equal(statement.sql, 'ALTER TABLE "user" ADD COLUMN username TEXT')
+    async batch(statements, mode) {
+      assert.equal(mode, 'immediate')
+      assert.equal(statements.length, 1)
+      assert.equal(statements[0].sql, 'ALTER TABLE "user" ADD COLUMN username TEXT')
+      assert.deepEqual(statements[0].args, [])
       alterCount += 1
 
       if (!options.refuseAlter) {
