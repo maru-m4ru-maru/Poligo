@@ -44,9 +44,11 @@ def api_request(page, method, path):
 
 def main():
     if not ADMIN_EMAIL or not ADMIN_PASSWORD:
-        raise SystemExit(
-            "Missing POLIGO_ADMIN_EMAIL or POLIGO_ADMIN_PASSWORD."
+        print(
+            "SKIP: POLIGO_ADMIN_EMAIL or POLIGO_ADMIN_PASSWORD is not configured.",
+            flush=True
         )
+        return
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
