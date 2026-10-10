@@ -174,6 +174,7 @@ async function prepareWorkspace(files) {
   }
 
   let totalBytes = 0
+  await fs.mkdir(workRoot, { recursive: true, mode: 0o755 })
   const workspace = await fs.mkdtemp(path.join(workRoot, 'job-'))
 
   try {
@@ -320,6 +321,7 @@ async function executeJob(job) {
     if (timedOut) {
       try {
         await container.kill()
+        await container.wait()
       } catch {}
     }
 
