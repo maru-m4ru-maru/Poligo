@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import {
@@ -36,6 +37,34 @@ const trustedOrigins = [
   'http://127.0.0.1:5173'
 ].filter(Boolean)
 
+async function createFallbackUsername(email) {
+  const authDatabase = getDatabase()
+  const emailPrefix = email.split('@')[0]
+  const base = emailPrefix
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 20) || 'user'
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = normalizeUsername(
+      base + '_' + randomBytes(4).toString('hex')
+    )
+    const statement = await authDatabase.prepare(
+      'SELECT id FROM "user" WHERE lower(username) = lower(?) LIMIT 1'
+    )
+    const rows = await statement.all([candidate])
+
+    if (!rows.length) {
+      return candidate
+    }
+  }
+
+  throw new APIError('INTERNAL_SERVER_ERROR', {
+    message: 'ユーザー名を発行できませんでした。もう一度お試しください。'
+  })
+}
+
 export const auth = betterAuth({
   baseURL: betterAuthUrl || undefined,
   secret: betterAuthSecret,
@@ -48,6 +77,15 @@ export const auth = betterAuth({
   database: kyselyAdapter(database, {
     type: 'sqlite'
   }),
+  user: {
+    additionalFields: {
+      username: {
+        type: 'string',
+        required: false,
+        input: true
+      }
+    }
+  },
   emailAndPassword: {
     enabled: true
   },
@@ -57,10 +95,23 @@ export const auth = betterAuth({
         before: async user => {
           let name
           let email
+          let username
 
           try {
-            name = normalizeUsername(user.name)
             email = normalizeEmailAddress(user.email)
+            name = typeof user.name === 'string' ? user.name.trim() : ''
+
+            if (
+              !name ||
+              name.length > 80 ||
+              /[\u0000-\u001f\u007f]/.test(name)
+            ) {
+              throw new Error('表示名は1〜80文字で入力してください。')
+            }
+
+            username = user.username
+              ? normalizeUsername(user.username)
+              : await createFallbackUsername(email)
           } catch (error) {
             throw new APIError('BAD_REQUEST', {
               message: error instanceof Error
@@ -81,12 +132,12 @@ export const auth = betterAuth({
             })
           }
 
-          const nameMatches = await authDatabase.prepare(
-            'SELECT id FROM "user" WHERE lower(name) = lower(?) LIMIT 1'
+          const usernameMatches = await authDatabase.prepare(
+            'SELECT id FROM "user" WHERE lower(username) = lower(?) LIMIT 1'
           )
-          const existingNames = await nameMatches.all([name])
+          const existingUsernames = await usernameMatches.all([username])
 
-          if (existingNames.length) {
+          if (existingUsernames.length) {
             throw new APIError('BAD_REQUEST', {
               message: 'このユーザー名はすでに使用されています。'
             })
@@ -96,6 +147,7 @@ export const auth = betterAuth({
             data: {
               ...user,
               name,
+              username,
               email
             }
           }
@@ -133,6 +185,7 @@ export async function initializeAuthDatabase() {
     `CREATE TABLE IF NOT EXISTS "user" (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
+      username TEXT,
       email TEXT NOT NULL UNIQUE,
       emailVerified BOOLEAN NOT NULL,
       image TEXT,
@@ -173,6 +226,56 @@ export async function initializeAuthDatabase() {
       expiresAt TIMESTAMP NOT NULL,
       createdAt TIMESTAMP,
       updatedAt TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS user_bans (
+      user_id TEXT PRIMARY KEY NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      banned_at INTEGER NOT NULL,
+      banned_by TEXT NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS announcements (
+      id TEXT PRIMARY KEY NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      target_user_id TEXT,
+      created_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1
     )`
+  ], 'immediate')
+
+  try {
+    await database.execute({
+      sql: 'ALTER TABLE "user" ADD COLUMN username TEXT',
+      args: []
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+
+    if (!/duplicate column name|already exists/i.test(message)) {
+      throw error
+    }
+  }
+
+  await database.batch([
+    {
+      sql: `UPDATE "user"
+        SET username = 'maru_m4ru_maru'
+        WHERE lower(email) = lower(?)
+          AND (username IS NULL OR username = '')`,
+      args: ['code-maru@outlook.jp']
+    },
+    {
+      sql: 'CREATE UNIQUE INDEX IF NOT EXISTS idx_user_username_nocase ON "user"(username COLLATE NOCASE) WHERE username IS NOT NULL AND username != ""'
+    },
+    {
+      sql: 'CREATE INDEX IF NOT EXISTS idx_user_bans_banned_at ON user_bans(banned_at)'
+    },
+    {
+      sql: 'CREATE INDEX IF NOT EXISTS idx_announcements_active_created_at ON announcements(active, created_at)'
+    },
+    {
+      sql: 'CREATE INDEX IF NOT EXISTS idx_announcements_target_user ON announcements(target_user_id)'
+    }
   ], 'immediate')
 }
