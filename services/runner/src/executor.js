@@ -3,7 +3,8 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import Docker from 'dockerode'
-import { getLanguage } from './languages.js'
+import { getLanguage, listLanguages } from './languages.js'
+import { decodeDockerLogs } from './dockerLogs.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -19,6 +20,7 @@ const pidsLimit = Number(process.env.EXECUTION_PIDS_LIMIT || 128)
 const maxOutputBytes = Number(process.env.MAX_OUTPUT_BYTES || 65_536)
 const maxArguments = Number(process.env.MAX_EXECUTION_ARGUMENTS || 32)
 const maxArgumentBytes = Number(process.env.MAX_EXECUTION_ARGUMENT_BYTES || 512)
+const maxStdinBytes = Number(process.env.MAX_EXECUTION_STDIN_BYTES || 1_000_000)
 const maxEnvironmentVariables = Number(process.env.MAX_ENVIRONMENT_VARIABLES || 64)
 const maxEnvironmentBytes = Number(process.env.MAX_ENVIRONMENT_BYTES || 16_384)
 const concurrency = Number(process.env.EXECUTION_CONCURRENCY || 1)
@@ -103,6 +105,22 @@ function normalizeArguments(args) {
   return normalized
 }
 
+function normalizeStdin(stdin) {
+  if (stdin === undefined || stdin === null) {
+    return ''
+  }
+
+  if (typeof stdin !== 'string') {
+    throw new Error('execution stdin must be text')
+  }
+
+  if (Buffer.byteLength(stdin, 'utf8') > maxStdinBytes) {
+    throw new Error('execution stdin is too large')
+  }
+
+  return stdin
+}
+
 function normalizeEnvironment(env) {
   if (env === undefined || env === null) {
     return {}
@@ -180,6 +198,7 @@ async function prepareWorkspace(files) {
       })
     }
 
+    await fs.chmod(workspace, 0o755)
     return workspace
   } catch (error) {
     await fs.rm(workspace, { recursive: true, force: true })
@@ -216,6 +235,7 @@ async function executeJob(job) {
 
   const files = job.files || {}
   const args = normalizeArguments(job.args)
+  const stdin = normalizeStdin(job.stdin)
   const environment = normalizeEnvironment(job.env)
   const entrypoint = normalizeFilePath(job.entrypoint || language.entrypoint)
 
@@ -241,8 +261,13 @@ async function executeJob(job) {
           key + '=' + value
         )
       ],
+      OpenStdin: true,
+      StdinOnce: true,
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
       HostConfig: {
-        AutoRemove: true,
+        AutoRemove: false,
         NetworkMode: 'none',
         ReadonlyRootfs: true,
         Memory: memoryBytes,
@@ -266,17 +291,29 @@ async function executeJob(job) {
       }
     })
 
+    const stdinStream = await container.attach({
+      stream: true,
+      stdin: true,
+      stdout: false,
+      stderr: false
+    })
+
     job.status = 'running'
     job.startedAt = new Date().toISOString()
 
     await container.start()
+    stdinStream.end(stdin)
+
+    let timeoutTimer
 
     const result = await Promise.race([
       container.wait(),
       new Promise(resolve => {
-        setTimeout(() => resolve({ timedOut: true }), timeoutMs)
+        timeoutTimer = setTimeout(() => resolve({ timedOut: true }), timeoutMs)
       })
-    ])
+    ]).finally(() => {
+      clearTimeout(timeoutTimer)
+    })
 
     const timedOut = result?.timedOut === true
 
@@ -296,17 +333,17 @@ async function executeJob(job) {
       })
     } catch {}
 
-    const output = truncate(
-      Buffer.isBuffer(logs) ? logs.toString('utf8') : String(logs)
-    )
+    const output = decodeDockerLogs(logs)
+    const stdout = truncate(output.stdout)
+    const stderr = truncate(output.stderr)
 
     job.finishedAt = new Date().toISOString()
 
     if (timedOut) {
       job.status = 'timeout'
       job.result = {
-        stdout: output,
-        stderr: '',
+        stdout,
+        stderr,
         exitCode: null,
         timedOut: true
       }
@@ -315,8 +352,8 @@ async function executeJob(job) {
 
     job.status = result?.StatusCode === 0 ? 'succeeded' : 'failed'
     job.result = {
-      stdout: output,
-      stderr: result?.StatusCode === 0 ? '' : output,
+      stdout,
+      stderr,
       exitCode: result?.StatusCode ?? null,
       timedOut: false
     }
@@ -366,7 +403,8 @@ export function enqueueJob({
   entrypoint,
   files,
   args,
-  env
+  env,
+  stdin
 }) {
   if (!id) {
     throw new Error('execution id is required')
@@ -383,6 +421,7 @@ export function enqueueJob({
     files,
     args,
     env,
+    stdin,
     status: 'queued',
     createdAt: new Date().toISOString(),
     startedAt: null,
@@ -402,9 +441,5 @@ export function getJob(id) {
 }
 
 export function listExecutionLanguages() {
-  return Object.keys({
-    python: true,
-    c: true,
-    cpp: true
-  })
+  return listLanguages()
 }
