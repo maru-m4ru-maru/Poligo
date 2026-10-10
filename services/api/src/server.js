@@ -3567,6 +3567,7 @@ async function handleAdminUsersRequest(request, response) {
         u.email AS target_user_email
       FROM announcements a
       LEFT JOIN "user" u ON u.id = a.target_user_id
+      WHERE a.active = 1
       ORDER BY a.created_at DESC
       LIMIT 200`
     )
