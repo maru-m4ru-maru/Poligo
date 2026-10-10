@@ -79,9 +79,10 @@ def signup_attempt(page, name, username, email, password):
 
 
 def expect_rejected(result, label):
-    if 200 <= result["status"] < 300:
+    if result["status"] not in {400, 409}:
         raise AssertionError(
-            label + " was accepted unexpectedly: " + str(result)
+            label + " did not return a validation rejection (400/409): " +
+            str(result)
         )
 
 
