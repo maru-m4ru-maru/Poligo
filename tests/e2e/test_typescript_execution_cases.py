@@ -76,7 +76,7 @@ def main():
 
     case = CASES[CASE]
     suffix = uuid.uuid4().hex
-    email = f"poligo-typescript-{CASE}-{suffix}@example.invalid"
+    email = f"poligo-typescript-{CASE}-{suffix}@example.com"
     password = "PoligoTypeScriptDiagnostic!" + uuid.uuid4().hex[:18]
 
     with sync_playwright() as playwright:
