@@ -350,8 +350,8 @@ export default function AdminPage({ session }) {
                     <article className="admin-user-card" key={user.id}>
                       <div className="admin-user-identity">
                         <div>
-                          <strong>{user.name || '未設定'}</strong>
-                          <span>{user.email}</span>
+                          <strong>{user.username ? '@' + user.username : 'ユーザー名未設定'}</strong>
+                          <span>{user.name || '表示名未設定'} · {user.email}</span>
                           <small>ID: {user.id}</small>
                           <small>登録: {formatDate(user.createdAt)} · 使用量: {formatBytes(user.storageBytes)} / {formatBytes(user.storageLimitBytes)}</small>
                           {user.banReason && <small>BAN理由: {user.banReason}</small>}
