@@ -10,6 +10,7 @@ import {
   encryptProjectSecrets
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
+import { shouldUseJudge0 } from './executionRouting.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -3287,7 +3288,7 @@ async function handleExecution(request, response) {
   const id = randomUUID()
   registerExecution(id, session.user.id)
 
-  if (!runnerUrl) {
+  if (shouldUseJudge0(payload.language, Boolean(runnerUrl))) {
     try {
       await handleJudge0Execution(response, payload, id, session.user.id)
     } catch (error) {
