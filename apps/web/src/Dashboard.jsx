@@ -574,6 +574,18 @@ export default function Dashboard({ session }) {
             <span className="stack-nav-icon">◯</span>
             アカウント
           </button>
+
+          {data?.user?.isAdmin && (
+            <button
+              onClick={() => {
+                window.history.pushState({}, '', '/')
+                window.location.hash = '/admin'
+              }}
+            >
+              <span className="stack-nav-icon">⚙</span>
+              管理画面
+            </button>
+          )}
         </nav>
 
         <div className="stack-sidebar-bottom">
