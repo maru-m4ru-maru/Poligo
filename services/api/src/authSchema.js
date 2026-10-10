@@ -3,10 +3,12 @@ export async function ensureUserUsernameColumn(database) {
   let columns = await columnsStatement.all()
 
   if (!columns.some(column => column.name === 'username')) {
-    await database.execute({
-      sql: 'ALTER TABLE "user" ADD COLUMN username TEXT',
-      args: []
-    })
+    await database.batch([
+      {
+        sql: 'ALTER TABLE "user" ADD COLUMN username TEXT',
+        args: []
+      }
+    ], 'immediate')
 
     columnsStatement = await database.prepare('PRAGMA table_info("user")')
     columns = await columnsStatement.all()

@@ -3640,10 +3640,12 @@ async function handleAdminUsersRequest(request, response) {
     parts.length === 4 &&
     parts[2] === 'announcements'
   ) {
-    const result = await database.execute({
-      sql: 'UPDATE announcements SET active = 0 WHERE id = ? AND active = 1',
-      args: [parts[3]]
-    })
+    const [result] = await database.batch([
+      {
+        sql: 'UPDATE announcements SET active = 0 WHERE id = ? AND active = 1',
+        args: [parts[3]]
+      }
+    ], 'immediate')
 
     if (Number(result.rowsAffected) !== 1) {
       send(response, 404, { error: 'announcement not found' })
