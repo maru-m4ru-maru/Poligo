@@ -120,3 +120,12 @@ jobs:
           name: poligo-terminal-production-e2e-failure
           path: poligo-terminal-production-e2e-failure.png
           if-no-files-found: ignore
+
+      - name: Clean up disposable E2E accounts and projects
+        if: always()
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          POLIGO_ADMIN_EMAIL: ${{ secrets.POLIGO_ADMIN_EMAIL }}
+          POLIGO_ADMIN_PASSWORD: ${{ secrets.POLIGO_ADMIN_PASSWORD }}
+          POLIGO_CLEANUP_EXECUTE: "1"
+        run: python -u tests/e2e/test_cleanup_disposable_accounts.py
