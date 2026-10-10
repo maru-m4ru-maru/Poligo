@@ -1,4 +1,9 @@
 import { betterAuth } from 'better-auth'
+import { APIError } from 'better-auth/api'
+import {
+  normalizeEmailAddress,
+  normalizeUsername
+} from './registrationPolicy.js'
 import { kyselyAdapter } from '@better-auth/kysely-adapter'
 import { LibsqlDialect } from '@libsql/kysely-libsql'
 import { Kysely } from 'kysely'
@@ -45,6 +50,79 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async user => {
+          let name
+          let email
+
+          try {
+            name = normalizeUsername(user.name)
+            email = normalizeEmailAddress(user.email)
+          } catch (error) {
+            throw new APIError('BAD_REQUEST', {
+              message: error instanceof Error
+                ? error.message
+                : '登録情報を確認してください。'
+            })
+          }
+
+          const authDatabase = getDatabase()
+          const emailMatches = await authDatabase.prepare(
+            'SELECT id FROM "user" WHERE lower(email) = lower(?) LIMIT 1'
+          )
+          const existingEmails = await emailMatches.all([email])
+
+          if (existingEmails.length) {
+            throw new APIError('BAD_REQUEST', {
+              message: 'このメールアドレスはすでに登録されています。'
+            })
+          }
+
+          const nameMatches = await authDatabase.prepare(
+            'SELECT id FROM "user" WHERE lower(name) = lower(?) LIMIT 1'
+          )
+          const existingNames = await nameMatches.all([name])
+
+          if (existingNames.length) {
+            throw new APIError('BAD_REQUEST', {
+              message: 'このユーザー名はすでに使用されています。'
+            })
+          }
+
+          return {
+            data: {
+              ...user,
+              name,
+              email
+            }
+          }
+        }
+      }
+    },
+    session: {
+      create: {
+        before: async session => {
+          const authDatabase = getDatabase()
+          const bannedStatement = await authDatabase.prepare(
+            'SELECT user_id FROM user_bans WHERE user_id = ? LIMIT 1'
+          )
+          const bannedUsers = await bannedStatement.all([session.userId])
+
+          if (bannedUsers.length) {
+            throw new APIError('FORBIDDEN', {
+              message: 'このアカウントは停止されています。運営へお問い合わせください。'
+            })
+          }
+
+          return {
+            data: session
+          }
+        }
+      }
+    }
   }
 })
 
