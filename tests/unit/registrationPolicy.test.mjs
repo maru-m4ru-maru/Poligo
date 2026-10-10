@@ -5,15 +5,23 @@ import {
   normalizeUsername
 } from '../../services/api/src/registrationPolicy.js'
 
-test('normalizes usernames without silently changing their display case', () => {
-  assert.equal(normalizeUsername('  maru_m4ru_maru  '), 'maru_m4ru_maru')
+test('accepts usernames with letters, numbers, and underscores', () => {
+  assert.equal(normalizeUsername('maru_m4ru_maru'), 'maru_m4ru_maru')
+  assert.equal(normalizeUsername('ABC_123'), 'ABC_123')
 })
 
-test('rejects empty, overlong, and control-character usernames', () => {
-  assert.throws(() => normalizeUsername(' '), /ユーザー名/)
-  assert.throws(() => normalizeUsername('x'), /ユーザー名/)
-  assert.throws(() => normalizeUsername('a'.repeat(65)), /ユーザー名/)
-  assert.throws(() => normalizeUsername('ok\nnot-ok'), /ユーザー名/)
+test('rejects invalid, short, overlong, or whitespace usernames', () => {
+  for (const username of [
+    '',
+    'ab',
+    'user name',
+    'username-',
+    '名前',
+    'a'.repeat(33),
+    'ok\nnot-ok'
+  ]) {
+    assert.throws(() => normalizeUsername(username), /ユーザー名/)
+  }
 })
 
 test('normalizes valid email addresses to lowercase', () => {
