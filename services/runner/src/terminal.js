@@ -480,7 +480,8 @@ async function createTerminal({
       socket: null,
       outputBuffer: '',
       createdAt: new Date().toISOString(),
-      lastUsedAt: Date.now()
+      lastUsedAt: Date.now(),
+      disconnectedAt: new Date().toISOString()
     }
 
     sessions.set(terminalId, session)
@@ -601,6 +602,7 @@ export async function attachTerminalSocket(id, socket) {
   }
 
   session.socket = socket
+  session.disconnectedAt = null
   session.lastUsedAt = Date.now()
 
   if (session.outputBuffer) {
@@ -656,6 +658,14 @@ export async function attachTerminalSocket(id, socket) {
   socket.on('close', () => {
     if (session.socket === socket) {
       session.socket = null
+      session.disconnectedAt = new Date().toISOString()
+    }
+  })
+
+  socket.on('error', () => {
+    if (session.socket === socket) {
+      session.socket = null
+      session.disconnectedAt = new Date().toISOString()
     }
   })
 }
@@ -664,6 +674,8 @@ export function listTerminals() {
   return [...sessions.values()].map(session => ({
     id: session.id,
     createdAt: session.createdAt,
-    lastUsedAt: new Date(session.lastUsedAt).toISOString()
+    lastUsedAt: new Date(session.lastUsedAt).toISOString(),
+    connected: Boolean(session.socket && session.socket.readyState === 1),
+    disconnectedAt: session.disconnectedAt
   }))
 }

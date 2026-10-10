@@ -9,7 +9,8 @@ const {
   attachTerminalSocket,
   closeTerminal,
   createTerminalSession,
-  getTerminalFiles
+  getTerminalFiles,
+  listTerminals
 } = terminalBackend
 import { enqueueJob, getJob, listExecutionLanguages } from './executor.js'
 
@@ -77,6 +78,16 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'GET' && request.url === '/v1/languages') {
     send(response, 200, {
       languages: listExecutionLanguages()
+    })
+    return
+  }
+
+  if (
+    request.method === 'GET' &&
+    request.url === '/v1/terminals'
+  ) {
+    send(response, 200, {
+      terminals: listTerminals()
     })
     return
   }

@@ -742,6 +742,44 @@ def main():
                 flush=True
             )
 
+            print("STEP: resume the existing terminal session after browser reload", flush=True)
+            page.reload(
+                wait_until="domcontentloaded",
+                timeout=60_000
+            )
+            page.wait_for_url(
+                "**/#/ide/*",
+                timeout=60_000
+            )
+            expect(
+                page.get_by_text("main.ts", exact=True).last
+            ).to_be_visible(timeout=30_000)
+            page.locator(".bottom-tab").filter(
+                has_text="ターミナル"
+            ).click()
+            page.wait_for_function(
+                "() => Boolean(window.__POLIGO_E2E_TERMINAL__)",
+                timeout=15_000
+            )
+            wait_for_terminal(page, timeout=60, retry_capacity=False)
+
+            reloaded_status = terminal_status(page) or {}
+
+            if reloaded_status.get("sessionId") != original_session_id:
+                raise AssertionError(
+                    "Browser reload did not resume the existing terminal session"
+                )
+
+            run_command(
+                page,
+                "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'BROWSER_RELOAD_SESSION_OK\\\\n'",
+                "BROWSER_RELOAD_SESSION_OK"
+            )
+            print(
+                "PASS: browser reload resumed the existing terminal session and retained its files",
+                flush=True
+            )
+
             print("STEP: recover after the previous Runner session was removed", flush=True)
             stale_status = terminal_status(page) or {}
             stale_session_id = stale_status.get("sessionId")

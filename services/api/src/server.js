@@ -53,6 +53,7 @@ const executionOwners = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
 const TERMINAL_RECORD_TTL_MS = 30 * 60 * 1000
+const TERMINAL_CAPACITY_RECLAIM_IDLE_MS = Number(process.env.TERMINAL_CAPACITY_RECLAIM_IDLE_MS || 30_000)
 
 const executionCleanupTimer = setInterval(() => {
   const now = Date.now()
@@ -4082,6 +4083,89 @@ async function syncTerminalNow(id, clientFiles) {
   }
 }
 
+async function reclaimDisconnectedTerminalForCapacity() {
+  let snapshot
+
+  try {
+    snapshot = await runnerTerminalRequest('/v1/terminals')
+  } catch {
+    return false
+  }
+
+  const now = Date.now()
+  const candidates = (Array.isArray(snapshot.terminals) ? snapshot.terminals : [])
+    .filter(terminal => {
+      if (
+        typeof terminal?.id !== 'string' ||
+        typeof terminal.disconnectedAt !== 'string'
+      ) {
+        return false
+      }
+
+      const disconnectedAt = Date.parse(terminal.disconnectedAt)
+
+      return Number.isFinite(disconnectedAt) &&
+        now - disconnectedAt >= TERMINAL_CAPACITY_RECLAIM_IDLE_MS
+    })
+    .sort((left, right) =>
+      Date.parse(left.disconnectedAt) - Date.parse(right.disconnectedAt)
+    )
+
+  for (const candidate of candidates) {
+    let owner
+
+    try {
+      owner = await readStoredTerminalOwner(candidate.id)
+    } catch {
+      continue
+    }
+
+    if (owner && owner.expiresAt > Date.now()) {
+      try {
+        const syncResult = await syncTerminal(candidate.id)
+
+        if (!syncResult) {
+          continue
+        }
+      } catch {
+        continue
+      }
+    }
+
+    try {
+      const currentOwner = terminalOwners.get(candidate.id) || owner
+
+      if (currentOwner) {
+        const cleaned = await expireTerminalOwner(candidate.id, currentOwner)
+
+        if (!cleaned) {
+          continue
+        }
+      } else {
+        await runnerTerminalRequest(
+          '/v1/terminals/' + encodeURIComponent(candidate.id),
+          {
+            method: 'DELETE'
+          }
+        )
+      }
+
+      console.warn('Terminal capacity reclaimed a disconnected session', {
+        id: candidate.id
+      })
+
+      return true
+    } catch (error) {
+      console.error('Terminal capacity reclamation failed', {
+        id: candidate.id,
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  return false
+}
+
 async function handleTerminalCreate(request, response) {
   const session = await getSession(request)
 
@@ -4127,7 +4211,7 @@ async function handleTerminalCreate(request, response) {
   let runnerSessionCreated = false
 
   try {
-    const result = await runnerTerminalRequest(
+    const createRunnerSession = () => runnerTerminalRequest(
       '/v1/terminals',
       {
         method: 'POST',
@@ -4140,6 +4224,25 @@ async function handleTerminalCreate(request, response) {
         })
       }
     )
+
+    let result
+
+    try {
+      result = await createRunnerSession()
+    } catch (error) {
+      if (error?.statusCode !== 429) {
+        throw error
+      }
+
+      const reclaimed = await reclaimDisconnectedTerminalForCapacity()
+
+      if (!reclaimed) {
+        throw error
+      }
+
+      result = await createRunnerSession()
+    }
+
     runnerSessionCreated = true
 
     const websocketTicket = randomBytes(32).toString('base64url')

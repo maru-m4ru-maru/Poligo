@@ -274,7 +274,31 @@ async function run() {
     throw new Error('initial workspace files are incorrect: ' + initial.text)
   }
 
+  const initialSessionSnapshot = await request('/v1/terminals')
+  const initialSessionStatus = initialSessionSnapshot.body?.terminals?.find(item => item.id === firstId)
+
+  if (
+    initialSessionSnapshot.status !== 200 ||
+    !initialSessionStatus ||
+    initialSessionStatus.connected !== false ||
+    typeof initialSessionStatus.disconnectedAt !== 'string'
+  ) {
+    throw new Error('runner session status did not report an unattached terminal')
+  }
+
   const first = await openSocket(firstId)
+  const connectedSessionSnapshot = await request('/v1/terminals')
+  const connectedSessionStatus = connectedSessionSnapshot.body?.terminals?.find(item => item.id === firstId)
+
+  if (
+    connectedSessionSnapshot.status !== 200 ||
+    !connectedSessionStatus ||
+    connectedSessionStatus.connected !== true ||
+    connectedSessionStatus.disconnectedAt !== null
+  ) {
+    throw new Error('runner session status did not report an attached terminal')
+  }
+
   first.terminalId = firstId
   first.send(JSON.stringify({
     type: 'resize',

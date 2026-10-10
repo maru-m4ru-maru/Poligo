@@ -486,6 +486,7 @@ export async function createTerminalSession({
     outputBuffer: '',
     createdAt: Date.now(),
     lastUsedAt: Date.now(),
+    disconnectedAt: new Date().toISOString(),
     closing: false,
     exited: false
   }
@@ -602,6 +603,7 @@ export async function attachTerminalSocket(id, socket) {
   }
 
   session.socket = socket
+  session.disconnectedAt = null
   session.lastUsedAt = Date.now()
 
   if (session.outputBuffer) {
@@ -653,12 +655,14 @@ export async function attachTerminalSocket(id, socket) {
   socket.on('close', () => {
     if (session.socket === socket) {
       session.socket = null
+      session.disconnectedAt = new Date().toISOString()
     }
   })
 
   socket.on('error', () => {
     if (session.socket === socket) {
       session.socket = null
+      session.disconnectedAt = new Date().toISOString()
     }
   })
 }
@@ -668,6 +672,8 @@ export function listTerminals() {
     id: session.id,
     createdAt: new Date(session.createdAt).toISOString(),
     lastUsedAt: new Date(session.lastUsedAt).toISOString(),
+    connected: Boolean(session.socket && session.socket.readyState === 1),
+    disconnectedAt: session.disconnectedAt,
     exited: session.exited
   }))
 }

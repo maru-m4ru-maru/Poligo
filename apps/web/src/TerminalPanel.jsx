@@ -25,7 +25,6 @@ const TerminalPanel = forwardRef(function TerminalPanel(
   const socketRef = useRef(null)
   const sessionIdRef = useRef('')
   const connectingRef = useRef(false)
-  const reconnectRequestedRef = useRef(false)
   const reuseExistingSessionRef = useRef(false)
   const activeRef = useRef(active)
   const pendingInputRef = useRef('')
@@ -260,8 +259,20 @@ const TerminalPanel = forwardRef(function TerminalPanel(
     let keepaliveTimer = null
     let syncTimer = null
     let syncInFlight = false
+    const storageKey = projectId
+      ? 'poligo-terminal-session:' + projectId
+      : ''
 
     async function connect() {
+      if (!sessionIdRef.current && storageKey) {
+        const savedSessionId = window.sessionStorage.getItem(storageKey)
+
+        if (savedSessionId) {
+          sessionIdRef.current = savedSessionId
+          reuseExistingSessionRef.current = true
+        }
+      }
+
       if (
         cancelled ||
         !projectId ||
@@ -306,12 +317,13 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
         let body = await response.json().catch(() => null)
 
-        if (reconnecting && response.status === 410) {
+        if (reconnecting && (response.status === 410 || response.status === 403)) {
           if (cancelled) {
             return
           }
 
           reconnecting = false
+          window.sessionStorage.removeItem(storageKey)
           reuseExistingSessionRef.current = false
           sessionIdRef.current = ''
           terminal.writeln(
@@ -358,16 +370,11 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           throw new Error('terminal reconnect returned a different session')
         }
 
+        window.sessionStorage.setItem(storageKey, body.id)
+
         if (cancelled) {
-          fetch(
-            apiUrl + '/api/terminal/sessions/' +
-              encodeURIComponent(body.id),
-            {
-              method: 'DELETE',
-              credentials: 'include',
-              keepalive: true
-            }
-          ).catch(() => {})
+          sessionIdRef.current = ''
+          reuseExistingSessionRef.current = false
           return
         }
 
@@ -633,41 +640,21 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         window.clearInterval(syncTimer)
       }
 
-      const socket = socketRef.current
       const sessionId = sessionIdRef.current
-      const preserveSession = Boolean(
-        reconnectRequestedRef.current &&
-        sessionId
-      )
 
-      if (preserveSession) {
-        reuseExistingSessionRef.current = true
-        reconnectRequestedRef.current = false
+      if (sessionId && storageKey) {
+        window.sessionStorage.setItem(storageKey, sessionId)
       }
+
+      const socket = socketRef.current
 
       if (socket) {
         socket.close()
       }
 
       socketRef.current = null
-
-      if (sessionId && !preserveSession) {
-        fetch(
-          apiUrl + '/api/terminal/sessions/' +
-            encodeURIComponent(sessionId),
-          {
-            method: 'DELETE',
-            credentials: 'include',
-            keepalive: true
-          }
-        ).catch(() => {})
-      }
-
-      if (!preserveSession) {
-        sessionIdRef.current = ''
-        reuseExistingSessionRef.current = false
-      }
-
+      sessionIdRef.current = ''
+      reuseExistingSessionRef.current = false
       connectingRef.current = false
     }
   }, [apiUrl, projectId, connectionAttempt])
@@ -693,9 +680,6 @@ const TerminalPanel = forwardRef(function TerminalPanel(
           <button
             type="button"
             onClick={() => {
-              reconnectRequestedRef.current =
-                connectionStatusRef.current === 'error' &&
-                Boolean(sessionIdRef.current)
               updateConnectionStatus('connecting')
               setConnectionAttempt(value => value + 1)
             }}
