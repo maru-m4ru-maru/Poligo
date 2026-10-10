@@ -113,7 +113,7 @@ def main():
     token = uuid.uuid4().hex
     test_email_prefix = "poligo-e2e-" + token
     candidate_emails = [
-        test_email_prefix + "@example.org",
+        test_email_prefix + "@gmail.com",
         test_email_prefix + "@mailinator.com"
     ]
     announcement_ids = []
@@ -215,13 +215,16 @@ def main():
                 wait_until="domcontentloaded",
                 timeout=60_000
             )
-            unique_username = "poligo_" + token[:16]
+            duplicate_email_username = "poligo_email_" + token[:12]
+            duplicate_name_email = test_email_prefix + "@gmail.com"
+            malformed_email_username = "poligo_bad_" + token[:12]
+            disposable_email_username = "poligo_temp_" + token[:12]
             signup_password = "E2E-NotARealAccount-2026!"
 
             duplicate_email = signup_attempt(
                 signup_page,
                 "Duplicate email test",
-                unique_username,
+                duplicate_email_username,
                 ADMIN_EMAIL,
                 signup_password
             )
@@ -231,7 +234,7 @@ def main():
                 signup_page,
                 "Duplicate username test",
                 duplicate_username,
-                candidate_emails[0],
+                duplicate_name_email,
                 signup_password
             )
             expect_rejected(
@@ -242,7 +245,7 @@ def main():
             malformed_email = signup_attempt(
                 signup_page,
                 "Malformed email test",
-                unique_username,
+                malformed_email_username,
                 "not-an-email",
                 signup_password
             )
@@ -254,7 +257,7 @@ def main():
             disposable_email = signup_attempt(
                 signup_page,
                 "Disposable email test",
-                unique_username,
+                disposable_email_username,
                 candidate_emails[1],
                 signup_password
             )
