@@ -43,7 +43,7 @@ const TEMPLATES = [
     type: 'Node.js',
     categories: ['人気', 'バックエンド', 'ネイティブ言語'],
     files: {
-      'main.js': 'import process from "node:process"\nimport { readFile } from "node:fs/promises"\n\nconst name = process.argv[2] || "World"\nconsole.log(`Hello, ${name} from Node.js ${process.versions.node}`)\nconsole.log("Current directory:", process.cwd())',
+      'main.js': 'import process from "node:process"\n\nconst name = process.argv[2] || "World"\nconsole.log(`Hello, ${name} from Node.js ${process.versions.node}`)\nconsole.log("Current directory:", process.cwd())',
       'package.json': JSON.stringify({
         name: 'poligo-node-app',
         version: '1.0.0',
