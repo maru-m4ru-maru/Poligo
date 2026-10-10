@@ -3509,6 +3509,7 @@ async function handleAdminUsersRequest(request, response) {
       `SELECT
         u.id,
         u.name,
+        u.username,
         u.email,
         u.createdAt,
         u.updatedAt,
@@ -3533,6 +3534,7 @@ async function handleAdminUsersRequest(request, response) {
       users: rows.map(row => ({
         id: row.id,
         name: row.name,
+        username: row.username || '',
         email: row.email,
         createdAt: Number(row.createdAt),
         updatedAt: Number(row.updatedAt),
