@@ -7140,15 +7140,16 @@ body {
 
 .admin-user-list {
   display: grid;
-  gap: 10px;
+  gap: 0;
 }
 
 .admin-user-card {
   min-width: 0;
-  padding: 16px;
-  border: 1px solid #202d40;
-  border-radius: 9px;
-  background: #080e15;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid #202d40;
+  border-radius: 0;
+  background: transparent;
 }
 
 .admin-user-identity {
