@@ -448,6 +448,10 @@ export default function AccountPage({ session }) {
 
             <div className="account-settings-profile">
               <div className="account-settings-profile-row">
+                <span>ユーザー名</span>
+                <strong>{session?.user?.username || '未設定'}</strong>
+              </div>
+              <div className="account-settings-profile-row">
                 <span>表示名</span>
                 <strong>{session?.user?.name || '未設定'}</strong>
               </div>
