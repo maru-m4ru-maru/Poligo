@@ -296,7 +296,8 @@ async function executeJob(job) {
       stream: true,
       stdin: true,
       stdout: false,
-      stderr: false
+      stderr: false,
+      hijack: true
     })
 
     job.status = 'running'
