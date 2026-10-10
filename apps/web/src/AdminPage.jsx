@@ -295,7 +295,7 @@ export default function AdminPage({ session }) {
             アカウント
           </button>
           <button className="active" type="button">
-            <span className="stack-nav-icon">⚙</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/admin-panel.svg" alt="" aria-hidden="true" /></span>
             管理画面
           </button>
         </nav>

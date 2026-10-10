@@ -2300,10 +2300,22 @@ body {
 }
 
 .stack-nav-icon {
-  width: 17px;
+  display: inline-flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   color: #6686b5;
   text-align: center;
   font-size: 14px;
+}
+
+.stack-nav-image-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
 }
 
 .stack-sidebar-bottom {

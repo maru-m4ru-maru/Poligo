@@ -50,6 +50,7 @@ const MAX_EXECUTION_ARGUMENTS = 32
 const MAX_EXECUTION_ARGUMENT_BYTES = 512
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
+let databaseInitializationPromise = Promise.resolve(false)
 const executionRateState = new Map()
 const executionOwners = new Map()
 const terminalOwners = new Map()
@@ -5543,6 +5544,15 @@ const server = http.createServer(async (request, response) => {
     request.url.startsWith('/api/admin/announcements/')
   ) {
     try {
+      const databaseReady = await databaseInitializationPromise
+
+      if (!databaseReady) {
+        send(response, 503, {
+          error: 'database initialization incomplete'
+        })
+        return
+      }
+
       await handleAdminUsersRequest(request, response)
     } catch (error) {
       const message = error instanceof Error
@@ -6162,25 +6172,27 @@ async function cleanupDisposableE2EAccountsOnStartup() {
 server.listen(port, '0.0.0.0', () => {
   console.log('Poligo API listening on ' + port)
 
-  initializeDatabase()
-    .then(async initialized => {
-      console.log('Poligo database ' + (initialized ? 'ready' : 'not configured'))
+  databaseInitializationPromise = (async () => {
+    const initialized = await initializeDatabase()
+    console.log('Poligo database ' + (initialized ? 'ready' : 'not configured'))
 
-      if (initialized) {
-        await initializeAuthDatabase()
-        await restoreTerminalOwners()
-        console.log('Poligo authentication database ready')
-        console.log('Poligo terminal sessions restored')
+    if (initialized) {
+      await initializeAuthDatabase()
+      await restoreTerminalOwners()
+      console.log('Poligo authentication database ready')
+      console.log('Poligo terminal sessions restored')
 
-        if (process.env.POLIGO_CLEANUP_DISPOSABLE_E2E_ACCOUNTS_ON_START === '1') {
-          await cleanupDisposableE2EAccountsOnStartup()
-        }
+      if (process.env.POLIGO_CLEANUP_DISPOSABLE_E2E_ACCOUNTS_ON_START === '1') {
+        await cleanupDisposableE2EAccountsOnStartup()
       }
-    })
-    .catch(error => {
-      console.error(
-        'Poligo database initialization failed: ' +
-        (error instanceof Error ? error.message : String(error))
-      )
-    })
+    }
+
+    return initialized
+  })().catch(error => {
+    console.error(
+      'Poligo database initialization failed: ' +
+      (error instanceof Error ? error.message : String(error))
+    )
+    return false
+  })
 })

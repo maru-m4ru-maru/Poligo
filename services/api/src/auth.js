@@ -9,6 +9,7 @@ import { kyselyAdapter } from '@better-auth/kysely-adapter'
 import { LibsqlDialect } from '@libsql/kysely-libsql'
 import { Kysely } from 'kysely'
 import { getDatabase } from './turso.js'
+import { ensureUserUsernameColumn } from './authSchema.js'
 
 const databaseUrl = process.env.TURSO_DATABASE_URL || ''
 const databaseToken = process.env.TURSO_AUTH_TOKEN || ''
@@ -244,18 +245,7 @@ export async function initializeAuthDatabase() {
     )`
   ], 'immediate')
 
-  try {
-    await database.execute({
-      sql: 'ALTER TABLE "user" ADD COLUMN username TEXT',
-      args: []
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-
-    if (!/duplicate column name|already exists/i.test(message)) {
-      throw error
-    }
-  }
+  await ensureUserUsernameColumn(database)
 
   await database.batch([
     {

@@ -582,7 +582,7 @@ export default function Dashboard({ session }) {
                 window.location.hash = '/admin'
               }}
             >
-              <span className="stack-nav-icon">⚙</span>
+              <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/admin-panel.svg" alt="" aria-hidden="true" /></span>
               管理画面
             </button>
           )}
