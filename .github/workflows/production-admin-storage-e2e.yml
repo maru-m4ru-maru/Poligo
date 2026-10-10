@@ -6,7 +6,7 @@ on:
 jobs:
   production-admin-storage-e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
 
@@ -48,3 +48,12 @@ jobs:
           POLIGO_TARGET_USER_EMAIL: ${{ secrets.POLIGO_TARGET_USER_EMAIL }}
           POLIGO_TARGET_USER_PASSWORD: ${{ secrets.POLIGO_TARGET_USER_PASSWORD }}
         run: python tests/e2e/test_admin_storage_limit.py
+
+      - name: Run production admin and registration E2E
+        env:
+          POLIGO_WEB_URL: https://poligo-web-2n2l.onrender.com
+          POLIGO_ADMIN_EMAIL: ${{ secrets.POLIGO_ADMIN_EMAIL }}
+          POLIGO_ADMIN_PASSWORD: ${{ secrets.POLIGO_ADMIN_PASSWORD }}
+          POLIGO_TARGET_USER_EMAIL: ${{ secrets.POLIGO_TARGET_USER_EMAIL }}
+          POLIGO_TARGET_USER_PASSWORD: ${{ secrets.POLIGO_TARGET_USER_PASSWORD }}
+        run: python tests/e2e/test_admin_controls_production.py
