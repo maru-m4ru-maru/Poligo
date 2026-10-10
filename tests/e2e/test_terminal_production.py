@@ -812,7 +812,7 @@ def main():
 
             run_command(
                 page,
-                "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'BROWSER_RELOAD_SESSION_OK\\nn'",
+                "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'BROWSER_RELOAD_SESSION_OK\\n'",
                 "BROWSER_RELOAD_SESSION_OK"
             )
             print(
