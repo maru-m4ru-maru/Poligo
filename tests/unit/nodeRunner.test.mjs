@@ -220,4 +220,34 @@ test('Node.js executes inside the isolated Docker sandbox', {
     assert.equal(stdinResult.status, 'failed')
     assert.match(stdinResult.result.stderr, /execution stdin must be text/)
   })
+ 
+  await t.test('missing entrypoints, unknown languages and oversized stdin fail before execution', async () => {
+    const missingEntrypoint = enqueueJob({
+      language: 'node',
+      entrypoint: 'missing.js',
+      files: { 'main.js': 'console.log("no")' }
+    })
+    const missingResult = await waitForJob(missingEntrypoint.id)
+    assert.equal(missingResult.status, 'failed')
+    assert.match(missingResult.result.stderr, /entrypoint file not found/)
+
+    const unknownLanguage = enqueueJob({
+      language: 'not-a-language',
+      entrypoint: 'main.js',
+      files: { 'main.js': 'console.log("no")' }
+    })
+    const languageResult = await waitForJob(unknownLanguage.id)
+    assert.equal(languageResult.status, 'failed')
+    assert.match(languageResult.result.stderr, /unsupported language/)
+
+    const oversizedStdin = enqueueJob({
+      language: 'node',
+      entrypoint: 'main.js',
+      files: { 'main.js': 'console.log("no")' },
+      stdin: 'x'.repeat(1_000_001)
+    })
+    const stdinResult = await waitForJob(oversizedStdin.id)
+    assert.equal(stdinResult.status, 'failed')
+    assert.match(stdinResult.result.stderr, /execution stdin is too large/)
+  })
 })
