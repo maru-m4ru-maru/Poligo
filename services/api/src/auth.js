@@ -283,10 +283,12 @@ export async function initializeAuthDatabase() {
   if (duplicateEmailRows.length) {
     console.warn('A case-insensitive email index was not created because duplicate email addresses already exist.')
   } else {
-    await database.execute({
-      sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email_nocase
-        ON "user"(email COLLATE NOCASE)`,
-      args: []
-    })
+    await database.batch([
+      {
+        sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email_nocase
+          ON "user"(email COLLATE NOCASE)`,
+        args: []
+      }
+    ], 'immediate')
   }
 }
