@@ -206,7 +206,7 @@ def enter_stdin(page, text):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = f"poligo-rust-e2e-{suffix}@example.invalid"
+    email = f"poligo-rust-e2e-{suffix}@example.com"
     password = "PoligoRustE2E!" + uuid.uuid4().hex[:18]
 
     basic_rust = """fn main() {

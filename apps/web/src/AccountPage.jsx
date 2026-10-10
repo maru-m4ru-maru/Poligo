@@ -7,6 +7,7 @@ function navigate(path) {
   if (
     path === '/dashboard' ||
     path === '/account' ||
+    path === '/admin' ||
     path === '/ide' ||
     path.startsWith('/ide/')
   ) {
@@ -344,6 +345,13 @@ export default function AccountPage({ session }) {
             <span className="stack-nav-icon">◯</span>
             アカウント
           </button>
+
+          {isAdmin && (
+            <button onClick={() => navigate('/admin')}>
+              <span className="stack-nav-icon">⚙</span>
+              管理画面
+            </button>
+          )}
         </nav>
 
         <div className="stack-sidebar-bottom">
@@ -439,6 +447,10 @@ export default function AccountPage({ session }) {
             </div>
 
             <div className="account-settings-profile">
+              <div className="account-settings-profile-row">
+                <span>ユーザー名</span>
+                <strong>{session?.user?.username || '未設定'}</strong>
+              </div>
               <div className="account-settings-profile-row">
                 <span>表示名</span>
                 <strong>{session?.user?.name || '未設定'}</strong>

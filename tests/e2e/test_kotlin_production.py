@@ -206,7 +206,7 @@ def enter_stdin(page, text):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = f"poligo-kotlin-e2e-{suffix}@example.invalid"
+    email = f"poligo-kotlin-e2e-{suffix}@example.com"
     password = "PoligoKotlinE2E!" + uuid.uuid4().hex[:18]
     env_marker = "/tmp/kotlin-e2e-" + suffix + "-env"
     arg_marker = "/tmp/kotlin-e2e-" + suffix + "-arg"

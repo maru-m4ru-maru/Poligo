@@ -9,5 +9,8 @@
     "dev:api": "pnpm --dir services/api dev",
     "dev:runner": "pnpm --dir services/runner dev",
     "build": "pnpm build:web"
+  },
+  "dependencies": {
+    "email-disposable": "1.0.108"
   }
 }

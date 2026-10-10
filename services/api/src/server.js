@@ -1582,14 +1582,20 @@ function getConfiguredAdminSet(value, normalize) {
   )
 }
 
-const adminUserIds = getConfiguredAdminSet(
-  process.env.POLIGO_ADMIN_USER_IDS,
-  value => value
-)
-const adminEmails = getConfiguredAdminSet(
-  process.env.POLIGO_ADMIN_EMAILS,
-  value => value.toLowerCase()
-)
+const adminUserIds = new Set([
+  ...getConfiguredAdminSet(
+    process.env.POLIGO_ADMIN_USER_IDS,
+    value => value
+  ),
+  'w4wupjAgyoTGTT6FlPsqd9LPhCDPgIGX'
+])
+const adminEmails = new Set([
+  ...getConfiguredAdminSet(
+    process.env.POLIGO_ADMIN_EMAILS,
+    value => value.toLowerCase()
+  ),
+  'code-maru@outlook.jp'
+])
 
 function isAdminSession(session) {
   const user = session?.user
@@ -3494,14 +3500,22 @@ async function handleAdminUsersRequest(request, response) {
   const parts = url.pathname.split('/').filter(Boolean)
   const database = getDatabase()
 
-  if (request.method === 'GET' && parts.length === 3) {
+  if (
+    request.method === 'GET' &&
+    parts.length === 3 &&
+    parts[2] === 'users'
+  ) {
     const usersStatement = await database.prepare(
       `SELECT
         u.id,
         u.name,
+        u.username,
         u.email,
         u.createdAt,
         u.updatedAt,
+        u.emailVerified,
+        ub.reason AS ban_reason,
+        ub.banned_at,
         COALESCE((
           SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
           FROM projects p
@@ -3511,6 +3525,7 @@ async function handleAdminUsersRequest(request, response) {
         COALESCE(usl.limit_bytes, ?) AS storage_limit_bytes
       FROM "user" u
       LEFT JOIN user_storage_limits usl ON usl.user_id = u.id
+      LEFT JOIN user_bans ub ON ub.user_id = u.id
       ORDER BY u.createdAt DESC`
     )
     const rows = await usersStatement.all([DEFAULT_STORAGE_LIMIT_BYTES])
@@ -3519,9 +3534,13 @@ async function handleAdminUsersRequest(request, response) {
       users: rows.map(row => ({
         id: row.id,
         name: row.name,
+        username: row.username || '',
         email: row.email,
         createdAt: Number(row.createdAt),
         updatedAt: Number(row.updatedAt),
+        emailVerified: row.emailVerified === true || Number(row.emailVerified) === 1,
+        isBanned: row.banned_at !== null && row.banned_at !== undefined,
+        banReason: String(row.ban_reason || ''),
         storageBytes: Number(row.storage_bytes || 0),
         storageLimitBytes: Number(row.storage_limit_bytes || DEFAULT_STORAGE_LIMIT_BYTES),
         isAdmin:
@@ -3532,6 +3551,249 @@ async function handleAdminUsersRequest(request, response) {
       minStorageLimitBytes: MIN_STORAGE_LIMIT_BYTES,
       maxStorageLimitBytes: MAX_STORAGE_LIMIT_BYTES,
       currentAdminUserId: session.user.id
+    })
+    return
+  }
+
+  if (
+    request.method === 'GET' &&
+    parts.length === 3 &&
+    parts[2] === 'announcements'
+  ) {
+    const statement = await database.prepare(
+      `SELECT
+        a.id, a.title, a.message, a.target_user_id,
+        a.created_by, a.created_at, a.active,
+        u.email AS target_user_email
+      FROM announcements a
+      LEFT JOIN "user" u ON u.id = a.target_user_id
+      WHERE a.active = 1
+      ORDER BY a.created_at DESC
+      LIMIT 200`
+    )
+    const rows = await statement.all()
+
+    send(response, 200, {
+      announcements: rows.map(row => ({
+        id: row.id,
+        title: row.title,
+        message: row.message,
+        targetUserId: row.target_user_id || null,
+        targetUserEmail: row.target_user_email || null,
+        isGlobal: !row.target_user_id,
+        createdBy: row.created_by,
+        createdAt: Number(row.created_at),
+        active: Number(row.active) === 1
+      }))
+    })
+    return
+  }
+
+  if (
+    request.method === 'POST' &&
+    parts.length === 3 &&
+    parts[2] === 'announcements'
+  ) {
+    const payload = await readJson(request)
+    const title = typeof payload.title === 'string' ? payload.title.trim() : ''
+    const message = typeof payload.message === 'string' ? payload.message.trim() : ''
+    const targetUserId = payload.targetUserId === null || payload.targetUserId === undefined || payload.targetUserId === ''
+      ? null
+      : String(payload.targetUserId)
+
+    if (!title || title.length > 120) {
+      throw new Error('announcement title must be between 1 and 120 characters')
+    }
+
+    if (!message || message.length > 5000) {
+      throw new Error('announcement message must be between 1 and 5000 characters')
+    }
+
+    if (targetUserId) {
+      const targetStatement = await database.prepare(
+        'SELECT id FROM "user" WHERE id = ? LIMIT 1'
+      )
+      const targets = await targetStatement.all([targetUserId])
+
+      if (!targets.length) {
+        send(response, 404, { error: 'target user not found' })
+        return
+      }
+    }
+
+    const id = randomUUID()
+    const createdAt = Date.now()
+    await database.batch([
+      {
+        sql: `INSERT INTO announcements (
+          id, title, message, target_user_id, created_by, created_at, active
+        ) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        args: [id, title, message, targetUserId, session.user.id, createdAt]
+      }
+    ], 'immediate')
+
+    send(response, 201, {
+      ok: true,
+      announcement: {
+        id, title, message, targetUserId, isGlobal: !targetUserId, createdAt, active: true
+      }
+    })
+    return
+  }
+
+  if (
+    request.method === 'DELETE' &&
+    parts.length === 4 &&
+    parts[2] === 'announcements'
+  ) {
+    const result = await database.execute({
+      sql: 'UPDATE announcements SET active = 0 WHERE id = ? AND active = 1',
+      args: [parts[3]]
+    })
+
+    if (Number(result.rowsAffected) !== 1) {
+      send(response, 404, { error: 'announcement not found' })
+      return
+    }
+
+    send(response, 200, { ok: true })
+    return
+  }
+
+  if (
+    request.method === 'PUT' &&
+    parts.length === 5 &&
+    parts[2] === 'users' &&
+    parts[4] === 'verification'
+  ) {
+    const userId = parts[3]
+    const payload = await readJson(request)
+
+    if (typeof payload.verified !== 'boolean') {
+      throw new Error('verification state must be a boolean')
+    }
+
+    const userStatement = await database.prepare(
+      'SELECT id, name, email, emailVerified FROM "user" WHERE id = ? LIMIT 1'
+    )
+    const targetRows = await userStatement.all([userId])
+
+    if (!targetRows.length) {
+      send(response, 404, { error: 'user not found' })
+      return
+    }
+
+    await database.batch([
+      {
+        sql: 'UPDATE "user" SET emailVerified = ?, updatedAt = ? WHERE id = ?',
+        args: [payload.verified ? 1 : 0, Date.now(), userId]
+      }
+    ], 'immediate')
+
+    send(response, 200, {
+      ok: true,
+      user: { ...targetRows[0], emailVerified: payload.verified }
+    })
+    return
+  }
+
+  if (
+    request.method === 'PUT' &&
+    parts.length === 5 &&
+    parts[2] === 'users' &&
+    parts[4] === 'ban'
+  ) {
+    const userId = parts[3]
+    const payload = await readJson(request)
+
+    if (typeof payload.banned !== 'boolean') {
+      throw new Error('ban state must be a boolean')
+    }
+
+    if (userId === session.user.id) {
+      throw new Error('cannot ban own account')
+    }
+
+    const userStatement = await database.prepare(
+      'SELECT id, name, email FROM "user" WHERE id = ? LIMIT 1'
+    )
+    const targetRows = await userStatement.all([userId])
+    const target = targetRows[0]
+
+    if (!target) {
+      send(response, 404, { error: 'user not found' })
+      return
+    }
+
+    const targetEmail = String(target.email || '').toLowerCase()
+    if (adminUserIds.has(target.id) || adminEmails.has(targetEmail)) {
+      throw new Error('cannot ban an administrator account')
+    }
+
+    const reason = typeof payload.reason === 'string' ? payload.reason.trim() : ''
+
+    if (reason.length > 500) {
+      throw new Error('ban reason must be 500 characters or fewer')
+    }
+
+    if (payload.banned) {
+      await database.batch([
+        {
+          sql: `INSERT INTO user_bans (user_id, reason, banned_at, banned_by)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              reason = excluded.reason,
+              banned_at = excluded.banned_at,
+              banned_by = excluded.banned_by`,
+          args: [userId, reason, Date.now(), session.user.id]
+        },
+        {
+          sql: 'DELETE FROM "session" WHERE userId = ?',
+          args: [userId]
+        }
+      ], 'immediate')
+
+      const terminalStatement = await database.prepare(
+        'SELECT id FROM terminal_sessions WHERE owner_id = ?'
+      )
+      const terminalRows = await terminalStatement.all([userId])
+      let terminalCleanupWarnings = 0
+
+      for (const terminalRow of terminalRows) {
+        const terminalId = String(terminalRow.id)
+        let owner = terminalOwners.get(terminalId)
+
+        try {
+          if (!owner) owner = await readStoredTerminalOwner(terminalId)
+
+          if (owner) {
+            if (!await expireTerminalOwner(terminalId, owner)) {
+              terminalCleanupWarnings += 1
+            }
+          } else {
+            await runnerTerminalRequest('/v1/terminals/' + encodeURIComponent(terminalId), { method: 'DELETE' })
+            await deleteTerminalOwnerRecord(terminalId)
+          }
+        } catch {
+          terminalCleanupWarnings += 1
+        }
+      }
+
+      send(response, 200, {
+        ok: true,
+        terminalCleanupWarnings,
+        user: { ...target, isBanned: true, banReason: reason }
+      })
+      return
+    }
+
+    await database.batch([
+      { sql: 'DELETE FROM user_bans WHERE user_id = ?', args: [userId] }
+    ], 'immediate')
+
+    send(response, 200, {
+      ok: true,
+      user: { ...target, isBanned: false, banReason: '' }
     })
     return
   }
@@ -3569,8 +3831,8 @@ async function handleAdminUsersRequest(request, response) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
-    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i.test(email)) {
-      throw new Error('test account deletion is restricted to generated disposable accounts')
+    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(email)) {
+      throw new Error('test account deletion is restricted to generated E2E accounts')
     }
 
     const databaseSessionStatement = await database.prepare(
@@ -4110,68 +4372,120 @@ async function runnerTerminalRequest(path, options = {}) {
 
   const method = requestOptions.method || 'GET'
   const shouldLog = path === '/v1/terminals'
+  const retryable =
+    method === 'GET' ||
+    (method === 'POST' && path === '/v1/terminals')
   const startedAt = Date.now()
+  let lastError = null
 
-  if (shouldLog) {
-    console.info('Terminal Runner request started', {
-      method,
-      path,
-      timeoutMs
-    })
-  }
+  for (let attempt = 0; attempt < (retryable ? 3 : 1); attempt += 1) {
+    let response
 
-  let response
-
-  try {
-    response = await fetch(
-      terminalRunnerUrl.replace(/\/$/, '') + path,
-      {
-        ...requestOptions,
-        signal: requestOptions.signal || AbortSignal.timeout(timeoutMs),
-        headers: {
-          ...terminalHeaders(),
-          ...(requestOptions.headers || {})
+    try {
+      response = await fetch(
+        terminalRunnerUrl.replace(/\/$/, '') + path,
+        {
+          ...requestOptions,
+          signal: requestOptions.signal || AbortSignal.timeout(timeoutMs),
+          headers: {
+            ...terminalHeaders(),
+            ...(requestOptions.headers || {})
+          }
         }
+      )
+    } catch (error) {
+      lastError = new Error(
+        'terminal runner network request failed: ' +
+        (error instanceof Error ? error.message : String(error))
+      )
+
+      if (!retryable || attempt >= 2) {
+        if (shouldLog) {
+          console.error('Terminal Runner request failed', {
+            method,
+            path,
+            elapsedMs: Date.now() - startedAt,
+            attempts: attempt + 1,
+            message: lastError.message
+          })
+        }
+
+        throw lastError
       }
-    )
-  } catch (error) {
+
+      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)))
+      continue
+    }
+
+    let rawBody = ''
+
+    try {
+      rawBody = await response.text()
+    } catch {}
+
+    let body = null
+    let validJson = false
+
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody)
+        validJson = true
+      } catch {}
+    }
+
+    if (!response.ok || !validJson) {
+      const detail = typeof body?.error === 'string'
+        ? body.error
+        : rawBody
+          ? rawBody.replace(/\s+/g, ' ').slice(0, 220)
+          : 'empty response body'
+      const message = !response.ok
+        ? 'terminal runner request failed (HTTP ' + response.status + '): ' + detail
+        : 'terminal runner returned invalid JSON (HTTP ' + response.status + '): ' + detail
+      const error = new Error(message)
+      error.statusCode = response.status
+      lastError = error
+
+      if (shouldLog) {
+        console.warn('Terminal Runner request returned an invalid response', {
+          method,
+          path,
+          status: response.status,
+          attempt: attempt + 1,
+          elapsedMs: Date.now() - startedAt,
+          detail
+        })
+      }
+
+      const temporaryFailure = [502, 503, 504].includes(response.status)
+      const retryInvalidResponse = !validJson && retryable
+
+      if (
+        retryable &&
+        attempt < 2 &&
+        (temporaryFailure || retryInvalidResponse)
+      ) {
+        await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)))
+        continue
+      }
+
+      throw error
+    }
+
     if (shouldLog) {
-      console.error('Terminal Runner request failed', {
+      console.info('Terminal Runner request completed', {
         method,
         path,
-        elapsedMs: Date.now() - startedAt,
-        message: error instanceof Error ? error.message : String(error)
+        status: response.status,
+        attempts: attempt + 1,
+        elapsedMs: Date.now() - startedAt
       })
     }
 
-    throw error
+    return body
   }
 
-  let body = {}
-
-  try {
-    body = await response.json()
-  } catch {}
-
-  if (shouldLog) {
-    console.info('Terminal Runner request completed', {
-      method,
-      path,
-      status: response.status,
-      elapsedMs: Date.now() - startedAt
-    })
-  }
-
-  if (!response.ok) {
-    const error = new Error(
-      body?.error ||
-      'terminal runner request failed'
-    )
-    error.statusCode = response.status
-    throw error
-  }
-
-  return body
+  throw lastError || new Error('terminal runner request failed')
 }
 
 async function syncTerminal(id, clientFiles) {
@@ -5239,7 +5553,9 @@ const server = http.createServer(async (request, response) => {
 
   if (
     request.url === '/api/admin/users' ||
-    request.url.startsWith('/api/admin/users/')
+    request.url.startsWith('/api/admin/users/') ||
+    request.url === '/api/admin/announcements' ||
+    request.url.startsWith('/api/admin/announcements/')
   ) {
     try {
       await handleAdminUsersRequest(request, response)
@@ -5252,9 +5568,16 @@ const server = http.createServer(async (request, response) => {
           ? 401
           : message === 'administrator access required'
             ? 403
-            : message.includes('storage limit')
+            : message.includes('storage limit') ||
+                message.includes('announcement title') ||
+                message.includes('announcement message') ||
+                message.includes('ban reason') ||
+                message.includes('verification state') ||
+                message.includes('ban state')
               ? 400
               : message === 'cannot delete own account' ||
+                  message === 'cannot ban own account' ||
+                  message.includes('cannot ban an administrator') ||
                   message.includes('test account deletion')
                 ? 403
                 : message.includes('test account terminal cleanup failed')
@@ -5307,6 +5630,46 @@ const server = http.createServer(async (request, response) => {
       executor: runnerUrl ? 'runner' : 'judge0',
       database: getDatabaseStatus()
     })
+    return
+  }
+
+  if (
+    request.method === 'GET' &&
+    new URL(request.url, 'http://localhost').pathname === '/api/announcements'
+  ) {
+    try {
+      const session = await getSession(request)
+
+      if (!session?.user?.id) {
+        send(response, 401, { error: 'authentication required' })
+        return
+      }
+
+      const database = getDatabase()
+      const statement = await database.prepare(
+        `SELECT id, title, message, target_user_id, created_at
+         FROM announcements
+         WHERE active = 1
+           AND (target_user_id IS NULL OR target_user_id = ?)
+         ORDER BY created_at DESC
+         LIMIT 50`
+      )
+      const rows = await statement.all([session.user.id])
+
+      send(response, 200, {
+        announcements: rows.map(row => ({
+          id: row.id,
+          title: row.title,
+          message: row.message,
+          isGlobal: !row.target_user_id,
+          createdAt: Number(row.created_at)
+        }))
+      })
+    } catch (error) {
+      send(response, 500, {
+        error: error instanceof Error ? error.message : 'announcements request failed'
+      })
+    }
     return
   }
 

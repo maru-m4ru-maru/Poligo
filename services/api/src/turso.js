@@ -80,6 +80,24 @@ export async function initializeDatabase() {
       )`,
       'CREATE INDEX IF NOT EXISTS idx_project_commits_project_id ON project_commits(project_id)',
       'CREATE INDEX IF NOT EXISTS idx_project_commit_files_commit_id ON project_commit_files(commit_id)',
+      `CREATE TABLE IF NOT EXISTS user_bans (
+        user_id TEXT PRIMARY KEY NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        banned_at INTEGER NOT NULL,
+        banned_by TEXT NOT NULL
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_user_bans_banned_at ON user_bans(banned_at)',
+      `CREATE TABLE IF NOT EXISTS announcements (
+        id TEXT PRIMARY KEY NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        target_user_id TEXT,
+        created_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1
+      )`,
+      'CREATE INDEX IF NOT EXISTS idx_announcements_active_created_at ON announcements(active, created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_announcements_target_user ON announcements(target_user_id)',
       `CREATE TABLE IF NOT EXISTS terminal_sessions (
         id TEXT PRIMARY KEY,
         owner_id TEXT NOT NULL,

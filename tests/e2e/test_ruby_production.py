@@ -206,7 +206,7 @@ def enter_stdin(page, text):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = f"poligo-ruby-e2e-{suffix}@example.invalid"
+    email = f"poligo-ruby-e2e-{suffix}@example.com"
     password = "PoligoRubyE2E!" + uuid.uuid4().hex[:18]
     env_marker = "/tmp/ruby-e2e-" + suffix + "-env"
     arg_marker = "/tmp/ruby-e2e-" + suffix + "-arg"

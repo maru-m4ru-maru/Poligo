@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { authClient } from './auth-client'
 import { deleteProject } from './projectStore'
+import AnnouncementsPanel from './AnnouncementsPanel'
 
 const TEMPLATES = [
   {
@@ -573,6 +574,18 @@ export default function Dashboard({ session }) {
             <span className="stack-nav-icon">◯</span>
             アカウント
           </button>
+
+          {data?.user?.isAdmin && (
+            <button
+              onClick={() => {
+                window.history.pushState({}, '', '/')
+                window.location.hash = '/admin'
+              }}
+            >
+              <span className="stack-nav-icon">⚙</span>
+              管理画面
+            </button>
+          )}
         </nav>
 
         <div className="stack-sidebar-bottom">
@@ -762,6 +775,7 @@ export default function Dashboard({ session }) {
         </header>
 
         <div className="stack-dashboard-content">
+          <AnnouncementsPanel />
           <section className="stack-welcome">
             <div>
               <span className="stack-eyebrow">POLIGO CLOUD</span>

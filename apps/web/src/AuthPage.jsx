@@ -5,6 +5,7 @@ export default function AuthPage({ mode }) {
   const isSignUp = mode === 'signup'
   const { isPending } = authClient.useSession()
   const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -28,6 +29,7 @@ export default function AuthPage({ mode }) {
       const result = isSignUp
         ? await authClient.signUp.email({
             name,
+            username,
             email,
             password
           })
@@ -78,15 +80,31 @@ export default function AuthPage({ mode }) {
 
         <form className="auth-page-form" onSubmit={submit}>
           {isSignUp && (
-            <label>
-              <span>表示名</span>
-              <input
-                value={name}
-                onChange={event => setName(event.target.value)}
-                autoComplete="name"
-                required
-              />
-            </label>
+            <>
+              <label>
+                <span>ユーザー名</span>
+                <input
+                  value={username}
+                  onChange={event => setUsername(event.target.value)}
+                  autoComplete="username"
+                  minLength={3}
+                  maxLength={32}
+                  pattern="[A-Za-z0-9_]{3,32}"
+                  title="英数字とアンダースコアを使って3〜32文字で入力してください"
+                  required
+                />
+              </label>
+              <label>
+                <span>表示名</span>
+                <input
+                  value={name}
+                  onChange={event => setName(event.target.value)}
+                  autoComplete="name"
+                  maxLength={80}
+                  required
+                />
+              </label>
+            </>
           )}
 
           <label>

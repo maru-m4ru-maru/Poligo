@@ -432,7 +432,7 @@ def test_one_time_websocket_ticket(page, project_id):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = "poligo-terminal-e2e-" + suffix + "@example.invalid"
+    email = "poligo-terminal-e2e-" + suffix + "@example.com"
     password = "PoligoTerminalE2E!" + uuid.uuid4().hex[:18]
     project_id = ""
 

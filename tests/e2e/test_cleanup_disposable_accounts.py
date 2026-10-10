@@ -12,7 +12,7 @@ ADMIN_EMAIL = os.getenv("POLIGO_ADMIN_EMAIL")
 ADMIN_PASSWORD = os.getenv("POLIGO_ADMIN_PASSWORD")
 EXECUTE_CLEANUP = os.getenv("POLIGO_CLEANUP_EXECUTE") == "1"
 DISPOSABLE_EMAIL = re.compile(
-    r"^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$",
+    r"^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$",
     re.IGNORECASE
 )
 
