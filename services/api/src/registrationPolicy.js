@@ -1,4 +1,58 @@
-import isDisposable from 'email-disposable'
+const DISPOSABLE_DOMAINS = new Set([
+  '10minutemail.com',
+  '20minutemail.com',
+  'burnermail.io',
+  'crazymailing.com',
+  'discard.email',
+  'dispostable.com',
+  'dropmail.me',
+  'emailfake.com',
+  'emailondeck.com',
+  'emailtemporanea.net',
+  'fakeinbox.com',
+  'getairmail.com',
+  'getnada.com',
+  'guerrillamail.com',
+  'guerrillamailblock.com',
+  'harakirimail.com',
+  'inboxkitten.com',
+  'mail7.io',
+  'mailcatch.com',
+  'maildrop.cc',
+  'mailinator.com',
+  'mailnesia.com',
+  'mailsac.com',
+  'mailpoof.com',
+  'mintemail.com',
+  'mohmal.com',
+  'mytemp.email',
+  'mytrashmail.com',
+  'nowmymail.com',
+  'sharklasers.com',
+  'spamgourmet.com',
+  'spambog.com',
+  'tempmail.com',
+  'tempmail.plus',
+  'tempmailo.com',
+  'temp-mail.org',
+  'tempail.com',
+  'tempr.email',
+  'throwawaymail.com',
+  'tmailor.com',
+  'tmail.ws',
+  'trashmail.com',
+  'yopmail.com'
+])
+
+let externalDisposableCheck = null
+
+try {
+  const module = await import('email-disposable')
+
+  if (typeof module.default === 'function') {
+    externalDisposableCheck = module.default
+  }
+} catch {}
 
 const EMAIL_LOCAL_PART = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/i
 const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
@@ -12,6 +66,29 @@ export function normalizeUsername(value) {
   }
 
   return value
+}
+
+function isDisposableEmailAddress(email) {
+  if (externalDisposableCheck) {
+    try {
+      if (externalDisposableCheck(email)) {
+        return true
+      }
+    } catch {}
+  }
+
+  const domain = email.split('@').at(-1).toLowerCase()
+
+  for (const disposableDomain of DISPOSABLE_DOMAINS) {
+    if (
+      domain === disposableDomain ||
+      domain.endsWith('.' + disposableDomain)
+    ) {
+      return true
+    }
+  }
+
+  return false
 }
 
 export function normalizeEmailAddress(value) {
@@ -63,7 +140,7 @@ export function normalizeEmailAddress(value) {
     throw new Error('メールアドレスの形式が正しくありません。')
   }
 
-  if (isDisposable(email)) {
+  if (isDisposableEmailAddress(email)) {
     throw new Error('使い捨てメールアドレスは登録に使用できません。')
   }
 
