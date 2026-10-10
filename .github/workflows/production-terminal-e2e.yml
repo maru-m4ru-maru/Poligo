@@ -13,6 +13,7 @@ on:
       - "render.yaml"
       - "services/runner/**"
       - "tests/e2e/test_terminal_production.py"
+      - "tests/e2e/test_cleanup_disposable_accounts.py"
       - ".github/workflows/production-terminal-e2e.yml"
       - ".github/workflows/production-terminal-runner-e2e.yml"
       - ".github/workflows/hosted-terminal-e2e.yml"
