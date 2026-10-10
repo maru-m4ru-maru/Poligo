@@ -3944,22 +3944,63 @@ async function runnerTerminalRequest(path, options = {}) {
     throw new Error('terminal service is not configured')
   }
 
-  const response = await fetch(
-    terminalRunnerUrl.replace(/\/$/, '') + path,
-    {
-      ...options,
-      headers: {
-        ...terminalHeaders(),
-        ...(options.headers || {})
+  const timeoutMs = Number(options.timeoutMs || 30_000)
+  const requestOptions = { ...options }
+  delete requestOptions.timeoutMs
+
+  const method = requestOptions.method || 'GET'
+  const shouldLog = path === '/v1/terminals'
+  const startedAt = Date.now()
+
+  if (shouldLog) {
+    console.info('Terminal Runner request started', {
+      method,
+      path,
+      timeoutMs
+    })
+  }
+
+  let response
+
+  try {
+    response = await fetch(
+      terminalRunnerUrl.replace(/\/$/, '') + path,
+      {
+        ...requestOptions,
+        signal: requestOptions.signal || AbortSignal.timeout(timeoutMs),
+        headers: {
+          ...terminalHeaders(),
+          ...(requestOptions.headers || {})
+        }
       }
+    )
+  } catch (error) {
+    if (shouldLog) {
+      console.error('Terminal Runner request failed', {
+        method,
+        path,
+        elapsedMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error)
+      })
     }
-  )
+
+    throw error
+  }
 
   let body = {}
 
   try {
     body = await response.json()
   } catch {}
+
+  if (shouldLog) {
+    console.info('Terminal Runner request completed', {
+      method,
+      path,
+      status: response.status,
+      elapsedMs: Date.now() - startedAt
+    })
+  }
 
   if (!response.ok) {
     const error = new Error(
@@ -4206,6 +4247,10 @@ async function reclaimDisconnectedTerminalForCapacity() {
 }
 
 async function handleTerminalCreate(request, response) {
+  const startedAt = Date.now()
+  let phase = 'authenticate'
+  console.info('Terminal create started')
+
   const session = await getSession(request)
 
   if (!session?.user?.id) {
@@ -4214,6 +4259,9 @@ async function handleTerminalCreate(request, response) {
     })
     return
   }
+
+  phase = 'project lookup'
+  console.info('Terminal create authenticated')
 
   if (!terminalRunnerUrl) {
     send(response, 503, {
@@ -4238,6 +4286,10 @@ async function handleTerminalCreate(request, response) {
     payload.projectId,
     session.user.id
   )
+  console.info('Terminal create project lookup completed', {
+    found: Boolean(project),
+    elapsedMs: Date.now() - startedAt
+  })
 
   if (!project) {
     send(response, 404, {
@@ -4250,6 +4302,9 @@ async function handleTerminalCreate(request, response) {
   let runnerSessionCreated = false
 
   try {
+    phase = 'runner create'
+    console.info('Terminal create requesting Runner session')
+
     const createRunnerSession = () => runnerTerminalRequest(
       '/v1/terminals',
       {
@@ -4269,11 +4324,19 @@ async function handleTerminalCreate(request, response) {
     try {
       result = await createRunnerSession()
     } catch (error) {
+      console.warn('Terminal create Runner request failed', {
+        statusCode: error?.statusCode || 0,
+        message: error instanceof Error ? error.message : String(error)
+      })
+
       if (error?.statusCode !== 429) {
         throw error
       }
 
+      phase = 'capacity reclaim'
+      console.info('Terminal create attempting capacity reclamation')
       const reclaimed = await reclaimDisconnectedTerminalForCapacity()
+      console.info('Terminal create capacity reclamation completed', { reclaimed })
 
       if (!reclaimed) {
         throw error
@@ -4283,6 +4346,10 @@ async function handleTerminalCreate(request, response) {
     }
 
     runnerSessionCreated = true
+    phase = 'persist session owner'
+    console.info('Terminal create Runner session ready', {
+      elapsedMs: Date.now() - startedAt
+    })
 
     const websocketTicket = randomBytes(32).toString('base64url')
 
@@ -4294,12 +4361,23 @@ async function handleTerminalCreate(request, response) {
       websocketTicket
     )
 
+    console.info('Terminal create completed', {
+      elapsedMs: Date.now() - startedAt
+    })
+
     send(response, 202, {
       id,
       websocketTicket,
       status: result.status || 'ready'
     })
   } catch (error) {
+    console.error('Terminal create failed', {
+      phase,
+      elapsedMs: Date.now() - startedAt,
+      statusCode: error?.statusCode || 0,
+      message: error instanceof Error ? error.message : String(error)
+    })
+
     if (runnerSessionCreated) {
       await runnerTerminalRequest(
         '/v1/terminals/' + encodeURIComponent(id),
