@@ -490,10 +490,17 @@ def main():
             page.keyboard.type("pwd", delay=2)
             page.keyboard.press("Enter")
 
+            terminal_session_id = str(status["sessionId"])
             deadline = time.monotonic() + 15
             while time.monotonic() < deadline:
                 text = terminal_text(page)
-                if any(line.strip() == "/workspace" for line in text.splitlines()):
+                if any(
+                    line.strip() == "/workspace" or (
+                        line.strip().startswith("/") and
+                        line.strip().endswith("/" + terminal_session_id)
+                    )
+                    for line in text.splitlines()
+                ):
                     break
                 page.wait_for_timeout(200)
             else:
