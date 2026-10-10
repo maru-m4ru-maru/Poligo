@@ -184,7 +184,7 @@ def delete_project(page, language):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = f"poligo-remaining-e2e-{suffix}@example.invalid"
+    email = f"poligo-remaining-e2e-{suffix}@example.com"
     password = "PoligoRemainingE2E!" + uuid.uuid4().hex[:18]
 
     with sync_playwright() as playwright:
