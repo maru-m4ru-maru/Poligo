@@ -127,7 +127,7 @@ def delete_project(page):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = f"poligo-go-e2e-{suffix}@example.invalid"
+    email = f"poligo-go-e2e-{suffix}@example.com"
     password = "PoligoGoE2E!" + uuid.uuid4().hex[:18]
     env_marker = "/tmp/go-e2e-" + suffix + "-env"
     arg_marker = "/tmp/go-e2e-" + suffix + "-arg"
