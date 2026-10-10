@@ -21,7 +21,7 @@ on:
 
 concurrency:
   group: poligo-production-terminal-e2e
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   production-terminal-e2e:
