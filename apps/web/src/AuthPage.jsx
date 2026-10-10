@@ -91,8 +91,9 @@ export default function AuthPage({ mode }) {
                   maxLength={32}
                   pattern="[A-Za-z0-9_]{3,32}"
                   title="英数字とアンダースコアを使って3〜32文字で入力してください"
-                  required
+                  placeholder="例: maru_m4ru_maru"
                 />
+                <small className="auth-page-hint">空欄の場合はユーザー名を自動発行します。</small>
               </label>
               <label>
                 <span>表示名</span>
