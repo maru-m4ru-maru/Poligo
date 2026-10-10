@@ -7,6 +7,10 @@ on:
       - main
     paths:
       - "apps/web/src/TerminalPanel.jsx"
+      - "apps/web/src/AuthPage.jsx"
+      - "services/api/src/auth.js"
+      - "services/api/src/registrationPolicy.js"
+      - "services/api/src/turso.js"
       - "services/api/src/server.js"
       - "services/api/src/terminalSync.js"
       - "tests/unit/terminalSync.test.mjs"
