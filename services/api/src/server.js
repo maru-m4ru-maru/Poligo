@@ -11,6 +11,7 @@ import {
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
+import { isConfiguredAdmin } from './adminPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -1595,16 +1596,7 @@ const adminEmails = getConfiguredAdminSet(
 )
 
 function isAdminSession(session) {
-  const user = session?.user
-
-  if (!user?.id) {
-    return false
-  }
-
-  return (
-    adminUserIds.has(user.id) ||
-    adminEmails.has(String(user.email || '').toLowerCase())
-  )
+  return isConfiguredAdmin(session?.user, adminUserIds, adminEmails)
 }
 
 async function requireAdminSession(request) {
@@ -3540,9 +3532,11 @@ async function handleAdminUsersRequest(request, response) {
         banReason: String(row.ban_reason || ''),
         storageBytes: Number(row.storage_bytes || 0),
         storageLimitBytes: Number(row.storage_limit_bytes || DEFAULT_STORAGE_LIMIT_BYTES),
-        isAdmin:
-          adminUserIds.has(row.id) ||
-          adminEmails.has(String(row.email || '').toLowerCase())
+        isAdmin: isConfiguredAdmin({
+          id: row.id,
+          email: row.email,
+          emailVerified: row.emailVerified
+        }, adminUserIds, adminEmails)
       })),
       defaultStorageLimitBytes: DEFAULT_STORAGE_LIMIT_BYTES,
       minStorageLimitBytes: MIN_STORAGE_LIMIT_BYTES,
@@ -3712,7 +3706,7 @@ async function handleAdminUsersRequest(request, response) {
     }
 
     const userStatement = await database.prepare(
-      'SELECT id, name, email FROM "user" WHERE id = ? LIMIT 1'
+      'SELECT id, name, email, emailVerified FROM "user" WHERE id = ? LIMIT 1'
     )
     const targetRows = await userStatement.all([userId])
     const target = targetRows[0]
@@ -3722,8 +3716,7 @@ async function handleAdminUsersRequest(request, response) {
       return
     }
 
-    const targetEmail = String(target.email || '').toLowerCase()
-    if (adminUserIds.has(target.id) || adminEmails.has(targetEmail)) {
+    if (isConfiguredAdmin(target, adminUserIds, adminEmails)) {
       throw new Error('cannot ban an administrator account')
     }
 
@@ -3807,7 +3800,7 @@ async function handleAdminUsersRequest(request, response) {
     }
 
     const userStatement = await database.prepare(
-      'SELECT id, name, email FROM "user" WHERE id = ?'
+      'SELECT id, name, email, emailVerified FROM "user" WHERE id = ?'
     )
     const users = await userStatement.all([userId])
     const target = users[0]
@@ -3819,12 +3812,7 @@ async function handleAdminUsersRequest(request, response) {
       return
     }
 
-    const email = String(target.email || '').toLowerCase()
-    const isAdmin =
-      adminUserIds.has(target.id) ||
-      adminEmails.has(email)
-
-    if (isAdmin) {
+    if (isConfiguredAdmin(target, adminUserIds, adminEmails)) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
@@ -5990,7 +5978,7 @@ server.on('upgrade', (request, socket, head) => {
 async function cleanupDisposableE2EAccountsOnStartup() {
   const database = getDatabase()
   const userRowsStatement = await database.prepare(
-    'SELECT id, email FROM "user"'
+    'SELECT id, email, emailVerified FROM "user"'
   )
   const userRows = await userRowsStatement.all()
   const disposablePattern = /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i
@@ -6002,8 +5990,11 @@ async function cleanupDisposableE2EAccountsOnStartup() {
     const email = String(row.email || '').trim().toLowerCase()
 
     return disposablePattern.test(email) &&
-      !adminUserIds.has(id) &&
-      !adminEmails.has(email)
+      !isConfiguredAdmin({
+        id,
+        email,
+        emailVerified: row.emailVerified
+      }, adminUserIds, adminEmails)
   })
 
   const totals = {
