@@ -282,8 +282,8 @@ export default function AdminPage({ session }) {
           </span>
         </button>
         <button className="stack-new-button" onClick={() => navigate('/dashboard')}>
-          <span>‹</span>
-          ダッシュボード
+          <span>+</span>
+          新規プロジェクト
         </button>
         <nav className="stack-sidebar-nav">
           <button onClick={() => navigate('/dashboard')}>
@@ -321,11 +321,11 @@ export default function AdminPage({ session }) {
           </div>
         </header>
 
-        <div className="admin-content">
+        <div className="account-settings-content">
           <div className="account-settings-heading">
             <span>ADMINISTRATION</span>
             <h1>管理画面</h1>
-            <p>ユーザー管理、アクセス制御、保存容量、お知らせを一元管理します。</p>
+            <p>ユーザー、保存容量、お知らせを管理します。</p>
           </div>
 
           {error && <p className="account-settings-error" role="alert">{error}</p>}
