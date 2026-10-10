@@ -3830,8 +3830,8 @@ async function handleAdminUsersRequest(request, response) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
-    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i.test(email)) {
-      throw new Error('test account deletion is restricted to generated disposable accounts')
+    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.com$/i.test(email)) {
+      throw new Error('test account deletion is restricted to generated E2E accounts')
     }
 
     const databaseSessionStatement = await database.prepare(
