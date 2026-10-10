@@ -62,15 +62,28 @@ const server = http.createServer(async (request, response) => {
     'http://localhost'
   ).pathname.replace(/\/+$/, '') || '/'
 
-  if (request.method === 'GET' && requestPath === '/health') {
-    send(response, 200, {
+  if (
+    (request.method === 'GET' || request.method === 'HEAD') &&
+    requestPath === '/health'
+  ) {
+    const health = {
       status: 'ok',
       service: 'runner',
       terminalBackend: process.env.TERMINAL_BACKEND === 'process' ? 'process' : 'docker',
       terminalReady: process.env.TERMINAL_BACKEND === 'process'
         ? process.getuid?.() === 0
         : existsSync(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
-    })
+    }
+
+    if (request.method === 'HEAD') {
+      response.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8'
+      })
+      response.end()
+    } else {
+      send(response, 200, health)
+    }
+
     return
   }
 
