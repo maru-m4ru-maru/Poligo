@@ -676,12 +676,49 @@ def main():
             print("PASS: terminal change propagated to IDE and storage", flush=True)
 
             print("STEP: reconnect and restore synchronized terminal files", flush=True)
+            disconnected_status = terminal_status(page) or {}
+            disconnected_session_id = disconnected_status.get("sessionId")
+
+            if not disconnected_session_id:
+                raise AssertionError(
+                    "Active terminal session ID was unavailable before disconnect"
+                )
+
+            sync_requests_after_disconnect = []
+            monitor_disconnected_sync = False
+
+            def observe_disconnected_sync(request):
+                if (
+                    monitor_disconnected_sync and
+                    "/api/terminal/sessions/" + disconnected_session_id + "/sync"
+                    in request.url
+                ):
+                    sync_requests_after_disconnect.append(request.url)
+
+            page.on("request", observe_disconnected_sync)
             page.evaluate(
                 "() => window.__POLIGO_E2E_TERMINAL__.disconnect()"
             )
 
             overlay = page.locator(".terminal-connection-overlay")
             expect(overlay).to_be_visible(timeout=15_000)
+
+            monitor_disconnected_sync = True
+            page.wait_for_timeout(6_500)
+            monitor_disconnected_sync = False
+            page.remove_listener("request", observe_disconnected_sync)
+
+            if sync_requests_after_disconnect:
+                raise AssertionError(
+                    "Terminal continued syncing after its WebSocket disconnected: " +
+                    str(sync_requests_after_disconnect)
+                )
+
+            print(
+                "PASS: disconnected terminal no longer keeps its session alive",
+                flush=True
+            )
+
             overlay.get_by_role(
                 "button",
                 name="再接続"
@@ -694,6 +731,43 @@ def main():
                 "RECONNECTED_FILE_OK"
             )
             print("PASS: reconnect restored synchronized terminal files", flush=True)
+
+            print("STEP: reconnect when the previous session was already removed", flush=True)
+            stale_status = terminal_status(page) or {}
+            stale_session_id = stale_status.get("sessionId")
+
+            if not stale_session_id:
+                raise AssertionError(
+                    "Active terminal session ID was unavailable before stale-session test"
+                )
+
+            page.evaluate(
+                "() => window.__POLIGO_E2E_TERMINAL__.disconnect()"
+            )
+
+            overlay = page.locator(".terminal-connection-overlay")
+            expect(overlay).to_be_visible(timeout=15_000)
+
+            if not delete_terminal_session(page, stale_session_id):
+                raise AssertionError(
+                    "Could not remove the terminal session before stale-session reconnect"
+                )
+
+            overlay.get_by_role(
+                "button",
+                name="再接続"
+            ).click()
+            wait_for_terminal(page, timeout=30, retry_capacity=False)
+
+            run_command(
+                page,
+                "grep -Fxq 'TERMINAL_TO_EDITOR_SYNC_OK' terminal-created.txt && printf 'RECONNECTED_AFTER_EXPIRED_SESSION_OK\\n'",
+                "RECONNECTED_AFTER_EXPIRED_SESSION_OK"
+            )
+            print(
+                "PASS: reconnect recovered after the previous session had already been removed",
+                flush=True
+            )
 
             print("STEP: terminal deletion propagates to the IDE", flush=True)
             run_command(

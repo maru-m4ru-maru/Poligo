@@ -71,7 +71,7 @@ const TerminalPanel = forwardRef(function TerminalPanel(
         )
         const payload = await response.json().catch(() => null)
 
-        if (!response.ok) {
+        if (!response.ok && response.status !== 404) {
           throw new Error(
             payload?.error ||
             'Could not close the previous terminal session (' +
@@ -416,10 +416,13 @@ const TerminalPanel = forwardRef(function TerminalPanel(
 
         syncTimer = window.setInterval(() => {
           const sessionId = sessionIdRef.current
+          const socket = socketRef.current
 
           if (
             cancelled ||
             !sessionId ||
+            !socket ||
+            socket.readyState !== WebSocket.OPEN ||
             syncInFlight
           ) {
             return
