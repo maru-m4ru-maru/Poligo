@@ -48,6 +48,7 @@ const EXECUTION_MAX_PROCESSES = 60
 const EXECUTION_MAX_FILE_SIZE = 1_024
 const MAX_EXECUTION_ARGUMENTS = 32
 const MAX_EXECUTION_ARGUMENT_BYTES = 512
+const MAX_EXECUTION_STDIN_BYTES = 1_000_000
 const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
 let databaseInitializationPromise = Promise.resolve(false)
@@ -493,6 +494,22 @@ function normalizeExecutionArguments(args) {
 
 function formatExecutionArguments(args) {
   return args.map(shellQuote).join(' ')
+}
+
+function normalizeExecutionStdin(stdin) {
+  if (stdin === undefined || stdin === null) {
+    return ''
+  }
+
+  if (typeof stdin !== 'string') {
+    throw new Error('execution stdin must be text')
+  }
+
+  if (Buffer.byteLength(stdin, 'utf8') > MAX_EXECUTION_STDIN_BYTES) {
+    throw new Error('execution stdin is too large')
+  }
+
+  return stdin
 }
 
 function getJavaPackageName(source) {
@@ -3184,7 +3201,8 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
         entrypoint: payload.entrypoint || null,
         files: payload.files,
         args: payload.args,
-        env: getExecutionEnvironment(payload.files)
+        env: getExecutionEnvironment(payload.files),
+        stdin: payload.stdin
       })
     }
   )
@@ -3239,6 +3257,7 @@ async function handleExecution(request, response) {
   try {
     payload.files = normalizeExecutionFiles(payload.files)
     payload.args = normalizeExecutionArguments(payload.args)
+    payload.stdin = normalizeExecutionStdin(payload.stdin)
   } catch (error) {
     send(response, 400, {
       error: error instanceof Error ? error.message : 'invalid execution files'
