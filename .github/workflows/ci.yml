@@ -32,6 +32,7 @@ jobs:
       - run: node --check services/api/src/server.js
       - run: node --check services/api/src/terminalSync.js
       - run: node --test tests/unit/*.test.mjs
+      - run: node --test tests/unit/runnerHealth.test.mjs
       - run: node --check services/runner/src/languages.js
       - run: node --check services/runner/src/executor.js
       - run: node --check services/runner/src/server.js
