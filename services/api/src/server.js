@@ -1589,13 +1589,10 @@ const adminUserIds = new Set([
   ),
   'w4wupjAgyoTGTT6FlPsqd9LPhCDPgIGX'
 ])
-const adminEmails = new Set([
-  ...getConfiguredAdminSet(
-    process.env.POLIGO_ADMIN_EMAILS,
-    value => value.toLowerCase()
-  ),
-  'code-maru@outlook.jp'
-])
+const adminEmails = getConfiguredAdminSet(
+  process.env.POLIGO_ADMIN_EMAILS,
+  value => value.toLowerCase()
+)
 
 function isAdminSession(session) {
   const user = session?.user
