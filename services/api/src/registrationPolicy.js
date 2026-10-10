@@ -4,21 +4,14 @@ const EMAIL_LOCAL_PART = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/i
 const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
 
 export function normalizeUsername(value) {
-  if (typeof value !== 'string') {
-    throw new Error('ユーザー名を入力してください。')
-  }
-
-  const username = value.trim()
-
   if (
-    username.length < 2 ||
-    username.length > 64 ||
-    /[\u0000-\u001f\u007f]/.test(username)
+    typeof value !== 'string' ||
+    !/^[A-Za-z0-9_]{3,32}$/.test(value)
   ) {
-    throw new Error('ユーザー名は2〜64文字で入力してください。')
+    throw new Error('ユーザー名は英数字とアンダースコアを使って3〜32文字で入力してください。')
   }
 
-  return username
+  return value
 }
 
 export function normalizeEmailAddress(value) {
