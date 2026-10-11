@@ -29,3 +29,25 @@ export function withOwnerMutationLock(ownerId, operation) {
       }
     })
 }
+
+export function withOwnerMutationLocks(ownerIds, operation) {
+  if (
+    !Array.isArray(ownerIds) ||
+    !ownerIds.length ||
+    ownerIds.some(ownerId => typeof ownerId !== 'string' || !ownerId) ||
+    typeof operation !== 'function'
+  ) {
+    throw new Error('valid owner ids and a mutation operation are required')
+  }
+
+  const orderedOwnerIds = [...new Set(ownerIds)].sort()
+  let run = operation
+
+  for (let index = orderedOwnerIds.length - 1; index >= 0; index -= 1) {
+    const ownerId = orderedOwnerIds[index]
+    const next = run
+    run = () => withOwnerMutationLock(ownerId, next)
+  }
+
+  return run()
+}

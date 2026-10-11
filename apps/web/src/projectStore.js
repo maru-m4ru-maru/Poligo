@@ -25,31 +25,56 @@ function getWorkspaceId() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(API_URL + path, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Poligo-Workspace': getWorkspaceId(),
-      ...(options.headers || {})
-    }
-  })
+  const timeoutMs = Number.isSafeInteger(options.timeoutMs) && options.timeoutMs > 0
+    ? options.timeoutMs
+    : 60_000
+  const externalSignal = options.signal
+  const requestOptions = { ...options }
+  delete requestOptions.timeoutMs
+  delete requestOptions.signal
+  const controller = new AbortController()
+  const abortFromCaller = () => controller.abort(externalSignal.reason)
+  const timeout = setTimeout(() => {
+    controller.abort(new DOMException('API request timed out', 'TimeoutError'))
+  }, timeoutMs)
 
-  if (!response.ok) {
-    let message = response.status + ' ' + response.statusText
-
-    try {
-      const body = await response.json()
-
-      if (body.error) {
-        message = body.error
-      }
-    } catch {}
-
-    throw new Error(message)
+  if (externalSignal?.aborted) {
+    abortFromCaller()
+  } else {
+    externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
   }
 
-  return response.status === 204 ? null : response.json()
+  try {
+    const response = await fetch(API_URL + path, {
+      ...requestOptions,
+      signal: controller.signal,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Poligo-Workspace': getWorkspaceId(),
+        ...(options.headers || {})
+      }
+    })
+
+    if (!response.ok) {
+      let message = response.status + ' ' + response.statusText
+
+      try {
+        const body = await response.json()
+
+        if (body.error) {
+          message = body.error
+        }
+      } catch {}
+
+      throw new Error(message)
+    }
+
+    return response.status === 204 ? null : await response.json()
+  } finally {
+    clearTimeout(timeout)
+    externalSignal?.removeEventListener('abort', abortFromCaller)
+  }
 }
 
 export async function claimWorkspace() {
