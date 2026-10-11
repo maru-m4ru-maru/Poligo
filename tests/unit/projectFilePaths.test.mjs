@@ -44,3 +44,10 @@ test('enforces UTF-8 bytes and file count', () => {
   assert.throws(() => normalizeProjectFileMap({ file: '日本語' }, { maxBytes: 5 }), /上限/)
   assert.throws(() => normalizeProjectFileMap({ a: '', b: '' }, { maxFiles: 1 }), /上限/)
 })
+
+test('rejects UTF-8 paths that exceed the filesystem-safe byte limit', () => {
+  const path = '界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界.js'
+  assert.ok(path.length < 240)
+  assert.ok(new TextEncoder().encode(path).byteLength > 240)
+  assert.throws(() => normalizeProjectFilePath(path), /不正/)
+})
