@@ -34,3 +34,26 @@ export function getTrustedOrigins(configuredOrigin, environment = 'development')
 
   return trusted
 }
+
+export function getOriginPolicy(configuredOrigin, environment = 'development') {
+  const configured = getTrustedOrigins(configuredOrigin, environment)
+
+  if (configured.length) {
+    return {
+      allowedOrigins: configured,
+      corsOrigin: configured[0]
+    }
+  }
+
+  const allowedOrigins = environment === 'production'
+    ? ['https://poligo-web-2n2l.onrender.com']
+    : [
+        'http://localhost:5173',
+        'http://127.0.0.1:5173'
+      ]
+
+  return {
+    allowedOrigins,
+    corsOrigin: allowedOrigins[0]
+  }
+}
