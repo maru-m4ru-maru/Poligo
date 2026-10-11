@@ -211,3 +211,28 @@ test('runner rejects malformed execution payloads and keeps authentication requi
     error: 'execution request must be an object'
   })
 })
+
+test('terminal creation validates project paths before allocating a session', async () => {
+  for (const files of [
+    { '../escape.js': 'bad' },
+    { 'src//main.js': 'bad' },
+    { 'src': 'file', 'src/main.js': 'child' },
+    { 'src/__proto__/payload': 'bad' },
+    { ['main.js' + String.fromCharCode(0) + 'hidden']: 'bad' }
+  ]) {
+    const response = await fetch(baseUrl + '/v1/terminals', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + runnerToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        id: 'terminal-path-test-' + Math.random().toString(36).slice(2, 12),
+        files
+      })
+    })
+
+    assert.equal(response.status, 400)
+    assert.match((await response.json()).error, /invalid file path|conflicts with a directory/)
+  }
+})
