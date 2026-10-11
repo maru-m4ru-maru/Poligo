@@ -3293,7 +3293,7 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
 
   if (!runnerResponse.ok) {
     executionOwners.delete(id)
-    send(response, 502, {
+    send(response, runnerResponse.status === 429 ? 429 : 502, {
       id,
       ...result
     })
