@@ -1790,7 +1790,13 @@ async function listProjects(ownerId) {
       p.created_at,
       p.updated_at,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) +
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM project_commits pc
+        JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE pc.project_id = p.id
+      ), 0) AS storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id = ?
