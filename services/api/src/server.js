@@ -3274,7 +3274,8 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
         args: payload.args,
         env: getExecutionEnvironment(payload.files),
         stdin: payload.stdin
-      })
+      }),
+      signal: AbortSignal.timeout(15_000)
     }
   )
 
@@ -3298,7 +3299,16 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
 
   if (!runnerResponse.ok) {
     executionOwners.delete(id)
-    send(response, 502, {
+
+    if (runnerResponse.status === 429) {
+      response.setHeader('Retry-After', '2')
+    }
+
+    const status = [400, 413, 429, 503].includes(runnerResponse.status)
+      ? runnerResponse.status
+      : 502
+
+    send(response, status, {
       id,
       ...result
     })
