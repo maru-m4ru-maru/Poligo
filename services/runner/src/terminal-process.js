@@ -7,6 +7,7 @@ import pty from 'node-pty'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
 import { assertNoFileDirectoryConflicts, normalizeRunnerFilePath as normalizeFilePath } from './filePaths.js'
+import { shouldDisconnectSlowTerminalSocket } from './terminalSocketPolicy.js'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = process.env.TERMINAL_RUN_ROOT || '/tmp/poligo-terminal-sessions'
@@ -15,6 +16,7 @@ const maxProjectBytes = Number(process.env.TERMINAL_MAX_PROJECT_BYTES || 5_000_0
 const maxWorkspaceBytes = Number(process.env.TERMINAL_MAX_WORKSPACE_BYTES || 384 * 1024 * 1024)
 const maxWorkspaceEntries = Number(process.env.TERMINAL_MAX_WORKSPACE_ENTRIES || 20_000)
 const maxOutputBytes = Number(process.env.TERMINAL_MAX_OUTPUT_BYTES || 65_536)
+const maxSocketBufferBytes = Number(process.env.TERMINAL_MAX_SOCKET_BUFFER_BYTES || 1_048_576)
 const maxSessions = Number(process.env.TERMINAL_MAX_SESSIONS || 4)
 const idleTtlMs = Number(process.env.TERMINAL_IDLE_TTL_MS || 30 * 60 * 1000)
 const maxLifetimeMs = Number(process.env.TERMINAL_MAX_LIFETIME_MS || 4 * 60 * 60 * 1000)
@@ -166,25 +168,49 @@ async function writeInitialFiles(workspace, uid, files) {
   await fs.chmod(workspace, 0o700)
 }
 
+function trimUtf8ToBytes(value, maxBytes) {
+  const buffer = Buffer.from(value, 'utf8')
+
+  if (buffer.length <= maxBytes) {
+    return value
+  }
+
+  let start = buffer.length - maxBytes
+
+  while (start < buffer.length && (buffer[start] & 0xc0) === 0x80) {
+    start += 1
+  }
+
+  return buffer.subarray(start).toString('utf8')
+}
+
 function appendOutput(session, data) {
   session.lastUsedAt = Date.now()
-  session.outputBuffer += data
-
-  if (session.outputBuffer.length > maxOutputBytes) {
-    session.outputBuffer = session.outputBuffer.slice(-maxOutputBytes)
-  }
+  session.outputBuffer = trimUtf8ToBytes(
+    session.outputBuffer + data,
+    maxOutputBytes
+  )
 
   const socket = session.socket
 
-  if (
-    socket?.readyState === 1 &&
-    socket.bufferedAmount < maxSocketBufferBytes
-  ) {
-    socket.send(JSON.stringify({
-      type: 'output',
-      data
-    }))
+  if (socket?.readyState !== 1) {
+    return
   }
+
+  if (shouldDisconnectSlowTerminalSocket(socket.bufferedAmount, maxSocketBufferBytes)) {
+    if (session.socket === socket) {
+      session.socket = null
+      session.disconnectedAt = new Date().toISOString()
+    }
+
+    socket.close(1013, 'terminal output backlog')
+    return
+  }
+
+  socket.send(JSON.stringify({
+    type: 'output',
+    data
+  }))
 }
 
 function terminalEnvironment(session) {
