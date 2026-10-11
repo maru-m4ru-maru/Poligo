@@ -7,10 +7,10 @@ import {
 
 test('keeps output within a UTF-8 byte limit without splitting multi-byte characters', () => {
   const value = 'ab日本語'
-  const result = keepUtf8Tail(value, 7)
+  const result = keepUtf8Tail(value, 8)
 
-  assert.equal(result, '日本語')
-  assert.ok(Buffer.byteLength(result, 'utf8') <= 7)
+  assert.equal(result, '本語')
+  assert.ok(Buffer.byteLength(result, 'utf8') <= 8)
 })
 
 test('keeps the newest bytes from output and safely handles zero and empty limits', () => {
