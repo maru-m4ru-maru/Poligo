@@ -1757,7 +1757,7 @@ function getStoredFileBytes(files) {
 
 function normalizeProjectPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new Error('project payload must be an object')
+    throw new Error('invalid project payload')
   }
 
   const name = typeof payload.name === 'string'
@@ -6020,17 +6020,20 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'project request failed'
       const status =
-        error.message === 'invalid workspace id' ||
-        error.message.includes('required') ||
-        error.message.includes('invalid project') ||
-        error.message.includes('project files') ||
-        error.message.includes('project is too large') ||
-        error.message.includes('too many project files') ||
-        error.message.includes('storage limit exceeded')
-          ? 400
-          : error.message === 'authentication required'
-            ? 401
+        message === 'authentication required'
+          ? 401
+          : message === 'invalid workspace id' ||
+              message.includes('required') ||
+              message.includes('invalid project') ||
+              message.includes('project files') ||
+              message.includes('project file') ||
+              message.includes('project is too large') ||
+              message.includes('too many project files') ||
+              message.includes('storage limit exceeded') ||
+              message.includes('conflicts with a directory')
+            ? 400
             : 500
 
       send(response, status, {
@@ -6047,15 +6050,22 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'project request failed'
       const status =
-        error.message === 'authentication required'
+        message === 'authentication required'
           ? 401
-          : error.message === 'storage limit exceeded'
+          : message === 'storage limit exceeded' ||
+              message.includes('invalid project') ||
+              message.includes('project file') ||
+              message.includes('project files') ||
+              message.includes('project is too large') ||
+              message.includes('too many project files') ||
+              message.includes('conflicts with a directory')
             ? 400
             : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'project request failed'
+        error: message
       })
     }
     return
