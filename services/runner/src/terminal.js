@@ -162,9 +162,9 @@ async function createWorkspaceArchive(files) {
     pack.entry({
       name: directory,
       type: 'directory',
-      mode: 0o755
-      , uid: 65534
-      , gid: 65534
+      mode: 0o755,
+      uid: 65534,
+      gid: 65534
     })
   }
 
@@ -252,15 +252,15 @@ function normalizeArchivePath(name) {
     value = value.slice('workspace/'.length)
   }
 
-  if (
-    !value ||
-    value.includes('\0') ||
-    value.split('/').some(part => part === '..' || part === '.')
-  ) {
+  if (!value) {
     return ''
   }
 
-  return value
+  try {
+    return normalizeFilePath(value)
+  } catch {
+    return ''
+  }
 }
 
 async function readWorkspaceArchive(container) {
