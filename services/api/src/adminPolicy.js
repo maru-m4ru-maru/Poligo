@@ -20,5 +20,5 @@ export function isConfiguredAdmin(user, adminUserIds, adminEmails) {
 
 export function isGeneratedE2EAccountEmail(email) {
   return typeof email === 'string' &&
-    /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(email)
+    /^poligo-[a-z0-9-]+-[a-f0-9]{32}@(example\.(?:invalid|com)|gmail\.com)$/i.test(email)
 }
