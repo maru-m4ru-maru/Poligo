@@ -2,19 +2,23 @@ const MAX_FILES = 200
 const MAX_PROJECT_BYTES = 5_000_000
 
 export function normalizeProjectPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('project payload must be an object')
+  }
+
   const name = typeof payload.name === 'string'
     ? payload.name.trim().slice(0, 120)
     : ''
 
-  if (!name) {
-    throw new Error('project name is required')
+  if (!name || name.split('').some(character => { const code = character.charCodeAt(0); return code < 32 || code === 127 })) {
+    throw new Error('project name is invalid')
   }
 
   if (!payload.files || typeof payload.files !== 'object' || Array.isArray(payload.files)) {
     throw new Error('project files must be an object')
   }
 
-  const files = {}
+  const files = Object.create(null)
   let totalBytes = 0
 
   for (const [path, value] of Object.entries(payload.files)) {
@@ -43,7 +47,12 @@ export function normalizeProjectPayload(payload) {
       throw new Error('project is too large')
     }
 
-    files[path] = value
+    Object.defineProperty(files, path, {
+      value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    })
   }
 
   const filePaths = new Set(Object.keys(files))
