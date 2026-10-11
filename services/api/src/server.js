@@ -5042,7 +5042,7 @@ async function handleTerminalSync(request, response, id) {
       ...(result || {})
     })
   } catch (error) {
-    send(response, 502, {
+    send(response, getRequestInputStatus(error) || 502, {
       error: error instanceof Error
         ? error.message
         : 'terminal sync failed'
@@ -5540,7 +5540,7 @@ const server = http.createServer(async (request, response) => {
                   ? 503
                   : 500
 
-      send(response, status, {
+      send(response, getRequestInputStatus(error) || status, {
         error: message
       })
     }
@@ -5571,7 +5571,7 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleAiAssist(request, response)
     } catch (error) {
-      send(response, 502, {
+      send(response, getRequestInputStatus(error) || 502, {
         error: error instanceof Error ? error.message : 'AI request failed'
       })
     }
@@ -5683,7 +5683,7 @@ const server = http.createServer(async (request, response) => {
             ? 401
             : 500
 
-      send(response, status, {
+      send(response, getRequestInputStatus(error) || status, {
         error: message
       })
     }
@@ -5718,7 +5718,7 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleTerminalCreate(request, response)
     } catch (error) {
-      send(response, 502, {
+      send(response, getRequestInputStatus(error) || 502, {
         error: error instanceof Error
           ? error.message
           : 'terminal request failed'
@@ -5816,21 +5816,23 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'project request failed'
       const status =
-        error.message === 'invalid workspace id' ||
-        error.message.includes('required') ||
-        error.message.includes('invalid project') ||
-        error.message.includes('project files') ||
-        error.message.includes('project is too large') ||
-        error.message.includes('too many project files') ||
-        error.message.includes('storage limit exceeded')
+        message === 'invalid workspace id' ||
+        message.includes('required') ||
+        message.includes('invalid project') ||
+        message.includes('project files') ||
+        message.includes('project file path') ||
+        message.includes('project is too large') ||
+        message.includes('too many project files') ||
+        message.includes('storage limit exceeded')
           ? 400
-          : error.message === 'authentication required'
+          : message === 'authentication required'
             ? 401
             : 500
 
-      send(response, status, {
-        error: error instanceof Error ? error.message : 'project request failed'
+      send(response, getRequestInputStatus(error) || status, {
+        error: message
       })
     }
     return
@@ -5850,7 +5852,7 @@ const server = http.createServer(async (request, response) => {
             ? 400
             : 500
 
-      send(response, status, {
+      send(response, getRequestInputStatus(error) || status, {
         error: error instanceof Error ? error.message : 'project request failed'
       })
     }
@@ -5895,7 +5897,7 @@ const server = http.createServer(async (request, response) => {
           ? 400
           : 502
 
-      send(response, status, {
+      send(response, getRequestInputStatus(error) || status, {
         error: message
       })
     }
