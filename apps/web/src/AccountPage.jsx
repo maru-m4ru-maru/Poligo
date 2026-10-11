@@ -84,11 +84,25 @@ export default function AccountPage({ session }) {
       setError('')
 
       try {
+        const workspaceHeaders = {
+          'X-Poligo-Workspace': getWorkspaceId()
+        }
+        const claimResponse = await fetch('/api/workspace/claim', {
+          method: 'POST',
+          credentials: 'include',
+          headers: workspaceHeaders
+        })
+        const claimResult = await claimResponse.json().catch(() => ({}))
+
+        if (!claimResponse.ok) {
+          throw new Error(
+            claimResult.error || 'ワークスペースをアカウントに接続できませんでした'
+          )
+        }
+
         const response = await fetch('/api/dashboard', {
           credentials: 'include',
-          headers: {
-            'X-Poligo-Workspace': getWorkspaceId()
-          }
+          headers: workspaceHeaders
         })
 
         const result = await response.json()
