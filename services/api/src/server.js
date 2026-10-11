@@ -12,6 +12,7 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin, isDisposableE2EAccountEmail } from './adminPolicy.js'
+import { DEFAULT_STORAGE_LIMIT_BYTES } from './storageQuota.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -29,7 +30,6 @@ const openRouterModels = {
 }
 const MAX_FILES = 200
 const MAX_PROJECT_BYTES = 5_000_000
-const DEFAULT_STORAGE_LIMIT_BYTES = 15 * 1024 * 1024
 const MIN_STORAGE_LIMIT_BYTES = 1 * 1024 * 1024
 const MAX_STORAGE_LIMIT_BYTES = 10 * 1024 * 1024 * 1024
 const MAX_REQUEST_BYTES = 8_000_000
