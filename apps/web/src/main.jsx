@@ -25,6 +25,7 @@ import AccountPage from './AccountPage'
 import AdminPage from './AdminPage'
 import TerminalPanel from './TerminalPanel'
 import { getExecutionLanguage } from './executionLanguage'
+import { hasProjectFilePathConflict, normalizeProjectFilePath } from './projectFilePaths'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1060,6 +1061,7 @@ function IDE({ projectId }) {
   const [collapsedFolders, setCollapsedFolders] = useState(new Set())
   const [editorMarkers, setEditorMarkers] = useState([])
   const [newFileName, setNewFileName] = useState('')
+  const [filePathError, setFilePathError] = useState('')
   const [renamingFile, setRenamingFile] = useState('')
   const [renameValue, setRenameValue] = useState('')
   const [draggedPath, setDraggedPath] = useState('')
@@ -1680,31 +1682,31 @@ function IDE({ projectId }) {
 
     const nextName = renameValue.trim()
 
-    if (
-      !nextName ||
-      nextName.includes('/') ||
-      nextName === '.' ||
-      nextName === '..'
-    ) {
-      cancelRenameFile()
+    if (!nextName || nextName.includes('/') || nextName.includes('\\')) {
+      setFilePathError('新しいファイル名を正しく入力してください。')
       return
     }
 
     const directory = renamingFile.includes('/')
       ? renamingFile.slice(0, renamingFile.lastIndexOf('/'))
       : ''
+    const candidate = directory ? directory + '/' + nextName : nextName
+    let nextPath
 
-    const nextPath = directory
-      ? directory + '/' + nextName
-      : nextName
+    try {
+      nextPath = normalizeProjectFilePath(candidate)
+    } catch (error) {
+      setFilePathError(error instanceof Error ? error.message : 'ファイルパスが不正です。')
+      return
+    }
 
     if (nextPath === renamingFile) {
       cancelRenameFile()
       return
     }
 
-    if (Object.prototype.hasOwnProperty.call(files, nextPath)) {
-      cancelRenameFile()
+    if (hasProjectFilePathConflict(files, nextPath, renamingFile)) {
+      setFilePathError('ファイル名が既存のファイルまたはフォルダーと競合しています。')
       return
     }
 
@@ -1722,6 +1724,7 @@ function IDE({ projectId }) {
       current === renamingFile ? nextPath : current
     )
     setSaveStatus('saving')
+    setFilePathError('')
     cancelRenameFile()
   }
 
@@ -2046,16 +2049,26 @@ function IDE({ projectId }) {
 
   async function handleFileUpload(event) {
     const uploaded = Array.from(event.target.files || [])
+    const stagedFiles = { ...filesRef.current }
+    let firstUploadedPath = ''
+    let invalidMessage = ''
 
     event.target.value = ''
 
     for (const file of uploaded) {
-      const path = file.name.replace(/\\/g, '/').replace(/^\/+/, '')
+      let path
 
-      if (
-        !path ||
-        path.split('/').some(part => !part || part === '.' || part === '..')
-      ) {
+      try {
+        path = normalizeProjectFilePath(file.name)
+      } catch (error) {
+        invalidMessage = error instanceof Error
+          ? error.message
+          : 'ファイルパスが不正です。'
+        continue
+      }
+
+      if (hasProjectFilePathConflict(stagedFiles, path, path)) {
+        invalidMessage = path + ' は既存のファイルまたはフォルダーと競合しています。'
         continue
       }
 
@@ -2066,6 +2079,7 @@ function IDE({ projectId }) {
         'css',
         'js',
         'mjs',
+        'cjs',
         'jsx',
         'ts',
         'tsx',
@@ -2098,39 +2112,51 @@ function IDE({ projectId }) {
           btoa(binary)
       }
 
-      setFiles(current => ({
-        ...current,
-        [path]: value
-      }))
-      setActiveFile(path)
-      setOpenFiles(current =>
-        current.includes(path)
-          ? current
-          : [...current, path]
-      )
+      stagedFiles[path] = value
+      firstUploadedPath = firstUploadedPath || path
     }
 
-    if (uploaded.length) {
+    if (firstUploadedPath) {
+      filesRef.current = stagedFiles
+      setFiles(stagedFiles)
+      setActiveFile(firstUploadedPath)
+      setOpenFiles(current => {
+        const next = [...current]
+
+        for (const path of Object.keys(stagedFiles)) {
+          if (
+            path !== firstUploadedPath &&
+            !uploaded.some(file => file.name === path)
+          ) {
+            continue
+          }
+
+          if (!next.includes(path)) {
+            next.push(path)
+          }
+        }
+
+        return next
+      })
       setSaveStatus('saving')
     }
+
+    setFilePathError(invalidMessage)
   }
 
   function cancelCreateFile() {
     setNewFileOpen(false)
     setNewFileName('')
+    setFilePathError('')
   }
 
   function commitCreateFile() {
-    const normalized = newFileName.trim()
+    let safeName
 
-    const safeName = normalized
-      .replace(/\\/g, '/')
-      .replace(/^\/+/, '')
-
-    if (
-      !safeName ||
-      safeName.split('/').some(part => !part || part === '.' || part === '..')
-    ) {
+    try {
+      safeName = normalizeProjectFilePath(newFileName.trim())
+    } catch (error) {
+      setFilePathError(error instanceof Error ? error.message : 'ファイルパスが不正です。')
       return
     }
 
@@ -2142,6 +2168,11 @@ function IDE({ projectId }) {
           : [...current, safeName]
       )
       cancelCreateFile()
+      return
+    }
+
+    if (hasProjectFilePathConflict(files, safeName)) {
+      setFilePathError('ファイル名が既存のファイルまたはフォルダーと競合しています。')
       return
     }
 
@@ -2402,19 +2433,28 @@ function IDE({ projectId }) {
           throw new Error('AIが無効な変更情報を返しました。')
         }
 
-        const exists = Object.prototype.hasOwnProperty.call(next, path)
+        const safePath = normalizeProjectFilePath(path)
+
+        if (
+          !Object.prototype.hasOwnProperty.call(next, safePath) &&
+          hasProjectFilePathConflict(next, safePath)
+        ) {
+          throw new Error(safePath + ' は既存のファイルまたはフォルダーと競合しています。')
+        }
+
+        const exists = Object.prototype.hasOwnProperty.call(next, safePath)
 
         if (!exists && oldText !== '') {
           throw new Error(path + ' が見つからないため変更を適用できません。')
         }
 
         if (!exists && oldText === '') {
-          next[path] = newText
-          changedFiles.push(path)
+          next[safePath] = newText
+          changedFiles.push(safePath)
           continue
         }
 
-        const current = next[path]
+        const current = next[safePath]
         const firstIndex = current.indexOf(oldText)
         const lastIndex = current.lastIndexOf(oldText)
 
@@ -2426,11 +2466,11 @@ function IDE({ projectId }) {
           throw new Error(path + ' の対象コードが複数箇所にあるため、安全のため適用を停止しました。')
         }
 
-        next[path] =
+        next[safePath] =
           current.slice(0, firstIndex) +
           newText +
           current.slice(firstIndex + oldText.length)
-        changedFiles.push(path)
+        changedFiles.push(safePath)
       }
     } catch (error) {
       return {
@@ -3383,6 +3423,9 @@ function IDE({ projectId }) {
                       aria-label="新しいファイル名"
                     />
                   </div>
+                )}
+                {filePathError && (
+                  <div className="source-control-error" role="alert">{filePathError}</div>
                 )}
                 {renderFileTree(Array.from(fileTree.values()))}
               </div>
