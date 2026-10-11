@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import Docker from 'dockerode'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { assertNoPathConflicts, normalizeRelativeFilePath } from './filePaths.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -33,17 +34,10 @@ const cleanupTimer = setInterval(() => {
 cleanupTimer.unref?.()
 
 function normalizeFilePath(value) {
+  const safePath = normalizeRelativeFilePath(value)
+
   if (
-    typeof value !== 'string' ||
-    !value ||
-    value.length > 240 ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    value.includes('\\') ||
-    value.split('/').some(part =>
-      !part ||
-      part === '..' ||
-      part === '.' ||
+    safePath.split('/').some(part =>
       part === '.terminal-cache' ||
       part === '.tmp' ||
       part === '.cache'
@@ -52,8 +46,9 @@ function normalizeFilePath(value) {
     throw new Error('invalid file path')
   }
 
-  return value
+  return safePath
 }
+
 function normalizeId(value) {
   if (
     typeof value !== 'string' ||
@@ -140,6 +135,11 @@ function normalizeFiles(files) {
     normalized[safePath] = content
   }
 
+  assertNoPathConflicts(
+    Object.keys(normalized),
+    'terminal file path conflicts with a directory'
+  )
+
   return normalized
 }
 
@@ -162,7 +162,9 @@ async function createWorkspaceArchive(files) {
     pack.entry({
       name: directory,
       type: 'directory',
-      mode: 0o777
+      mode: 0o755
+      , uid: 65534
+      , gid: 65534
     })
   }
 
@@ -170,7 +172,9 @@ async function createWorkspaceArchive(files) {
     pack.entry({
       name,
       type: 'file',
-      mode: 0o666,
+      mode: 0o644,
+      uid: 65534,
+      gid: 65534,
       size: Buffer.byteLength(content, 'utf8')
     }, Buffer.from(content, 'utf8'))
   }
@@ -497,9 +501,9 @@ async function createTerminal({
         'cd /workspace && exec bash --noprofile --norc -i'
       ],
       WorkingDir: '/workspace',
-      User: '0:0',
+      User: '65534:65534',
       Env: [
-        'HOME=/workspace',
+        'HOME=/tmp',
         'TERM=xterm-256color',
         'COLORTERM=truecolor',
         'LANG=C.UTF-8',
@@ -524,8 +528,8 @@ async function createTerminal({
         CapDrop: ['ALL'],
         SecurityOpt: ['no-new-privileges'],
         Tmpfs: {
-          '/workspace': 'rw,nosuid,nodev,size=128m',
-          '/tmp': 'rw,nosuid,nodev,size=64m'
+          '/workspace': 'rw,nosuid,nodev,size=128m,uid=65534,gid=65534,mode=0755',
+          '/tmp': 'rw,nosuid,nodev,size=64m,uid=65534,gid=65534,mode=1777'
         },
         LogConfig: {
           Type: 'json-file',
