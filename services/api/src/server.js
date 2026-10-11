@@ -5993,7 +5993,9 @@ const server = http.createServer(async (request, response) => {
           ? 400
           : message === 'authentication required'
             ? 401
-            : 500
+            : message === 'commit history storage limit exceeded'
+              ? 409
+              : 500
 
       send(response, status, {
         error: message
