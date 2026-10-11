@@ -17,7 +17,7 @@ import { getOriginPolicy } from './authPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
-import { buildProjectUpdateStatements } from './projectWritePolicy.js'
+import { buildProjectDeleteStatements, buildProjectUpdateStatements } from './projectWritePolicy.js'
 import {
   COMMIT_HISTORY_STORAGE_MULTIPLIER,
   MAX_COMMITS_PER_ACCOUNT,
@@ -2001,27 +2001,71 @@ async function updateProject(projectId, ownerId, payload) {
 }
 
 async function deleteProject(projectId, ownerId) {
-  const database = getDatabase()
-  const current = await getProjectById(projectId, ownerId)
+  return withOwnerCommitLock(ownerId, async () => {
+    const database = getDatabase()
+    const current = await getProjectById(projectId, ownerId)
 
-  if (!current) {
-    return false
-  }
-
-  await database.batch([
-    {
-      sql: 'DELETE FROM project_files WHERE project_id = ?',
-      args: [projectId]
-    },
-    {
-      sql: 'DELETE FROM projects WHERE id = ? AND owner_id = ?',
-      args: [projectId, ownerId]
+    if (!current) {
+      return false
     }
-  ], 'immediate')
 
-  return true
+    const terminalStatement = await database.prepare(
+      'SELECT id FROM terminal_sessions WHERE project_id = ? AND owner_id = ?'
+    )
+    const terminalRows = await terminalStatement.all([projectId, ownerId])
+
+    for (const row of terminalRows) {
+      const terminalId = String(row.id)
+      const owner = await loadTerminalOwner(terminalId)
+
+      if (owner) {
+        if (owner.userId !== ownerId || owner.projectId !== projectId) {
+          throw new Error('project terminal ownership mismatch')
+        }
+
+        const cleaned = await expireTerminalOwner(terminalId, owner)
+
+        if (!cleaned) {
+          throw new Error('project terminal cleanup failed; project was not deleted')
+        }
+
+        continue
+      }
+
+      if (terminalRunnerUrl) {
+        try {
+          await runnerTerminalRequest(
+            '/v1/terminals/' + encodeURIComponent(terminalId),
+            {
+              method: 'DELETE'
+            }
+          )
+        } catch (error) {
+          const message = error instanceof Error
+            ? error.message.toLowerCase()
+            : String(error).toLowerCase()
+
+          if (
+            !message.includes('terminal session not found') &&
+            !message.includes('404')
+          ) {
+            throw new Error('project terminal cleanup failed; project was not deleted')
+          }
+        }
+      }
+
+      await deleteTerminalOwnerRecord(terminalId)
+    }
+
+    const statements = buildProjectDeleteStatements({
+      projectId,
+      ownerId
+    })
+    const results = await database.batch(statements, 'immediate')
+
+    return Number(results[results.length - 1]?.rowsAffected) === 1
+  })
 }
-
 
 async function handleDashboardRequest(request, response) {
   const session = await getSession(request)
