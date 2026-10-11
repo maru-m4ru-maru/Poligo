@@ -2111,87 +2111,239 @@ async function getCommit(projectId, ownerId, commitId) {
   }
 }
 
-async function ensureInitialCommit(projectId, ownerId) {
-  const commits = await listCommits(projectId, ownerId)
+async function getCommitRetentionPlan(ownerId, projectId, storedFiles) {
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+  const maxHistoryBytes =
+    storageLimitBytes * COMMIT_HISTORY_STORAGE_MULTIPLIER
+  const commitRows = await getOwnerCommitRows(ownerId)
+  const snapshotBytes = getStoredFileBytes(storedFiles)
+  const plan = planCommitRetention(commitRows, {
+    projectId,
+    newCommitBytes: snapshotBytes,
+    historyLimitBytes: maxHistoryBytes
+  })
 
-  if (commits === null) {
-    return null
+  if (!plan.ok) {
+    throw new Error('commit history storage limit exceeded')
   }
 
-  if (commits.length) {
-    return commits
+  return {
+    maxHistoryBytes,
+    snapshotBytes,
+    deleteIds: plan.deleteIds
   }
+}
 
-  const project = await getProjectById(projectId, ownerId)
-
-  if (!project) {
-    return null
-  }
-
-  const database = getDatabase()
-  const commitId = randomUUID()
-  const now = Date.now()
-  const statements = [
-    {
-      sql: 'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
-      args: [commitId, projectId, ownerId, 'Initial commit', now]
-    }
+function buildCommitInsertStatement({
+  id,
+  projectId,
+  ownerId,
+  message,
+  createdAt,
+  snapshotBytes,
+  maxHistoryBytes,
+  initialOnly = false
+}) {
+  const sql = `INSERT INTO project_commits (
+      id, project_id, author_id, message, created_at
+    )
+    SELECT ?, ?, ?, ?, ?
+    WHERE (
+      SELECT COALESCE(SUM(LENGTH(CAST(pcf.content AS BLOB))), 0)
+      FROM project_commit_files pcf
+      JOIN project_commits pc ON pc.id = pcf.commit_id
+      JOIN projects p ON p.id = pc.project_id
+      WHERE p.owner_id = ?
+    ) + ? <= ?
+      AND (
+        SELECT COUNT(*)
+        FROM project_commits pc
+        JOIN projects p ON p.id = pc.project_id
+        WHERE p.owner_id = ?
+      ) < ?
+      AND (
+        SELECT COUNT(*) FROM project_commits WHERE project_id = ?
+      ) < ?
+      AND EXISTS (
+        SELECT 1 FROM projects WHERE id = ? AND owner_id = ?
+      )${initialOnly
+        ? ' AND NOT EXISTS (SELECT 1 FROM project_commits WHERE project_id = ?)'
+        : ''}`
+  const args = [
+    id,
+    projectId,
+    ownerId,
+    message,
+    createdAt,
+    ownerId,
+    snapshotBytes,
+    maxHistoryBytes,
+    ownerId,
+    MAX_COMMITS_PER_ACCOUNT,
+    projectId,
+    MAX_COMMITS_PER_PROJECT,
+    projectId,
+    ownerId
   ]
 
-  const storedFiles = encryptProjectSecrets(project.files)
-
-  for (const [filePath, fileContent] of Object.entries(storedFiles)) {
-    statements.push({
-      sql: 'INSERT INTO project_commit_files (commit_id, path, content) VALUES (?, ?, ?)',
-      args: [commitId, filePath, fileContent]
-    })
+  if (initialOnly) {
+    args.push(projectId)
   }
 
-  await database.batch(statements, 'immediate')
+  return {
+    sql,
+    args
+  }
+}
 
-  return [{
-    id: commitId,
-    authorId: ownerId,
-    message: 'Initial commit',
-    createdAt: now
-  }]
+async function ensureInitialCommit(projectId, ownerId) {
+  return withOwnerCommitLock(ownerId, async () => {
+    const existingCommits = await listCommits(projectId, ownerId)
+
+    if (existingCommits === null) {
+      return null
+    }
+
+    if (existingCommits.length) {
+      return existingCommits
+    }
+
+    const project = await getProjectById(projectId, ownerId)
+
+    if (!project) {
+      return null
+    }
+
+    const database = getDatabase()
+    const commitId = randomUUID()
+    const now = Date.now()
+    const storedFiles = encryptProjectSecrets(project.files)
+    const retention = await getCommitRetentionPlan(
+      ownerId,
+      projectId,
+      storedFiles
+    )
+    const statements = []
+
+    appendCommitRetentionDeletes(
+      statements,
+      retention.deleteIds,
+      ownerId
+    )
+
+    const insertIndex = statements.length
+    statements.push(buildCommitInsertStatement({
+      id: commitId,
+      projectId,
+      ownerId,
+      message: 'Initial commit',
+      createdAt: now,
+      snapshotBytes: retention.snapshotBytes,
+      maxHistoryBytes: retention.maxHistoryBytes,
+      initialOnly: true
+    }))
+
+    for (const [filePath, fileContent] of Object.entries(storedFiles)) {
+      statements.push({
+        sql: `INSERT INTO project_commit_files (commit_id, path, content)
+          SELECT ?, ?, ?
+          WHERE EXISTS (
+            SELECT 1 FROM project_commits
+            WHERE id = ? AND project_id = ?
+          )`,
+        args: [commitId, filePath, fileContent, commitId, projectId]
+      })
+    }
+
+    const results = await database.batch(statements, 'immediate')
+
+    if (Number(results[insertIndex]?.rowsAffected) !== 1) {
+      const latestCommits = await listCommits(projectId, ownerId)
+
+      if (latestCommits?.length) {
+        return latestCommits
+      }
+
+      throw new Error('commit history storage limit exceeded')
+    }
+
+    return [{
+      id: commitId,
+      authorId: ownerId,
+      message: 'Initial commit',
+      createdAt: now
+    }]
+  })
 }
 
 async function commitProject(projectId, ownerId, payload) {
-  const project = await getProjectById(projectId, ownerId)
+  return withOwnerCommitLock(ownerId, async () => {
+    const project = await getProjectById(projectId, ownerId)
 
-  if (!project) {
-    return null
-  }
-
-  const message = normalizeCommitMessage(payload.message)
-  const database = getDatabase()
-  const commitId = randomUUID()
-  const now = Date.now()
-  const statements = [
-    {
-      sql: 'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
-      args: [commitId, projectId, ownerId, message, now]
+    if (!project) {
+      return null
     }
-  ]
 
-  const storedFiles = encryptProjectSecrets(project.files)
+    const message = normalizeCommitMessage(payload.message)
+    const database = getDatabase()
+    const commitId = randomUUID()
+    const now = Date.now()
+    const storedFiles = encryptProjectSecrets(project.files)
+    const retention = await getCommitRetentionPlan(
+      ownerId,
+      projectId,
+      storedFiles
+    )
+    const statements = []
 
-  for (const [filePath, fileContent] of Object.entries(storedFiles)) {
-    statements.push({
-      sql: 'INSERT INTO project_commit_files (commit_id, path, content) VALUES (?, ?, ?)',
-      args: [commitId, filePath, fileContent]
-    })
-  }
+    appendCommitRetentionDeletes(
+      statements,
+      retention.deleteIds,
+      ownerId
+    )
 
-  await database.batch(statements, 'immediate')
+    const insertIndex = statements.length
+    statements.push(buildCommitInsertStatement({
+      id: commitId,
+      projectId,
+      ownerId,
+      message,
+      createdAt: now,
+      snapshotBytes: retention.snapshotBytes,
+      maxHistoryBytes: retention.maxHistoryBytes
+    }))
 
-  return {
-    id: commitId,
-    message,
-    createdAt: now,
-    files: project.files
-  }
+    for (const [filePath, fileContent] of Object.entries(storedFiles)) {
+      statements.push({
+        sql: `INSERT INTO project_commit_files (commit_id, path, content)
+          SELECT ?, ?, ?
+          WHERE EXISTS (
+            SELECT 1 FROM project_commits
+            WHERE id = ? AND project_id = ?
+          )`,
+        args: [commitId, filePath, fileContent, commitId, projectId]
+      })
+    }
+
+    const results = await database.batch(statements, 'immediate')
+
+    if (Number(results[insertIndex]?.rowsAffected) !== 1) {
+      const latestProject = await getProjectById(projectId, ownerId)
+
+      if (!latestProject) {
+        return null
+      }
+
+      throw new Error('commit history storage limit exceeded')
+    }
+
+    return {
+      id: commitId,
+      message,
+      createdAt: now,
+      files: project.files
+    }
+  })
 }
 
 function buildFileDiff(baseFiles, currentFiles) {
