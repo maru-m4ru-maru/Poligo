@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { existsSync } from 'node:fs'
 import { WebSocketServer } from 'ws'
 const terminalBackend = process.env.TERMINAL_BACKEND === 'process'
@@ -27,20 +28,9 @@ function send(response, status, body) {
 }
 
 async function readJson(request) {
-  let body = ''
-  let size = 0
-
-  for await (const chunk of request) {
-    size += Buffer.byteLength(chunk)
-
-    if (size > maxRequestBytes) {
-      throw new Error('request too large')
-    }
-
-    body += chunk
-  }
-
-  return body ? JSON.parse(body) : {}
+  return readJsonBody(request, {
+    maxBytes: maxRequestBytes
+  })
 }
 
 function authorized(request) {
