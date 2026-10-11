@@ -56,13 +56,22 @@ const server = http.createServer(async (request, response) => {
     (request.method === 'GET' || request.method === 'HEAD') &&
     requestPath === '/health'
   ) {
+    const dockerReady = existsSync(
+      process.env.DOCKER_SOCKET || '/var/run/docker.sock'
+    )
+    const terminalBackend = process.env.TERMINAL_BACKEND === 'process'
+      ? 'process'
+      : 'docker'
+    const terminalReady = terminalBackend === 'process'
+      ? process.getuid?.() === 0
+      : dockerReady
+    const executionReady = dockerReady
     const health = {
-      status: 'ok',
+      status: terminalReady && executionReady ? 'ok' : 'degraded',
       service: 'runner',
-      terminalBackend: process.env.TERMINAL_BACKEND === 'process' ? 'process' : 'docker',
-      terminalReady: process.env.TERMINAL_BACKEND === 'process'
-        ? process.getuid?.() === 0
-        : existsSync(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
+      terminalBackend,
+      terminalReady,
+      executionReady
     }
 
     if (request.method === 'HEAD') {
