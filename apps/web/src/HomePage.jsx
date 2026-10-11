@@ -54,9 +54,6 @@ export default function HomePage({ session }) {
           ) : (
             <>
               <button onClick={() => navigate('/signin')}>サインイン</button>
-              <button onClick={() => navigate('/terms')}>
-                利用規約
-              </button>
               <button className="home-nav-primary" onClick={() => navigate('/createaccount')}>
                 アカウントを作成
               </button>
