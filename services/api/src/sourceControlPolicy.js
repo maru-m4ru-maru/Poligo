@@ -1,5 +1,10 @@
 export function parseSourceControlRoute(method, pathname) {
-  if (typeof method !== 'string' || typeof pathname !== 'string') {
+  if (
+    typeof method !== 'string' ||
+    typeof pathname !== 'string' ||
+    (pathname.length > 1 && pathname.endsWith('/')) ||
+    pathname.includes('//')
+  ) {
     return null
   }
 
