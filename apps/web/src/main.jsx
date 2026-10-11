@@ -110,7 +110,7 @@ const FILE_ICONS = {
   kotlin: '/icons/kotlin.svg',
   c: '/icons/c.svg',
   cpp: '/icons/cplusplus.svg',
-  csharp: '/icons/csharp.svg',
+  csharp: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
   typescript: '/icons/typescript.svg'
 }
 
