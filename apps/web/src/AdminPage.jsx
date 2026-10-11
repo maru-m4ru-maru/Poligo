@@ -287,15 +287,15 @@ export default function AdminPage({ session }) {
         </button>
         <nav className="stack-sidebar-nav">
           <button onClick={() => navigate('/dashboard')}>
-            <span className="stack-nav-icon">▦</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/folder-kanban.svg" alt="" aria-hidden="true" /></span>
             プロジェクト
           </button>
           <button onClick={() => navigate('/account')}>
-            <span className="stack-nav-icon">◯</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/user-round.svg" alt="" aria-hidden="true" /></span>
             アカウント
           </button>
           <button className="active" type="button">
-            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/admin-panel.svg" alt="" aria-hidden="true" /></span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/shield-check.svg" alt="" aria-hidden="true" /></span>
             管理画面
           </button>
         </nav>
