@@ -5,6 +5,7 @@ export function shouldDisconnectSlowTerminalSocket(
   maxBufferedBytes = DEFAULT_MAX_TERMINAL_SOCKET_BUFFER_BYTES
 ) {
   return !Number.isSafeInteger(bufferedBytes) ||
+    bufferedBytes < 0 ||
     !Number.isSafeInteger(maxBufferedBytes) ||
     maxBufferedBytes < 1 ||
     bufferedBytes >= maxBufferedBytes
