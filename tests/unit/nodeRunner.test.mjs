@@ -18,7 +18,7 @@ const dockerAvailable = (() => {
   }
 })()
 
-const { enqueueJob, getJob, listExecutionLanguages } = await import(
+const { cleanupFinishedJobs, enqueueJob, getJob, listExecutionLanguages } = await import(
   '../../services/runner/src/executor.js'
 )
 
@@ -71,6 +71,32 @@ test('Node.js runtime is registered with a pinned Node 24 image', () => {
   )
   assert.ok(listLanguages().includes('node'))
   assert.ok(listExecutionLanguages().includes('node'))
+})
+
+test('finished executions release source files, arguments, environment values and stdin', async () => {
+  const job = enqueueJob({
+    language: 'unknown-language',
+    entrypoint: 'main.js',
+    files: {
+      'main.js': 'console.log("secret-source")'
+    },
+    args: ['secret-argument'],
+    env: {
+      API_SECRET: 'secret-environment'
+    },
+    stdin: 'secret-stdin'
+  })
+
+  const finished = await waitForJob(job.id)
+  assert.equal(finished.status, 'failed')
+  assert.equal(finished.files, null)
+  assert.equal(finished.args, null)
+  assert.equal(finished.env, null)
+  assert.equal(finished.stdin, null)
+
+  const removed = cleanupFinishedJobs(Date.parse(finished.finishedAt) + 60_001)
+  assert.ok(removed >= 1)
+  assert.equal(getJob(job.id), null)
 })
 
 test('Docker log decoder separates stdout and stderr and handles raw output', () => {
