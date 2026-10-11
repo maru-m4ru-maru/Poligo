@@ -85,3 +85,13 @@ test('returns a prototype-safe file map', () => {
   assert.equal(Object.getPrototypeOf(files), null)
   assert.equal(files['src/main.js'], 'console.log("ok")')
 })
+
+test('rejects file paths exceeding filesystem-safe UTF-8 byte length', () => {
+  const path = '界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界.js'
+  assert.ok(path.length < 240)
+  assert.ok(Buffer.byteLength(path, 'utf8') > 240)
+  assert.throws(
+    () => normalizeProjectFileMap({ [path]: 'content' }),
+    /invalid project file path/
+  )
+})
