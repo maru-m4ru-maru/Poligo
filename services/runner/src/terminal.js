@@ -491,10 +491,12 @@ async function createTerminal({
     throw new Error('terminal id already exists')
   }
 
+  let container = null
+
   try {
     await ensureImage()
 
-    const container = await docker.createContainer({
+    container = await docker.createContainer({
       Image: terminalImage,
       Cmd: [
         'bash',
@@ -628,6 +630,16 @@ async function createTerminal({
     if (session) {
       sessions.delete(terminalId)
       await cleanupSession(session)
+    } else if (container) {
+      try {
+        await container.kill()
+      } catch {}
+
+      try {
+        await container.remove({
+          force: true
+        })
+      } catch {}
     }
 
     throw error
