@@ -3,11 +3,10 @@ import {
   encryptSecret,
   isEncryptedSecret
 } from './secretStore.js'
+import { DEFAULT_STORAGE_LIMIT_BYTES, STORAGE_LIMIT_TRIGGERS } from './storageTriggers.js'
 
 const url = process.env.TURSO_DATABASE_URL || ''
 const authToken = process.env.TURSO_AUTH_TOKEN || ''
-const DEFAULT_STORAGE_LIMIT_BYTES = 15 * 1024 * 1024
-
 let database = null
 let status = 'not_configured'
 let error = null
@@ -113,75 +112,7 @@ export async function initializeDatabase() {
       )`,
       'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_owner_project ON terminal_sessions(owner_id, project_id)',
       'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_expires_at ON terminal_sessions(expires_at)',
-      `CREATE TRIGGER IF NOT EXISTS enforce_project_file_storage_limit
-      BEFORE INSERT ON project_files
-      BEGIN
-        SELECT RAISE(ABORT, 'storage limit exceeded')
-        WHERE
-          COALESCE((
-            SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
-            FROM projects p
-            JOIN project_files pf ON pf.project_id = p.id
-            WHERE p.owner_id = (
-              SELECT owner_id FROM projects WHERE id = NEW.project_id
-            )
-          ), 0) +
-          COALESCE((
-            SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
-            FROM projects p
-            JOIN project_commits pc ON pc.project_id = p.id
-            JOIN project_commit_files pcf ON pcf.commit_id = pc.id
-            WHERE p.owner_id = (
-              SELECT owner_id FROM projects WHERE id = NEW.project_id
-            )
-          ), 0) +
-          LENGTH(CAST(NEW.content AS BLOB)) >
-          COALESCE((
-            SELECT limit_bytes FROM user_storage_limits
-            WHERE user_id = (
-              SELECT owner_id FROM projects WHERE id = NEW.project_id
-            )
-          ), ${DEFAULT_STORAGE_LIMIT_BYTES});
-      END`,
-      `CREATE TRIGGER IF NOT EXISTS enforce_commit_file_storage_limit
-      BEFORE INSERT ON project_commit_files
-      BEGIN
-        SELECT RAISE(ABORT, 'storage limit exceeded')
-        WHERE
-          COALESCE((
-            SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
-            FROM projects p
-            JOIN project_files pf ON pf.project_id = p.id
-            WHERE p.owner_id = (
-              SELECT owner_id
-              FROM project_commits
-              WHERE id = NEW.commit_id
-            )
-          ), 0) +
-          COALESCE((
-            SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
-            FROM projects p
-            JOIN project_commits pc ON pc.project_id = p.id
-            JOIN project_commit_files pcf ON pcf.commit_id = pc.id
-            WHERE p.owner_id = (
-              SELECT owner_id
-              FROM project_commits current_commit
-              JOIN projects current_project
-                ON current_project.id = current_commit.project_id
-              WHERE current_commit.id = NEW.commit_id
-            )
-          ), 0) +
-          LENGTH(CAST(NEW.content AS BLOB)) >
-          COALESCE((
-            SELECT limit_bytes FROM user_storage_limits
-            WHERE user_id = (
-              SELECT p.owner_id
-              FROM project_commits pc
-              JOIN projects p ON p.id = pc.project_id
-              WHERE pc.id = NEW.commit_id
-            )
-          ), ${DEFAULT_STORAGE_LIMIT_BYTES});
-      END`
+      ...STORAGE_LIMIT_TRIGGERS
     ], 'immediate')
 
     const secretRows = await database.prepare(
