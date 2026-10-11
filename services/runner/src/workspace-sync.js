@@ -53,7 +53,9 @@ process.stdin.on('end', () => {
           !part ||
           part === '.' ||
           part === '..' ||
-          ignored.has(part)
+          ignored.has(part) ||
+          ['__proto__', 'prototype', 'constructor'].includes(part) ||
+          /[\u0000-\u001f\u007f]/.test(part)
         )
       ) {
         throw new Error('invalid file path')
