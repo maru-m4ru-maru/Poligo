@@ -6,6 +6,7 @@ import path from 'node:path'
 import pty from 'node-pty'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { assertNoFileDirectoryConflicts, normalizeRunnerFilePath as normalizeFilePath } from './filePaths.js'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = process.env.TERMINAL_RUN_ROOT || '/tmp/poligo-terminal-sessions'
@@ -40,46 +41,6 @@ function normalizeId(value) {
   return value
 }
 
-const reservedTerminalPathParts = new Set([
-  '.git',
-  'node_modules',
-  '.terminal-cache',
-  '.tmp',
-  '.cache',
-  '__proto__',
-  'prototype',
-  'constructor'
-])
-
-function normalizeFilePath(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    value.length > 240 ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    /^[A-Za-z]:/.test(value) ||
-    value.includes('\\') ||
-    /[\u0000-\u001f\u007f]/.test(value)
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  const parts = value.split('/')
-
-  if (
-    parts.some(part =>
-      !part ||
-      part === '.' ||
-      part === '..' ||
-      reservedTerminalPathParts.has(part)
-    )
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  return parts.join('/')
-}
 
 function normalizeFiles(files) {
   if (!files || typeof files !== 'object' || Array.isArray(files)) {
@@ -115,17 +76,7 @@ function normalizeFiles(files) {
     normalized[safePath] = content
   }
 
-  const paths = new Set(Object.keys(normalized))
-
-  for (const filePath of paths) {
-    const parts = filePath.split('/')
-
-    for (let index = 1; index < parts.length; index += 1) {
-      if (paths.has(parts.slice(0, index).join('/'))) {
-        throw new Error('terminal file path conflicts with a directory')
-      }
-    }
-  }
+  assertNoFileDirectoryConflicts(Object.keys(normalized))
 
   return normalized
 }
