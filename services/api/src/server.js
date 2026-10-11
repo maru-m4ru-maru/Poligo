@@ -273,10 +273,11 @@ function normalizeExecutionFiles(files) {
       typeof path !== 'string' ||
       path.length === 0 ||
       path.length > 240 ||
+      path === '__proto__' ||
       path.includes('\\') ||
       path.includes('\0') ||
       path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
+      path.split('/').some(part => !part || part === '..' || part === '.')
     ) {
       throw new Error('invalid project file path')
     }
@@ -292,6 +293,18 @@ function normalizeExecutionFiles(files) {
     }
 
     normalized[path] = value
+  }
+
+  const normalizedPaths = new Set(Object.keys(normalized))
+
+  for (const filePath of normalizedPaths) {
+    const parts = filePath.split('/')
+
+    for (let index = 1; index < parts.length; index += 1) {
+      if (normalizedPaths.has(parts.slice(0, index).join('/'))) {
+        throw new Error('project file path conflicts with a directory')
+      }
+    }
   }
 
   if (Object.keys(normalized).length > MAX_FILES) {
@@ -1772,6 +1785,10 @@ function getStoredFileBytes(files) {
 }
 
 function normalizeProjectPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('invalid project payload')
+  }
+
   const name = typeof payload.name === 'string'
     ? payload.name.trim().slice(0, 120)
     : ''
@@ -1792,9 +1809,10 @@ function normalizeProjectPayload(payload) {
       typeof path !== 'string' ||
       path.length === 0 ||
       path.length > 240 ||
+      path === '__proto__' ||
       path.includes('\\') ||
       path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
+      path.split('/').some(part => !part || part === '..' || part === '.')
     ) {
       throw new Error('invalid project file path')
     }
@@ -1810,6 +1828,18 @@ function normalizeProjectPayload(payload) {
     }
 
     files[path] = value
+  }
+
+  const filePaths = new Set(Object.keys(files))
+
+  for (const filePath of filePaths) {
+    const parts = filePath.split('/')
+
+    for (let index = 1; index < parts.length; index += 1) {
+      if (filePaths.has(parts.slice(0, index).join('/'))) {
+        throw new Error('project file path conflicts with a directory')
+      }
+    }
   }
 
   if (Object.keys(files).length > MAX_FILES) {
