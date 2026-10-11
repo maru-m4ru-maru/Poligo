@@ -26,7 +26,7 @@ const LANGUAGES = [
   { name: 'PHP', icon: '/icons/php.svg' },
   { name: 'Ruby', icon: '/icons/ruby.svg' },
   { name: 'Kotlin', icon: '/icons/kotlin.svg' },
-  { name: 'C#', icon: '/icons/csharp.svg' }
+  { name: 'C#', icon: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png' }
 ]
 
 export default function HomePage({ session }) {
