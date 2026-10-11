@@ -58,7 +58,6 @@ try {
 
 const EMAIL_LOCAL_PART = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+$/i
 const DOMAIN_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
-const GENERATED_E2E_EMAIL = /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.com$/i
 
 export function normalizeUsername(value) {
   if (
@@ -72,11 +71,6 @@ export function normalizeUsername(value) {
 }
 
 function isDisposableEmailAddress(email) {
-  // CI-generated accounts use a strict UUID-based address that the cleanup job recognizes.
-  if (GENERATED_E2E_EMAIL.test(email)) {
-    return false
-  }
-
   if (externalDisposableCheck) {
     try {
       if (externalDisposableCheck(email)) {
