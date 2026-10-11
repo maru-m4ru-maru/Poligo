@@ -2027,53 +2027,56 @@ async function createProject(ownerId, payload) {
 }
 
 async function updateProject(projectId, ownerId, payload) {
-  const database = getDatabase()
-  const current = await getProjectById(projectId, ownerId)
+  return withOwnerCommitLock(ownerId, async () => {
 
-  if (!current) {
-    return null
-  }
+    const database = getDatabase()
+    const current = await getProjectById(projectId, ownerId)
 
-  const storedFiles = encryptProjectSecrets(payload.files)
-  const newStorageBytes = getStoredFileBytes(storedFiles)
-  const updatedAt = Math.max(Date.now(), Number(current.updatedAt) + 1)
-  const { statements } = buildProjectUpdateStatements({
-    projectId,
-    ownerId,
-    expectedUpdatedAt: Number(current.updatedAt),
-    updatedAt,
-    projectName: payload.name,
-    storedFiles,
-    newStorageBytes,
-    defaultStorageLimitBytes: DEFAULT_STORAGE_LIMIT_BYTES
-  })
-  const results = await database.batch(statements, 'immediate')
-
-  if (Number(results[0]?.rowsAffected) !== 1) {
-    const latest = await getProjectById(projectId, ownerId)
-
-    if (!latest) {
+    if (!current) {
       return null
     }
 
-    if (Number(latest.updatedAt) !== Number(current.updatedAt)) {
-      throw new Error('project changed while saving; reload before retrying')
+    const storedFiles = encryptProjectSecrets(payload.files)
+    const newStorageBytes = getStoredFileBytes(storedFiles)
+    const updatedAt = Math.max(Date.now(), Number(current.updatedAt) + 1)
+    const { statements } = buildProjectUpdateStatements({
+      projectId,
+      ownerId,
+      expectedUpdatedAt: Number(current.updatedAt),
+      updatedAt,
+      projectName: payload.name,
+      storedFiles,
+      newStorageBytes,
+      defaultStorageLimitBytes: DEFAULT_STORAGE_LIMIT_BYTES
+    })
+    const results = await database.batch(statements, 'immediate')
+
+    if (Number(results[0]?.rowsAffected) !== 1) {
+      const latest = await getProjectById(projectId, ownerId)
+
+      if (!latest) {
+        return null
+      }
+
+      if (Number(latest.updatedAt) !== Number(current.updatedAt)) {
+        throw new Error('project changed while saving; reload before retrying')
+      }
+
+      throw new Error('storage limit exceeded')
     }
 
-    throw new Error('storage limit exceeded')
-  }
+    if (Number(results[results.length - 1]?.rowsAffected) !== 1) {
+      throw new Error('project revision claim was lost while saving')
+    }
 
-  if (Number(results[results.length - 1]?.rowsAffected) !== 1) {
-    throw new Error('project revision claim was lost while saving')
-  }
-
-  return {
-    id: projectId,
-    name: payload.name,
-    files: payload.files,
-    createdAt: current.createdAt,
-    updatedAt
-  }
+    return {
+      id: projectId,
+      name: payload.name,
+      files: payload.files,
+      createdAt: current.createdAt,
+      updatedAt
+    }
+  })
 }
 
 async function deleteProject(projectId, ownerId) {
