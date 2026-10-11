@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isConfiguredAdmin } from '../../services/api/src/adminPolicy.js'
+import { isConfiguredAdmin, isDisposableE2EAccountEmail } from '../../services/api/src/adminPolicy.js'
 
 const adminUserIds = new Set(['fixed-user-id'])
 const adminEmails = new Set(['admin@example.com'])
@@ -78,4 +78,18 @@ test('missing IDs and unrelated emails do not grant admin access', () => {
     }, adminUserIds, adminEmails),
     false
   )
+})
+
+test('restricts disposable account cleanup and deletion to generated E2E email addresses', () => {
+  assert.equal(
+    isDisposableE2EAccountEmail('poligo-run-0123456789abcdef0123456789abcdef@example.invalid'),
+    true
+  )
+  assert.equal(
+    isDisposableE2EAccountEmail('POLIGO-TEST-0123456789ABCDEF0123456789ABCDEF@example.com'),
+    true
+  )
+  assert.equal(isDisposableE2EAccountEmail('person@example.com'), false)
+  assert.equal(isDisposableE2EAccountEmail('poligo-test@example.invalid'), false)
+  assert.equal(isDisposableE2EAccountEmail(null), false)
 })
