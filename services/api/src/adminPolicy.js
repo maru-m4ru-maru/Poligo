@@ -17,3 +17,13 @@ export function isConfiguredAdmin(user, adminUserIds, adminEmails) {
 
   return adminEmails.has(String(user.email || '').trim().toLowerCase())
 }
+
+export function isDisposableE2EAccountEmail(value) {
+  if (typeof value !== 'string') {
+    return false
+  }
+
+  return /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(
+    value.trim().toLowerCase()
+  )
+}
