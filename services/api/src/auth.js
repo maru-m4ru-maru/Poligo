@@ -10,7 +10,7 @@ import { LibsqlDialect } from '@libsql/kysely-libsql'
 import { Kysely } from 'kysely'
 import { getDatabase } from './turso.js'
 import { ensureUserUsernameColumn } from './authSchema.js'
-import { getTrustedOrigins } from './authPolicy.js'
+import { getOriginPolicy } from './authPolicy.js'
 
 const databaseUrl = process.env.TURSO_DATABASE_URL || ''
 const databaseToken = process.env.TURSO_AUTH_TOKEN || ''
@@ -38,7 +38,7 @@ const database = new Kysely({
   })
 })
 
-const trustedOrigins = getTrustedOrigins(allowedOrigin, runtimeEnvironment)
+const trustedOrigins = getOriginPolicy(allowedOrigin, runtimeEnvironment).allowedOrigins
 
 async function createFallbackUsername(email) {
   const authDatabase = getDatabase()
