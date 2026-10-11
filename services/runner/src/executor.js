@@ -56,19 +56,45 @@ const jobCleanupTimer = setInterval(() => {
 
 jobCleanupTimer.unref?.()
 
+const reservedExecutionPathParts = new Set([
+  '.git',
+  'node_modules',
+  '.terminal-cache',
+  '.tmp',
+  '.cache',
+  '__proto__',
+  'prototype',
+  'constructor'
+])
+
 function normalizeFilePath(value) {
   if (
     typeof value !== 'string' ||
     !value ||
+    value.length > 240 ||
     value.includes('\0') ||
     value.startsWith('/') ||
+    /^[A-Za-z]:/.test(value) ||
     value.includes('\\') ||
-    value.split('/').some(part => !part || part === '..' || part === '.')
+    /[\u0000-\u001f\u007f]/.test(value)
   ) {
     throw new Error('invalid file path')
   }
 
-  return value
+  const parts = value.split('/')
+
+  if (
+    parts.some(part =>
+      !part ||
+      part === '..' ||
+      part === '.' ||
+      reservedExecutionPathParts.has(part)
+    )
+  ) {
+    throw new Error('invalid file path')
+  }
+
+  return parts.join('/')
 }
 
 function truncate(value) {
@@ -183,14 +209,28 @@ async function prepareWorkspace(files) {
     throw new Error('too many files')
   }
 
+  const safeEntries = entries.map(([name, content]) => [
+    normalizeFilePath(name),
+    content
+  ])
+  const paths = new Set(safeEntries.map(([name]) => name))
+
+  for (const filePath of paths) {
+    const parts = filePath.split('/')
+
+    for (let index = 1; index < parts.length; index += 1) {
+      if (paths.has(parts.slice(0, index).join('/'))) {
+        throw new Error('file path conflicts with a directory')
+      }
+    }
+  }
+
   let totalBytes = 0
   await fs.mkdir(workRoot, { recursive: true, mode: 0o755 })
   const workspace = await fs.mkdtemp(path.join(workRoot, 'job-'))
 
   try {
-    for (const [name, content] of entries) {
-      const safePath = normalizeFilePath(name)
-
+    for (const [safePath, content] of safeEntries) {
       if (typeof content !== 'string') {
         throw new Error('file content must be text')
       }
