@@ -6,6 +6,7 @@ import path from 'node:path'
 import pty from 'node-pty'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { assertNoPathConflicts, normalizeRelativeFilePath } from './filePaths.js'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = process.env.TERMINAL_RUN_ROOT || '/tmp/poligo-terminal-sessions'
@@ -41,33 +42,13 @@ function normalizeId(value) {
 }
 
 function normalizeFilePath(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    value.length > 240 ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    value.includes('\\')
-  ) {
+  const safePath = normalizeRelativeFilePath(value)
+
+  if (safePath.split('/').some(part => ignoredDirectories.has(part))) {
     throw new Error('invalid file path')
   }
 
-  const parts = value.split('/')
-
-  if (
-    parts.some(part =>
-      !part ||
-      part === '.' ||
-      part === '..' ||
-      part === '.terminal-cache' ||
-      part === '.tmp' ||
-      part === '.cache'
-    )
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  return parts.join('/')
+  return safePath
 }
 
 function normalizeFiles(files) {
@@ -103,6 +84,11 @@ function normalizeFiles(files) {
 
     normalized[safePath] = content
   }
+
+  assertNoPathConflicts(
+    Object.keys(normalized),
+    'terminal file path conflicts with a directory'
+  )
 
   return normalized
 }
