@@ -51,7 +51,7 @@ test('rejects a file path that is also a directory prefix', () => {
 })
 
 test('requires a name and string file contents', () => {
-  assert.throws(() => normalizeProjectPayload({ name: ' ', files: {} }), /project name is required/)
+  assert.throws(() => normalizeProjectPayload({ name: ' ', files: {} }), /project name is invalid/)
   assert.throws(() => normalizeProjectPayload({ name: 'x', files: { 'main.js': 42 } }), /must be text/)
 })
 
