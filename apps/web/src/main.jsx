@@ -2124,6 +2124,7 @@ function IDE({ projectId }) {
       0
     )
     let activePath = ''
+    const uploadedPaths = []
     let firstError = ''
 
     for (const file of uploaded) {
@@ -2137,10 +2138,13 @@ function IDE({ projectId }) {
       const extension = fileExtension(path)
       const isText = textExtensions.has(extension) || file.type.startsWith('text/')
       const contentPrefix = 'data:' + (file.type || 'application/octet-stream') + ';base64,'
+      const existingBytes = nextFiles[path]
+        ? encoder.encode(nextFiles[path]).byteLength
+        : 0
       const expectedBytes = isText
         ? file.size
         : Math.ceil(file.size / 3) * 4 + encoder.encode(contentPrefix).byteLength
-      const remainingBytes = 5_000_000 - currentBytes
+      const remainingBytes = 5_000_000 - (currentBytes - existingBytes)
 
       if (expectedBytes > remainingBytes) {
         firstError ||= 'プロジェクトの保存容量を超えるため、ファイルを追加できませんでした。'
@@ -2189,6 +2193,7 @@ function IDE({ projectId }) {
       nextFiles[path] = value
       currentBytes = nextBytes
       activePath = path
+      uploadedPaths.push(path)
     }
 
     if (activePath) {
@@ -2198,7 +2203,7 @@ function IDE({ projectId }) {
       setOpenFiles(current => {
         const merged = [...current]
 
-        for (const path of Object.keys(nextFiles)) {
+        for (const path of uploadedPaths) {
           if (!merged.includes(path)) {
             merged.push(path)
           }
