@@ -19,3 +19,33 @@ export function isAllowedWorkspaceId(workspaceId, sessionUserId, accountIds = []
 
   return !accountIds.includes(workspaceId)
 }
+
+export function buildWorkspaceClaimStatements(workspaceId, userId, updatedAt = Date.now()) {
+  if (
+    typeof workspaceId !== 'string' ||
+    !workspaceId ||
+    typeof userId !== 'string' ||
+    !userId ||
+    workspaceId === userId ||
+    !Number.isSafeInteger(updatedAt)
+  ) {
+    throw new Error('invalid workspace claim')
+  }
+
+  return [
+    {
+      sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
+      args: [userId, workspaceId]
+    },
+    {
+      sql: `UPDATE terminal_sessions
+        SET owner_id = ?,
+          websocket_ticket_hash = '',
+          ticket_expires_at = 0,
+          ticket_used = 1,
+          updated_at = ?
+        WHERE owner_id = ?`,
+      args: [userId, updatedAt, workspaceId]
+    }
+  ]
+}
