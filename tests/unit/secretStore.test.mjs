@@ -43,7 +43,7 @@ test('encrypted project secrets round-trip while example env files remain readab
   assert.equal(isEncryptedSecret(encrypted['.env']), true)
   assert.equal(isEncryptedSecret(encrypted['nested/.env.production']), true)
   assert.equal(encrypted['.env.example'], files['.env.example'])
-  assert.deepEqual(decryptProjectSecrets(encrypted), files)
+  assert.deepEqual({ ...decryptProjectSecrets(encrypted) }, files)
 })
 
 test('rejects ciphertext that is modified or uses an invalid authentication tag', () => {
