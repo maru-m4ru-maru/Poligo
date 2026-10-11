@@ -77,6 +77,7 @@ const startupReadiness = createStartupReadiness()
 const databaseInitializationPromise = startupReadiness.promise
 let databaseInitializationError = null
 let databaseInitializationComplete = false
+let databaseInitializationFailed = false
 const executionRateState = new Map()
 const executionOwners = new Map()
 const terminalOwners = new Map()
@@ -6004,12 +6005,12 @@ const server = http.createServer(async (request, response) => {
       database: {
         ...databaseStatus,
         initialization: !databaseInitializationComplete
-          ? databaseInitializationError
+          ? 'pending'
+          : databaseInitializationFailed
             ? 'failed'
-            : 'pending'
-          : databaseInitializationError
-            ? 'degraded'
-            : 'ready'
+            : databaseInitializationError
+              ? 'degraded'
+              : 'ready'
       }
     })
     return
@@ -6613,10 +6614,12 @@ server.listen(port, '0.0.0.0', () => {
       }
 
       databaseInitializationComplete = true
+      databaseInitializationFailed = false
       databaseInitializationError = projectDatabaseError
       startupReadiness.resolve(true)
     } catch (error) {
       databaseInitializationComplete = true
+      databaseInitializationFailed = true
       databaseInitializationError = error instanceof Error
         ? error.message
         : String(error)
