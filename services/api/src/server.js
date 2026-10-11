@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createStartupReadiness } from './startupReadiness.js'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
@@ -71,7 +72,8 @@ const MAX_EXECUTION_ARGUMENTS = 32
 const MAX_EXECUTION_ARGUMENT_BYTES = 512
 const MAX_EXECUTION_STDIN_BYTES = 1_000_000
 const authHandler = toNodeHandler(auth)
-let databaseInitializationPromise = Promise.resolve(false)
+const startupReadiness = createStartupReadiness()
+const databaseInitializationPromise = startupReadiness.promise
 let databaseInitializationError = null
 let databaseInitializationComplete = false
 const executionRateState = new Map()
@@ -1676,20 +1678,18 @@ async function getWorkspaceId(request, sessionUserId) {
 }
 
 async function getSession(request) {
+  const initialized = await databaseInitializationPromise
+
+  if (!initialized) {
+    return null
+  }
+
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(request.headers)
   })
 
   if (!session?.user?.id) {
     return session
-  }
-
-  if (!databaseInitializationComplete) {
-    const initialized = await databaseInitializationPromise
-
-    if (!initialized) {
-      return null
-    }
   }
 
   const database = getDatabase()
@@ -5861,6 +5861,15 @@ const server = http.createServer(async (request, response) => {
 
   if (request.url.startsWith('/api/auth/')) {
     setCorsHeaders(response)
+    const authReady = await databaseInitializationPromise
+
+    if (!authReady) {
+      send(response, 503, {
+        error: 'authentication database initialization failed; check /api/health and API logs'
+      })
+      return
+    }
+
     await authHandler(request, response)
     return
   }
@@ -6537,41 +6546,53 @@ async function cleanupDisposableE2EAccountsOnStartup() {
 server.listen(port, '0.0.0.0', () => {
   console.log('Poligo API listening on ' + port)
 
-  databaseInitializationPromise = (async () => {
-    const projectDatabaseInitialized = await initializeDatabase()
+  void (async () => {
+    let projectDatabaseInitialized = false
     let projectDatabaseError = null
 
-    if (projectDatabaseInitialized) {
-      console.log('Poligo project database ready')
-    } else {
-      const databaseStatus = getDatabaseStatus()
-      projectDatabaseError = databaseStatus.error ||
-        (databaseStatus.status === 'not_configured'
-          ? 'Turso database is not configured'
-          : 'Project database initialization did not complete')
+    try {
+      projectDatabaseInitialized = await initializeDatabase()
 
-      console.error('Poligo project database initialization failed: ' + projectDatabaseError)
+      if (projectDatabaseInitialized) {
+        console.log('Poligo project database ready')
+      } else {
+        const databaseStatus = getDatabaseStatus()
+        projectDatabaseError = databaseStatus.error ||
+          (databaseStatus.status === 'not_configured'
+            ? 'Turso database is not configured'
+            : 'Project database initialization did not complete')
+
+        console.error('Poligo project database initialization failed: ' + projectDatabaseError)
+      }
+
+      await initializeAuthDatabase()
+      console.log('Poligo authentication database ready')
+
+      if (projectDatabaseInitialized) {
+        await restoreTerminalOwners()
+        console.log('Poligo terminal sessions restored')
+      } else {
+        console.warn('Poligo terminal sessions were not restored because the project database is unavailable')
+      }
+
+      if (
+        projectDatabaseInitialized &&
+        process.env.POLIGO_CLEANUP_DISPOSABLE_E2E_ACCOUNTS_ON_START === '1'
+      ) {
+        await cleanupDisposableE2EAccountsOnStartup()
+      }
+
+      databaseInitializationComplete = true
+      databaseInitializationError = projectDatabaseError
+      startupReadiness.resolve(true)
+    } catch (error) {
+      databaseInitializationComplete = true
+      databaseInitializationError = error instanceof Error
+        ? error.message
+        : String(error)
+
+      console.error('Poligo database initialization failed: ' + databaseInitializationError)
+      startupReadiness.resolve(false)
     }
-
-    await initializeAuthDatabase()
-    await restoreTerminalOwners()
-    console.log('Poligo authentication database ready')
-    console.log('Poligo terminal sessions restored')
-
-    if (process.env.POLIGO_CLEANUP_DISPOSABLE_E2E_ACCOUNTS_ON_START === '1') {
-      await cleanupDisposableE2EAccountsOnStartup()
-    }
-
-    databaseInitializationComplete = true
-    databaseInitializationError = projectDatabaseError
-    return true
-  })().catch(error => {
-    databaseInitializationComplete = false
-    databaseInitializationError = error instanceof Error
-      ? error.message
-      : String(error)
-
-    console.error('Poligo database initialization failed: ' + databaseInitializationError)
-    return false
-  })
+  })()
 })
