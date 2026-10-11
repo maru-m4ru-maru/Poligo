@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { isWorkspaceClaimAllowed } from '../../services/api/src/workspacePolicy.js'
 
-test('keeps a user's existing account workspace attached to that same user', () => {
+test("keeps a user's existing account workspace attached to that same user", () => {
   assert.equal(isWorkspaceClaimAllowed('user-123456789012', 'user-123456789012', true), true)
 })
 
