@@ -4,6 +4,7 @@ import Docker from 'dockerode'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
 import { assertNoFileDirectoryConflicts, normalizeRunnerFilePath as normalizeFilePath } from './filePaths.js'
+import { shouldDisconnectSlowTerminalSocket } from './terminalSocketPolicy.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -17,6 +18,7 @@ const nanoCpus = Number(process.env.TERMINAL_NANO_CPUS || 500_000_000)
 const pidsLimit = Number(process.env.TERMINAL_PIDS_LIMIT || 128)
 const idleTtlMs = Number(process.env.TERMINAL_IDLE_TTL_MS || 30 * 60 * 1000)
 const maxOutputBytes = Number(process.env.TERMINAL_MAX_OUTPUT_BYTES || 65_536)
+const maxSocketBufferBytes = Number(process.env.TERMINAL_MAX_SOCKET_BUFFER_BYTES || 1_048_576)
 const terminalNetworkMode = process.env.TERMINAL_NETWORK_MODE || 'none'
 
 const sessions = new Map()
@@ -45,22 +47,48 @@ function normalizeId(value) {
   return value
 }
 
+function trimUtf8ToBytes(value, maxBytes) {
+  const buffer = Buffer.from(value, 'utf8')
+
+  if (buffer.length <= maxBytes) {
+    return value
+  }
+
+  let start = buffer.length - maxBytes
+
+  while (start < buffer.length && (buffer[start] & 0xc0) === 0x80) {
+    start += 1
+  }
+
+  return buffer.subarray(start).toString('utf8')
+}
+
 function appendOutput(session, data) {
-  session.outputBuffer += data
+  session.outputBuffer = trimUtf8ToBytes(
+    session.outputBuffer + data,
+    maxOutputBytes
+  )
 
-  if (session.outputBuffer.length > maxOutputBytes) {
-    session.outputBuffer =
-      session.outputBuffer.slice(-maxOutputBytes)
+  const socket = session.socket
+
+  if (socket?.readyState !== 1) {
+    return
   }
 
-  if (session.socket?.readyState === 1) {
-    session.socket.send(
-      JSON.stringify({
-        type: 'output',
-        data
-      })
-    )
+  if (shouldDisconnectSlowTerminalSocket(socket.bufferedAmount, maxSocketBufferBytes)) {
+    if (session.socket === socket) {
+      session.socket = null
+      session.disconnectedAt = new Date().toISOString()
+    }
+
+    socket.close(1013, 'terminal output backlog')
+    return
   }
+
+  socket.send(JSON.stringify({
+    type: 'output',
+    data
+  }))
 }
 
 async function ensureImage() {
@@ -217,10 +245,8 @@ async function writeWorkspaceArchive(container, archive) {
   }
 }
 
-function normalizeArchivePath(name) {
-  let value = String(name || '')
-    .replace(/^\.\//, '')
-    .replace(/^\/+/, '')
+export function normalizeArchivePath(name) {
+  let value = String(name || '').replace(/^\.\//, '')
 
   if (value === 'workspace') {
     return ''
@@ -230,15 +256,15 @@ function normalizeArchivePath(name) {
     value = value.slice('workspace/'.length)
   }
 
-  if (
-    !value ||
-    value.includes('\0') ||
-    value.split('/').some(part => part === '..' || part === '.')
-  ) {
+  if (!value) {
     return ''
   }
 
-  return value
+  try {
+    return normalizeFilePath(value)
+  } catch {
+    return ''
+  }
 }
 
 async function readWorkspaceArchive(container) {
@@ -303,7 +329,7 @@ async function readWorkspaceArchive(container) {
         }
 
         const extract = tar.extract()
-        const files = {}
+        const files = Object.create(null)
         let totalBytes = 0
 
         extract.on('entry', (header, entryStream, next) => {
