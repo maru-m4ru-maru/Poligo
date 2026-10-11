@@ -4325,13 +4325,16 @@ async function persistTerminalOwner(id, owner) {
   const database = getDatabase()
   const storedFiles = JSON.stringify(encryptProjectSecrets(owner.baseFiles))
 
-  await database.batch([
+  const results = await database.batch([
     {
       sql: `INSERT INTO terminal_sessions (
         id, owner_id, project_id, base_files, created_at, updated_at, expires_at,
         websocket_ticket_hash, ticket_expires_at, ticket_used
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`,
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM projects WHERE id = ? AND owner_id = ?
+      )`,
       args: [
         id,
         owner.userId,
@@ -4342,10 +4345,16 @@ async function persistTerminalOwner(id, owner) {
         owner.expiresAt,
         owner.websocketTicketHash || (owner.websocketTicket ? hashWebSocketTicket(owner.websocketTicket) : ''),
         owner.websocketTicketExpiresAt || 0,
-        owner.websocketTicketUsed ? 1 : 0
+        owner.websocketTicketUsed ? 1 : 0,
+        owner.projectId,
+        owner.userId
       ]
     }
   ], 'immediate')
+
+  if (Number(results[0]?.rowsAffected) !== 1) {
+    throw new Error('project no longer exists for terminal session')
+  }
 }
 
 async function updateTerminalOwnerRecord(id, owner) {
@@ -4547,31 +4556,39 @@ async function loadTerminalOwner(id) {
 }
 
 async function registerTerminal(id, userId, projectId, files, websocketTicket) {
-  const now = Date.now()
-  const owner = {
-    userId,
-    projectId,
-    baseFiles: { ...files },
-    websocketTicket,
-    websocketTicketHash: hashWebSocketTicket(websocketTicket),
-    websocketTicketExpiresAt: now + 60_000,
-    websocketTicketUsed: false,
-    createdAt: now,
-    expiresAt: now + TERMINAL_RECORD_TTL_MS,
-    cleanupInProgress: false,
-    revoked: false
-  }
+  return withOwnerMutationLock(userId, async () => {
+    const project = await getProjectById(projectId, userId)
 
-  terminalOwners.set(id, owner)
+    if (!project) {
+      throw new Error('project not found')
+    }
 
-  try {
-    await persistTerminalOwner(id, owner)
-  } catch (error) {
-    terminalOwners.delete(id)
-    throw error
-  }
+    const now = Date.now()
+    const owner = {
+      userId,
+      projectId,
+      baseFiles: { ...files },
+      websocketTicket,
+      websocketTicketHash: hashWebSocketTicket(websocketTicket),
+      websocketTicketExpiresAt: now + 60_000,
+      websocketTicketUsed: false,
+      createdAt: now,
+      expiresAt: now + TERMINAL_RECORD_TTL_MS,
+      cleanupInProgress: false,
+      revoked: false
+    }
 
-  return owner
+    terminalOwners.set(id, owner)
+
+    try {
+      await persistTerminalOwner(id, owner)
+    } catch (error) {
+      terminalOwners.delete(id)
+      throw error
+    }
+
+    return owner
+  })
 }
 
 function retainTerminal(id) {
