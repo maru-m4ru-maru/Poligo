@@ -25,6 +25,7 @@ import AccountPage from './AccountPage'
 import AdminPage from './AdminPage'
 import TerminalPanel from './TerminalPanel'
 import { getExecutionLanguage } from './executionLanguage'
+import { areValidProjectPaths, isSafeProjectFilePath } from './filePaths'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1050,6 +1051,7 @@ function IDE({ projectId }) {
   const [preview, setPreview] = useState('')
   const [apiStatus, setApiStatus] = useState('checking')
   const [saveStatus, setSaveStatus] = useState('saved')
+  const [workspaceError, setWorkspaceError] = useState('')
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [quickOpenOpen, setQuickOpenOpen] = useState(false)
@@ -1227,9 +1229,15 @@ function IDE({ projectId }) {
     let cancelled = false
 
     async function loadWorkspace() {
+      let claimError = null
+
       try {
         await claimWorkspace()
-      } catch {}
+      } catch (error) {
+        claimError = error instanceof Error
+          ? error.message
+          : 'ワークスペースの引き継ぎに失敗しました'
+      }
 
       try {
         const result = projectId
@@ -1251,10 +1259,22 @@ function IDE({ projectId }) {
         setFiles(result.currentProject.files)
         setActiveFile(firstFile(result.currentProject.files))
         setOpenFiles([firstFile(result.currentProject.files)])
+        setWorkspaceError(
+          claimError
+            ? '旧ワークスペースの引き継ぎに失敗しました: ' + claimError
+            : ''
+        )
         setWorkspaceReady(true)
       } catch (error) {
         if (!cancelled) {
           setSaveStatus('storage error')
+          setWorkspaceError(
+            claimError
+              ? 'ワークスペースを読み込めませんでした: ' + claimError
+              : error instanceof Error
+                ? error.message
+                : 'ワークスペースを読み込めませんでした'
+          )
           console.error(error)
         }
       }
@@ -1488,7 +1508,12 @@ function IDE({ projectId }) {
     setSourceError('')
 
     try {
-      await saveCurrentProject()
+      const saved = await saveCurrentProject()
+
+      if (!saved) {
+        throw new Error('変更を保存できなかったため、コミットを中止しました。')
+      }
+
       const commit = await createCommit(currentProjectId, message)
 
       setSourceCommitMessage('')
@@ -1635,6 +1660,13 @@ function IDE({ projectId }) {
       return
     }
 
+    if (!areValidProjectPaths(Object.keys(next))) {
+      setSaveStatus('storage error')
+      setWorkspaceError('ターミナルからの変更に不正なファイルパスが含まれているため、取り込みませんでした。')
+      return
+    }
+
+    setWorkspaceError('')
     filesRef.current = next
     setFiles(next)
     setOpenFiles(current => current.filter(path =>
@@ -1703,17 +1735,25 @@ function IDE({ projectId }) {
       return
     }
 
-    if (Object.prototype.hasOwnProperty.call(files, nextPath)) {
+    if (!isSafeProjectFilePath(nextPath) ||
+      Object.prototype.hasOwnProperty.call(files, nextPath)) {
+      setWorkspaceError('新しいファイル名が不正か、既存のパスと衝突しています。')
       cancelRenameFile()
       return
     }
 
-    setFiles(current => {
-      const next = { ...current }
-      next[nextPath] = next[renamingFile]
-      delete next[renamingFile]
-      return next
-    })
+    const nextFiles = { ...files }
+    nextFiles[nextPath] = nextFiles[renamingFile]
+    delete nextFiles[renamingFile]
+
+    if (!areValidProjectPaths(Object.keys(nextFiles))) {
+      setWorkspaceError('新しいファイル名が既存のファイルまたはフォルダーと衝突しています。')
+      cancelRenameFile()
+      return
+    }
+
+    setWorkspaceError('')
+    setFiles(nextFiles)
 
     setOpenFiles(current =>
       current.map(file => file === renamingFile ? nextPath : file)
@@ -1806,6 +1846,13 @@ function IDE({ projectId }) {
     for (const [path, value] of updates) {
       nextFiles[path] = value
     }
+
+    if (!areValidProjectPaths(Object.keys(nextFiles))) {
+      setWorkspaceError('移動先が既存のファイルまたはフォルダーと衝突しています。')
+      return
+    }
+
+    setWorkspaceError('')
 
     const mapMovedPath = path => {
       if (path === sourcePath || path.startsWith(sourcePath + '/')) {
@@ -2005,7 +2052,7 @@ function IDE({ projectId }) {
   }
 
   async function saveCurrentProject() {
-    if (!currentProjectId) return
+    if (!currentProjectId) return false
 
     try {
       const timestamp = Date.now()
@@ -2030,8 +2077,10 @@ function IDE({ projectId }) {
       )))
 
       setSaveStatus('saved')
+      return true
     } catch {
       setSaveStatus('storage error')
+      return false
     }
   }
 
@@ -2134,6 +2183,11 @@ function IDE({ projectId }) {
       return
     }
 
+    if (!isSafeProjectFilePath(safeName)) {
+      setWorkspaceError('ファイルパスが不正です。')
+      return
+    }
+
     if (Object.prototype.hasOwnProperty.call(files, safeName)) {
       setActiveFile(safeName)
       setOpenFiles(current =>
@@ -2145,10 +2199,18 @@ function IDE({ projectId }) {
       return
     }
 
-    setFiles(current => ({
-      ...current,
+    const nextFiles = {
+      ...files,
       [safeName]: ''
-    }))
+    }
+
+    if (!areValidProjectPaths(Object.keys(nextFiles))) {
+      setWorkspaceError('ファイル名が既存のファイルまたはフォルダーと衝突しています。')
+      return
+    }
+
+    setWorkspaceError('')
+    setFiles(nextFiles)
     setActiveFile(safeName)
     setOpenFiles(current => [...current, safeName])
     setSaveStatus('saving')
@@ -3064,6 +3126,19 @@ function IDE({ projectId }) {
 
   return (
     <>
+      {workspaceError && (
+        <div
+          role="alert"
+          style={{
+            padding: '8px 12px',
+            background: '#2b1616',
+            color: '#ffd0d0',
+            borderBottom: '1px solid #743434'
+          }}
+        >
+          {workspaceError}
+        </div>
+      )}
       {dialog && (
         <div className="poligo-dialog-overlay" onMouseDown={() => {
           if (!dialogBusy) setDialog(null)
