@@ -157,9 +157,21 @@ test('enforces a quota across current files and repeated full-file commits', () 
 
     addCommit(database, 'commit-a', 'project-a', { 'main.js': '123' })
     assert.equal(usedBytes(database, 'user-a'), 6)
+    assert.deepEqual(
+      database.prepare(
+        'SELECT current_bytes, snapshot_bytes FROM user_storage_usage WHERE user_id = ?'
+      ).get('user-a'),
+      { current_bytes: 3, snapshot_bytes: 3 }
+    )
 
     addCommit(database, 'commit-b', 'project-a', { 'main.js': '123' })
     assert.equal(usedBytes(database, 'user-a'), 9)
+    assert.deepEqual(
+      database.prepare(
+        'SELECT current_bytes, snapshot_bytes FROM user_storage_usage WHERE user_id = ?'
+      ).get('user-a'),
+      { current_bytes: 3, snapshot_bytes: 6 }
+    )
 
     assert.throws(
       () => addCommit(database, 'commit-c', 'project-a', { 'main.js': '123' }),
@@ -169,6 +181,33 @@ test('enforces a quota across current files and repeated full-file commits', () 
     assert.equal(
       database.prepare('SELECT COUNT(*) AS count FROM project_commits').get().count,
       2
+    )
+  } finally {
+    database.close()
+  }
+})
+
+test('rejects the 101st commit even when the commits contain no file bytes', () => {
+  const database = createDatabase()
+
+  try {
+    addProject(database, 'project-a', 'user-a')
+
+    const insertCommit = database.prepare(
+      'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)'
+    )
+
+    for (let index = 0; index < 100; index += 1) {
+      insertCommit.run('commit-' + index, 'project-a', 'user-a', 'empty', index)
+    }
+
+    assert.throws(
+      () => insertCommit.run('commit-100', 'project-a', 'user-a', 'empty', 101),
+      /project commit limit reached/
+    )
+    assert.equal(
+      database.prepare('SELECT COUNT(*) AS count FROM project_commits WHERE project_id = ?').get('project-a').count,
+      100
     )
   } finally {
     database.close()
