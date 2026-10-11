@@ -119,3 +119,4 @@ jobs:
       - run: find services/api/src services/runner/src -type f -name '*.js' -print0 | xargs -0 -n 1 node --check
       - run: python3 -m py_compile tests/e2e/test_terminal_production.py
       - run: python3 -m py_compile tests/e2e/test_admin_controls_production.py
+      - run: python3 -m py_compile tests/e2e/project_cleanup.py tests/e2e/test_typescript_environment_api.py tests/e2e/test_typescript_tsx_api.py tests/e2e/test_typescript_production.py

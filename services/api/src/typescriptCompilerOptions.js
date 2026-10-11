@@ -6,5 +6,5 @@ export function getTypeScriptCompilerOptions(entrypoint) {
   // TSX is transpiled by the API before submission, while plain TS is compiled by Judge0.
   return entrypoint.toLowerCase().endsWith('.tsx')
     ? ''
-    : '--target ES2022'
+    : '--target es2020'
 }

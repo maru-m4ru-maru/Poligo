@@ -7,6 +7,7 @@ import uuid
 sys.stdout.reconfigure(line_buffering=True)
 
 from playwright.sync_api import expect, sync_playwright
+from project_cleanup import cleanup_owned_projects
 
 
 BASE_URL = os.getenv(
@@ -588,6 +589,7 @@ def main():
             print("PRODUCTION TYPESCRIPT E2E: FAIL")
             raise
         finally:
+            cleanup_owned_projects(page, API_URL, BASE_URL, "production TypeScript E2E")
             context.close()
             browser.close()
 
