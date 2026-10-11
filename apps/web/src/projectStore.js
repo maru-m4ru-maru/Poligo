@@ -25,31 +25,45 @@ function getWorkspaceId() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(API_URL + path, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Poligo-Workspace': getWorkspaceId(),
-      ...(options.headers || {})
-    }
-  })
+  const timeoutMs = Number.isSafeInteger(options.timeoutMs) && options.timeoutMs > 0
+    ? options.timeoutMs
+    : 60_000
+  const { timeoutMs: ignoredTimeoutMs, signal: ignoredSignal, ...requestOptions } = options
+  const controller = new AbortController()
+  const timeout = setTimeout(() => {
+    controller.abort(new DOMException('API request timed out', 'TimeoutError'))
+  }, timeoutMs)
 
-  if (!response.ok) {
-    let message = response.status + ' ' + response.statusText
-
-    try {
-      const body = await response.json()
-
-      if (body.error) {
-        message = body.error
+  try {
+    const response = await fetch(API_URL + path, {
+      ...requestOptions,
+      signal: controller.signal,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Poligo-Workspace': getWorkspaceId(),
+        ...(options.headers || {})
       }
-    } catch {}
+    })
 
-    throw new Error(message)
+    if (!response.ok) {
+      let message = response.status + ' ' + response.statusText
+
+      try {
+        const body = await response.json()
+
+        if (body.error) {
+          message = body.error
+        }
+      } catch {}
+
+      throw new Error(message)
+    }
+
+    return response.status === 204 ? null : await response.json()
+  } finally {
+    clearTimeout(timeout)
   }
-
-  return response.status === 204 ? null : response.json()
 }
 
 export async function claimWorkspace() {
