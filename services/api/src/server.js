@@ -18,6 +18,7 @@ import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
 import { buildProjectDeleteStatements, buildProjectUpdateStatements } from './projectWritePolicy.js'
+import { canAcceptTerminalUpgrade } from './terminalAccessPolicy.js'
 import {
   COMMIT_HISTORY_STORAGE_MULTIPLIER,
   MAX_COMMITS_PER_ACCOUNT,
@@ -76,6 +77,57 @@ const executionOwners = new Map()
 const projectCommitQueues = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
+const terminalConnectionsByOwner = new Map()
+
+function registerTerminalConnection(userId, closeConnection) {
+  const record = {
+    close: closeConnection
+  }
+  const connections = terminalConnectionsByOwner.get(userId) || new Set()
+
+  connections.add(record)
+  terminalConnectionsByOwner.set(userId, connections)
+
+  let active = true
+
+  return {
+    setClose(close) {
+      if (active) {
+        record.close = close
+      }
+    },
+    unregister() {
+      if (!active) {
+        return
+      }
+
+      active = false
+      connections.delete(record)
+
+      if (!connections.size) {
+        terminalConnectionsByOwner.delete(userId)
+      }
+    }
+  }
+}
+
+function closeTerminalConnectionsForUser(userId) {
+  const connections = terminalConnectionsByOwner.get(userId)
+
+  if (!connections) {
+    return
+  }
+
+  for (const connection of [...connections]) {
+    try {
+      connection.close()
+    } catch (error) {
+      console.error('Terminal connection revocation failed', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+}
 const TERMINAL_RECORD_TTL_MS = 30 * 60 * 1000
 const TERMINAL_CAPACITY_RECLAIM_IDLE_MS = Number(process.env.TERMINAL_CAPACITY_RECLAIM_IDLE_MS || 30_000)
 
@@ -3579,8 +3631,14 @@ async function handleAdminUsersRequest(request, response) {
         {
           sql: 'DELETE FROM "session" WHERE userId = ?',
           args: [userId]
+        },
+        {
+          sql: "UPDATE terminal_sessions SET websocket_ticket_hash = '', ticket_expires_at = 0, ticket_used = 1, updated_at = ? WHERE owner_id = ?",
+          args: [Date.now(), userId]
         }
       ], 'immediate')
+
+      closeTerminalConnectionsForUser(userId)
 
       const terminalStatement = await database.prepare(
         'SELECT id FROM terminal_sessions WHERE owner_id = ?'
@@ -4032,7 +4090,11 @@ async function consumeTerminalWebSocketTicket(id, ticket) {
         WHERE id = ?
           AND websocket_ticket_hash = ?
           AND ticket_used = 0
-          AND ticket_expires_at > ?`,
+          AND ticket_expires_at > ?
+          AND NOT EXISTS (
+            SELECT 1 FROM user_bans
+            WHERE user_id = terminal_sessions.owner_id
+          )`,
       args: [
         now,
         id,
@@ -4128,6 +4190,7 @@ async function loadTerminalOwner(id) {
   ) {
     owner.cleanupInProgress = cached.cleanupInProgress
     owner.cleanupPromise = cached.cleanupPromise
+    owner.revoked = cached.revoked === true
   }
 
   terminalOwners.set(id, owner)
@@ -4151,7 +4214,8 @@ async function registerTerminal(id, userId, projectId, files, websocketTicket) {
     websocketTicketUsed: false,
     createdAt: now,
     expiresAt: now + TERMINAL_RECORD_TTL_MS,
-    cleanupInProgress: false
+    cleanupInProgress: false,
+    revoked: false
   }
 
   terminalOwners.set(id, owner)
@@ -5013,7 +5077,8 @@ async function handleTerminalClose(request, response, id) {
 }
 
 const terminalWebSocketServer = new WebSocketServer({
-  noServer: true
+  noServer: true,
+  maxPayload: 1_048_576
 })
 
 async function handleTerminalUpgrade(request, socket, head, id) {
@@ -5039,15 +5104,57 @@ async function handleTerminalUpgrade(request, socket, head, id) {
     !owner ||
     !terminalRunnerUrl ||
     !ticket ||
-    owner.expiresAt <= Date.now()
+    owner.expiresAt <= Date.now() ||
+    owner.revoked
   ) {
     console.warn('Terminal websocket rejected by ticket', {
       id,
       ownerExists: Boolean(owner),
       ticketPresent: Boolean(ticket),
       ownerExpired: Boolean(owner && owner.expiresAt <= Date.now()),
-      runnerConfigured: Boolean(terminalRunnerUrl)
+      runnerConfigured: Boolean(terminalRunnerUrl),
+      ownerRevoked: Boolean(owner?.revoked)
     })
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  const connection = registerTerminalConnection(
+    owner.userId,
+    () => {
+      owner.revoked = true
+      socket.destroy()
+    }
+  )
+  socket.once('close', connection.unregister)
+
+  let banned = false
+
+  try {
+    const database = getDatabase()
+    const bannedStatement = await database.prepare(
+      'SELECT 1 FROM user_bans WHERE user_id = ? LIMIT 1'
+    )
+    const bannedRows = await bannedStatement.all([owner.userId])
+    banned = bannedRows.length > 0
+  } catch (error) {
+    connection.unregister()
+    console.error('Terminal websocket ban check failed', {
+      id,
+      message: error instanceof Error ? error.message : String(error)
+    })
+    socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  if (!canAcceptTerminalUpgrade({
+    owner,
+    originAllowed,
+    runnerConfigured: Boolean(terminalRunnerUrl),
+    ticketPresent: Boolean(ticket),
+    banned
+  })) {
+    connection.unregister()
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
   }
@@ -5057,6 +5164,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   try {
     ticketConsumed = await consumeTerminalWebSocketTicket(id, ticket)
   } catch (error) {
+    connection.unregister()
     console.error('Terminal websocket ticket consumption failed', {
       id,
       message: error instanceof Error ? error.message : String(error)
@@ -5066,6 +5174,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   }
 
   if (!ticketConsumed) {
+    connection.unregister()
     console.warn('Terminal websocket rejected by ticket', {
       id,
       ownerExists: true,
@@ -5086,6 +5195,17 @@ async function handleTerminalUpgrade(request, socket, head, id) {
     socket,
     head,
     client => {
+      connection.setClose(() => {
+        owner.revoked = true
+
+        if (client.readyState === WebSocket.OPEN) {
+          client.close(4003, 'account access revoked')
+        } else {
+          client.terminate()
+        }
+      })
+      client.once('close', connection.unregister)
+
       const runnerSocket = new WebSocket(
         terminalRunnerWebSocketUrl(id),
         {
@@ -5099,6 +5219,11 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       let runnerReady = false
 
       client.on('message', data => {
+        if (owner.revoked) {
+          client.close(4003, 'account access revoked')
+          return
+        }
+
         retainTerminal(id)
         const message = Buffer.isBuffer(data)
           ? data.toString('utf8')
@@ -5154,6 +5279,11 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       })
 
       runnerSocket.on('message', data => {
+        if (owner.revoked) {
+          runnerSocket.close()
+          return
+        }
+
         retainTerminal(id)
         const message = Buffer.isBuffer(data)
           ? data.toString('utf8')
@@ -5200,12 +5330,14 @@ async function handleTerminalUpgrade(request, socket, head, id) {
           runnerSocket.terminate()
         }
 
-        void syncTerminal(id).catch(error => {
-          console.error('Terminal sync after websocket close failed', {
-            id,
-            message: error instanceof Error ? error.message : String(error)
+        if (!owner.revoked) {
+          void syncTerminal(id).catch(error => {
+            console.error('Terminal sync after websocket close failed', {
+              id,
+              message: error instanceof Error ? error.message : String(error)
+            })
           })
-        })
+        }
       })
     }
   )
