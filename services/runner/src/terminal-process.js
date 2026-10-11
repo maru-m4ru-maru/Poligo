@@ -20,7 +20,6 @@ const maxSocketBufferBytes = Number(process.env.TERMINAL_MAX_SOCKET_BUFFER_BYTES
 const maxSessions = Number(process.env.TERMINAL_MAX_SESSIONS || 4)
 const idleTtlMs = Number(process.env.TERMINAL_IDLE_TTL_MS || 30 * 60 * 1000)
 const maxLifetimeMs = Number(process.env.TERMINAL_MAX_LIFETIME_MS || 4 * 60 * 60 * 1000)
-const maxSocketBufferBytes = 1_048_576
 const ignoredDirectories = new Set([
   '.git',
   'node_modules',
