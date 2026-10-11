@@ -1,4 +1,4 @@
-const JAVASCRIPT_EXTENSIONS = new Set(['js', 'mjs', 'cjs'])
+const NODE_EXECUTABLE_EXTENSIONS = new Set(['js', 'mjs', 'cjs', 'ts', 'mts', 'cts'])
 
 function extensionOf(path) {
   if (typeof path !== 'string') {
@@ -11,8 +11,8 @@ function extensionOf(path) {
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
 }
 
-function isJavaScriptFile(path, files) {
-  return JAVASCRIPT_EXTENSIONS.has(extensionOf(path)) &&
+function isNodeExecutableFile(path, files) {
+  return NODE_EXECUTABLE_EXTENSIONS.has(extensionOf(path)) &&
     typeof files?.[path] === 'string'
 }
 
@@ -28,7 +28,7 @@ function parseManifest(files) {
 }
 
 function findNodeEntrypoint(files, activeFile, manifest) {
-  if (isJavaScriptFile(activeFile, files)) {
+  if (isNodeExecutableFile(activeFile, files)) {
     return activeFile
   }
 
@@ -36,18 +36,18 @@ function findNodeEntrypoint(files, activeFile, manifest) {
     ? manifest.main.trim()
     : ''
 
-  if (declaredMain && isJavaScriptFile(declaredMain, files)) {
+  if (declaredMain && isNodeExecutableFile(declaredMain, files)) {
     return declaredMain
   }
 
   for (const candidate of ['main.js', 'index.js', 'src/index.js']) {
-    if (isJavaScriptFile(candidate, files)) {
+    if (isNodeExecutableFile(candidate, files)) {
       return candidate
     }
   }
 
   return Object.keys(files || {})
-    .filter(path => isJavaScriptFile(path, files))
+    .filter(path => isNodeExecutableFile(path, files))
     .sort()[0] || ''
 }
 
