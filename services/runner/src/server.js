@@ -239,6 +239,21 @@ const server = http.createServer(async (request, response) => {
   if (request.method === 'POST' && requestPath === '/v1/run') {
     try {
       const payload = await readJson(request)
+
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        send(response, 400, {
+          error: 'execution request must be an object'
+        })
+        return
+      }
+
+      if (!listExecutionLanguages().includes(payload.language)) {
+        send(response, 400, {
+          error: 'unsupported language'
+        })
+        return
+      }
+
       const job = enqueueJob(payload)
 
       send(response, 202, {
@@ -246,8 +261,16 @@ const server = http.createServer(async (request, response) => {
         status: job.status
       })
     } catch (error) {
-      send(response, 400, {
-        error: error instanceof Error ? error.message : 'invalid request'
+      const message = error instanceof Error ? error.message : 'invalid request'
+      const status =
+        message === 'execution queue is full'
+          ? 429
+          : message === 'request too large'
+            ? 413
+            : 400
+
+      send(response, status, {
+        error: message
       })
     }
 
