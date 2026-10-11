@@ -3749,6 +3749,14 @@ async function handleAdminUsersRequest(request, response) {
         args: [userId]
       },
       {
+        sql: 'DELETE FROM user_bans WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM announcements WHERE target_user_id = ?',
+        args: [userId]
+      },
+      {
         sql: 'DELETE FROM user_storage_limits WHERE user_id = ?',
         args: [userId]
       },
@@ -5975,6 +5983,14 @@ async function cleanupDisposableE2EAccountsOnStartup() {
       },
       {
         sql: 'DELETE FROM terminal_sessions WHERE owner_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM user_bans WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM announcements WHERE target_user_id = ?',
         args: [userId]
       },
       {
