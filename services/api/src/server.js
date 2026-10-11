@@ -3172,7 +3172,8 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
         args: payload.args,
         env: getExecutionEnvironment(payload.files),
         stdin: payload.stdin
-      })
+      }),
+      signal: AbortSignal.timeout(15_000)
     }
   )
 
@@ -3196,7 +3197,17 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
 
   if (!runnerResponse.ok) {
     executionOwners.delete(id)
-    send(response, 502, {
+    const status =
+      runnerResponse.status === 400 || runnerResponse.status === 413 || runnerResponse.status === 429
+        ? runnerResponse.status
+        : 502
+    const retryAfter = runnerResponse.headers.get('Retry-After')
+
+    if (status === 429 && retryAfter) {
+      response.setHeader('Retry-After', retryAfter)
+    }
+
+    send(response, status, {
       id,
       ...result
     })
@@ -3289,7 +3300,12 @@ async function handleExecution(request, response) {
     return
   }
 
-  await handleRunnerExecution(response, payload, id, session.user.id)
+  try {
+    await handleRunnerExecution(response, payload, id, session.user.id)
+  } catch (error) {
+    executionOwners.delete(id)
+    throw error
+  }
 }
 
 async function handleExecutionStatus(request, response, id) {
