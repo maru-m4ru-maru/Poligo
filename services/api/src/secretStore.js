@@ -11,46 +11,65 @@ function getKey() {
   return Buffer.from(keyText, 'hex')
 }
 
-function decryptEnvelope(value) {
+function decryptCiphertext(value) {
   const parts = value.split(':')
 
   if (parts.length !== 5 || parts[0] !== 'poligo' || parts[1] !== 'v1') {
-    return null
+    throw new Error('invalid encrypted secret format')
   }
 
-  let iv
-  let tag
-  let encrypted
-
-  try {
-    iv = Buffer.from(parts[2], 'base64url')
-    tag = Buffer.from(parts[3], 'base64url')
-    encrypted = Buffer.from(parts[4], 'base64url')
-  } catch {
-    return null
+  if (![parts[2], parts[3], parts[4]].every(part => /^[A-Za-z0-9_-]*$/.test(part))) {
+    throw new Error('invalid encrypted secret encoding')
   }
+
+  const iv = Buffer.from(parts[2], 'base64url')
+  const tag = Buffer.from(parts[3], 'base64url')
+  const encrypted = Buffer.from(parts[4], 'base64url')
 
   if (iv.length !== 12 || tag.length !== 16) {
-    return null
+    throw new Error('invalid encrypted secret metadata')
   }
 
-  try {
-    const decipher = createDecipheriv('aes-256-gcm', getKey(), iv)
-    decipher.setAuthTag(tag)
+  const decipher = createDecipheriv('aes-256-gcm', getKey(), iv)
+  decipher.setAuthTag(tag)
 
-    return Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]).toString('utf8')
-  } catch {
-    return null
+  return Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final()
+  ]).toString('utf8')
+}
+
+export function hasEncryptedSecretEnvelope(value) {
+  if (typeof value !== 'string' || !value.startsWith(PREFIX)) {
+    return false
   }
+
+  const parts = value.split(':')
+
+  if (
+    parts.length !== 5 ||
+    parts[0] !== 'poligo' ||
+    parts[1] !== 'v1' ||
+    ![parts[2], parts[3], parts[4]].every(part => /^[A-Za-z0-9_-]*$/.test(part))
+  ) {
+    return false
+  }
+
+  return Buffer.from(parts[2], 'base64url').length === 12 &&
+    Buffer.from(parts[3], 'base64url').length === 16
 }
 
 export function isEncryptedSecret(value) {
-  return typeof value === 'string' &&
-    value.startsWith(PREFIX) &&
-    decryptEnvelope(value) !== null
+  if (!hasEncryptedSecretEnvelope(value)) {
+    return false
+  }
+
+  try {
+    decryptCiphertext(value)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function encryptSecret(value) {
@@ -58,8 +77,12 @@ export function encryptSecret(value) {
     throw new Error('secret content must be text')
   }
 
-  if (isEncryptedSecret(value)) {
-    return value
+  if (hasEncryptedSecretEnvelope(value)) {
+    if (isEncryptedSecret(value)) {
+      return value
+    }
+
+    throw new Error('encrypted secret could not be authenticated; verify POLIGO_ENCRYPTION_KEY')
   }
 
   const iv = randomBytes(12)
@@ -85,21 +108,15 @@ export function decryptSecret(value) {
     throw new Error('secret content must be text')
   }
 
-  if (!value.startsWith(PREFIX)) {
+  if (!hasEncryptedSecretEnvelope(value)) {
     return value
   }
 
-  const decrypted = decryptEnvelope(value)
-
-  if (decrypted === null) {
-    throw new Error('invalid encrypted secret format or authentication tag')
-  }
-
-  return decrypted
+  return decryptCiphertext(value)
 }
 
 export function encryptProjectSecrets(files) {
-  const result = {}
+  const result = Object.create(null)
 
   for (const [path, value] of Object.entries(files)) {
     const name = path.split('/').pop() || path
@@ -116,7 +133,7 @@ export function encryptProjectSecrets(files) {
 }
 
 export function decryptProjectSecrets(files) {
-  const result = {}
+  const result = Object.create(null)
 
   for (const [path, value] of Object.entries(files)) {
     const name = path.split('/').pop() || path
