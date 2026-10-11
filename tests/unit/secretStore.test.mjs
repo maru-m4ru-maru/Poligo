@@ -47,7 +47,9 @@ test('encrypted project secrets round-trip while example env files remain readab
 
 test('rejects ciphertext that is modified or uses an invalid authentication tag', () => {
   const encrypted = encryptSecret('TOKEN=valid')
-  const tampered = encrypted.slice(0, -1) + (encrypted.endsWith('a') ? 'b' : 'a')
+  const parts = encrypted.split(':')
+  parts[3] = (parts[3][0] === 'a' ? 'b' : 'a') + parts[3].slice(1)
+  const tampered = parts.join(':')
 
   assert.equal(isEncryptedSecret(tampered), false)
   assert.throws(() => decryptSecret(tampered), /invalid encrypted secret/)
