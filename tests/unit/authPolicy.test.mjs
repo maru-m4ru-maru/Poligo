@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getTrustedOrigins } from '../../services/api/src/authPolicy.js'
+import { getOriginPolicy, getTrustedOrigins } from '../../services/api/src/authPolicy.js'
 
 test('production trusts only explicitly configured HTTP origins', () => {
   assert.deepEqual(
@@ -31,5 +31,32 @@ test('deduplicates configured origins and strips no unexpected path', () => {
   assert.deepEqual(
     getTrustedOrigins('https://poligo.example/', 'production'),
     []
+  )
+})
+
+test('uses a safe single production origin when configured origin is missing or wildcard', () => {
+  assert.deepEqual(
+    getOriginPolicy('', 'production'),
+    {
+      allowedOrigins: ['https://poligo-web-2n2l.onrender.com'],
+      corsOrigin: 'https://poligo-web-2n2l.onrender.com'
+    }
+  )
+  assert.deepEqual(
+    getOriginPolicy('*', 'production'),
+    {
+      allowedOrigins: ['https://poligo-web-2n2l.onrender.com'],
+      corsOrigin: 'https://poligo-web-2n2l.onrender.com'
+    }
+  )
+})
+
+test('supports an explicit allowlist while keeping CORS header value singular', () => {
+  assert.deepEqual(
+    getOriginPolicy('https://poligo.example,https://preview.poligo.example', 'production'),
+    {
+      allowedOrigins: ['https://poligo.example', 'https://preview.poligo.example'],
+      corsOrigin: 'https://poligo.example'
+    }
   )
 })
