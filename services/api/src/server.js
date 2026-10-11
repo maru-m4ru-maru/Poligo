@@ -14,6 +14,13 @@ import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin } from './adminPolicy.js'
 import { isWorkspaceClaimAllowed } from './workspacePolicy.js'
 import { normalizeProjectFileMap, normalizeProjectPayload } from './projectPolicy.js'
+import {
+  canQueueTerminalMessage,
+  canSendTerminalMessage,
+  parseTerminalWebSocketMessage,
+  TERMINAL_WS_MAX_BUFFERED_BYTES,
+  TERMINAL_WS_MAX_MESSAGE_BYTES
+} from './websocketPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -5182,7 +5189,8 @@ async function handleTerminalClose(request, response, id) {
 }
 
 const terminalWebSocketServer = new WebSocketServer({
-  noServer: true
+  noServer: true,
+  maxPayload: TERMINAL_WS_MAX_MESSAGE_BYTES
 })
 
 async function handleTerminalUpgrade(request, socket, head, id) {
@@ -5265,26 +5273,50 @@ async function handleTerminalUpgrade(request, socket, head, id) {
         {
           headers: terminalHeaders(),
           handshakeTimeout: 15_000,
-          maxPayload: 1_048_576
+          maxPayload: TERMINAL_WS_MAX_BUFFERED_BYTES
         }
       )
 
       const queue = []
+      let queuedBytes = 0
       let runnerReady = false
 
       client.on('message', data => {
         retainTerminal(id)
-        const message = Buffer.isBuffer(data)
-          ? data.toString('utf8')
-          : String(data)
+        const raw = Buffer.isBuffer(data) ? data : Buffer.from(data)
+        const payload = parseTerminalWebSocketMessage(raw)
+
+        if (!payload) {
+          client.close(1008, 'invalid terminal message')
+          return
+        }
+
+        const message = raw.toString('utf8')
+        const messageBytes = raw.length
 
         if (runnerSocket.readyState === WebSocket.OPEN) {
+          if (!canSendTerminalMessage(runnerSocket.bufferedAmount, messageBytes)) {
+            runnerSocket.close(1013, 'terminal input backpressure')
+            client.close(1013, 'terminal input backpressure')
+            return
+          }
+
           runnerSocket.send(message)
-        } else if (
-          runnerSocket.readyState === WebSocket.CONNECTING &&
-          queue.length < 128
-        ) {
-          queue.push(message)
+        } else if (runnerSocket.readyState === WebSocket.CONNECTING) {
+          if (!canQueueTerminalMessage({
+            messageBytes,
+            queuedBytes,
+            queuedMessages: queue.length
+          })) {
+            queue.length = 0
+            queuedBytes = 0
+            runnerSocket.terminate()
+            client.close(1013, 'terminal connection is busy')
+            return
+          }
+
+          queue.push({ message, messageBytes })
+          queuedBytes += messageBytes
         }
       })
 
@@ -5292,9 +5324,19 @@ async function handleTerminalUpgrade(request, socket, head, id) {
         runnerReady = true
         console.info('Terminal runner websocket connected', { id })
 
-        for (const message of queue.splice(0)) {
-          runnerSocket.send(message)
+        for (const item of queue.splice(0)) {
+          queuedBytes -= item.messageBytes
+
+          if (!canSendTerminalMessage(runnerSocket.bufferedAmount, item.messageBytes)) {
+            runnerSocket.close(1013, 'terminal input backpressure')
+            client.close(1013, 'terminal input backpressure')
+            break
+          }
+
+          runnerSocket.send(item.message)
         }
+
+        queuedBytes = 0
       })
 
       runnerSocket.on('unexpected-response', (upstreamRequest, response) => {
@@ -5334,6 +5376,14 @@ async function handleTerminalUpgrade(request, socket, head, id) {
           : String(data)
 
         if (client.readyState === WebSocket.OPEN) {
+          const messageBytes = Buffer.byteLength(message, 'utf8')
+
+          if (!canSendTerminalMessage(client.bufferedAmount, messageBytes)) {
+            client.close(1013, 'terminal output backpressure')
+            runnerSocket.close(1013, 'terminal output backpressure')
+            return
+          }
+
           client.send(message)
         }
       })
@@ -5368,6 +5418,9 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       })
 
       client.on('close', () => {
+        queue.length = 0
+        queuedBytes = 0
+
         if (runnerSocket.readyState === WebSocket.OPEN) {
           runnerSocket.close()
         } else if (runnerSocket.readyState === WebSocket.CONNECTING) {
