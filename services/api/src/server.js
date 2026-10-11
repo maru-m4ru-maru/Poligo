@@ -2013,8 +2013,7 @@ async function createProject(ownerId, payload) {
   }
 }
 
-async function updateProject(projectId, ownerId, payload) {
-  return withOwnerMutationLock(ownerId, async () => {
+async function updateProjectUnlocked(projectId, ownerId, payload) {
     const database = getDatabase()
     const current = await getProjectById(projectId, ownerId)
 
@@ -2062,7 +2061,12 @@ async function updateProject(projectId, ownerId, payload) {
       createdAt: current.createdAt,
       updatedAt
     }
-  })
+}
+
+async function updateProject(projectId, ownerId, payload) {
+  return withOwnerMutationLock(ownerId, () =>
+    updateProjectUnlocked(projectId, ownerId, payload)
+  )
 }
 
 async function deleteProject(projectId, ownerId) {
@@ -4761,88 +4765,101 @@ async function syncTerminal(id, clientFiles) {
 }
 
 async function syncTerminalNow(id, clientFiles) {
-  const owner = await loadTerminalOwner(id)
+  const initialOwner = await loadTerminalOwner(id)
 
-  if (!owner) {
+  if (!initialOwner) {
     return null
   }
 
-  const project = await getProjectById(
-    owner.projectId,
-    owner.userId
-  )
+  return withOwnerMutationLock(initialOwner.userId, async () => {
+    const owner = await loadTerminalOwner(id)
 
-  if (!project) {
-    terminalOwners.delete(id)
-    await deleteTerminalOwnerRecord(id).catch(() => {})
-    return null
-  }
+    if (
+      !owner ||
+      owner.userId !== initialOwner.userId ||
+      owner.projectId !== initialOwner.projectId ||
+      owner.expiresAt <= Date.now()
+    ) {
+      return null
+    }
 
-  const result = await runnerTerminalRequest(
-    '/v1/terminals/' +
-      encodeURIComponent(id) +
-      '/files'
-  )
-  const runnerFiles = normalizeExecutionFiles(
-    result.files || {}
-  )
-  const normalizedClientFiles = clientFiles === undefined
-    ? undefined
-    : normalizeExecutionFiles(clientFiles)
-  const sync = mergeTerminalFiles({
-    baseFiles: owner.baseFiles || {},
-    projectFiles: project.files,
-    runnerFiles,
-    clientFiles: normalizedClientFiles
-  })
-  const payload = normalizeProjectPayload({
-    name: project.name,
-    files: sync.files
-  })
-
-  if (!filesEqual(project.files, payload.files)) {
-    await updateProject(
+    const project = await getProjectById(
       owner.projectId,
-      owner.userId,
-      payload
+      owner.userId
     )
-  }
 
-  if (!filesEqual(runnerFiles, sync.runnerFiles)) {
-    await runnerTerminalRequest(
+    if (!project) {
+      terminalOwners.delete(id)
+      await deleteTerminalOwnerRecord(id).catch(() => {})
+      return null
+    }
+
+    const result = await runnerTerminalRequest(
       '/v1/terminals/' +
         encodeURIComponent(id) +
-        '/files',
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          files: sync.runnerFiles
-        })
-      }
+        '/files'
     )
-  }
+    const runnerFiles = normalizeExecutionFiles(
+      result.files || {}
+    )
+    const normalizedClientFiles = clientFiles === undefined
+      ? undefined
+      : normalizeExecutionFiles(clientFiles)
+    const sync = mergeTerminalFiles({
+      baseFiles: owner.baseFiles || {},
+      projectFiles: project.files,
+      runnerFiles,
+      clientFiles: normalizedClientFiles
+    })
+    const payload = normalizeProjectPayload({
+      name: project.name,
+      files: sync.files
+    })
 
-  owner.baseFiles = sync.baselineFiles
-  retainTerminal(id)
-  await updateTerminalOwnerRecord(id, owner)
-
-  const changedFiles = {}
-
-  for (const path of sync.changedPaths) {
-    if (Object.prototype.hasOwnProperty.call(payload.files, path)) {
-      changedFiles[path] = payload.files[path]
+    if (!filesEqual(project.files, payload.files)) {
+      await updateProjectUnlocked(
+        owner.projectId,
+        owner.userId,
+        payload
+      )
     }
-  }
 
-  return {
-    projectId: owner.projectId,
-    files: changedFiles,
-    changedPaths: sync.changedPaths,
-    conflicts: sync.conflicts
-  }
+    if (!filesEqual(runnerFiles, sync.runnerFiles)) {
+      await runnerTerminalRequest(
+        '/v1/terminals/' +
+          encodeURIComponent(id) +
+          '/files',
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            files: sync.runnerFiles
+          })
+        }
+      )
+    }
+
+    owner.baseFiles = sync.baselineFiles
+    retainTerminal(id)
+    await updateTerminalOwnerRecord(id, owner)
+
+    const changedFiles = {}
+
+    for (const path of sync.changedPaths) {
+      if (Object.prototype.hasOwnProperty.call(payload.files, path)) {
+        changedFiles[path] = payload.files[path]
+      }
+    }
+
+    return {
+      projectId: owner.projectId,
+      files: changedFiles,
+      changedPaths: sync.changedPaths,
+      conflicts: sync.conflicts
+    }
+  })
 }
 
 async function reclaimDisconnectedTerminalForCapacity() {
