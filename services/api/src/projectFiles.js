@@ -13,7 +13,7 @@ export function normalizeProjectFilePath(path) {
   if (
     typeof path !== 'string' ||
     !path ||
-    path.length > 240 ||
+    Buffer.byteLength(path, 'utf8') > 240 ||
     path.includes('\\') ||
     path.startsWith('/') ||
     /^[A-Za-z]:/.test(path) ||
