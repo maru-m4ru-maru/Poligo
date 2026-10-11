@@ -1747,8 +1747,11 @@ function normalizeProjectPayload(payload) {
       typeof path !== 'string' ||
       path.length === 0 ||
       path.length > 240 ||
-      /[\\u0000-\\u001f\\u007f]/.test(path) ||
-      path.includes('\\\\') ||
+      path.split('').some(character => {
+        const code = character.charCodeAt(0)
+        return code < 32 || code === 127
+      }) ||
+      path.includes(String.fromCharCode(92)) ||
       path.startsWith('/') ||
       path.split('/').some(part => !part || part === '..' || part === '.')
     ) {
