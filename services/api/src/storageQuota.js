@@ -51,6 +51,62 @@ export const PROJECT_STORAGE_QUOTA_TRIGGERS = [
    BEGIN
      SELECT RAISE(ABORT, 'storage limit exceeded');
    END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_project_files_enforce_owner_quota_update
+   BEFORE UPDATE OF project_id, path, content ON project_files
+   FOR EACH ROW
+   WHEN (
+     ${ownerStorageFor('(SELECT owner_id FROM projects WHERE id = NEW.project_id)')} -
+     CASE
+       WHEN (SELECT owner_id FROM projects WHERE id = OLD.project_id) =
+            (SELECT owner_id FROM projects WHERE id = NEW.project_id)
+       THEN LENGTH(CAST(OLD.content AS BLOB))
+       ELSE 0
+     END +
+     LENGTH(CAST(NEW.content AS BLOB))
+   ) >
+     COALESCE((
+       SELECT limit_bytes
+       FROM user_storage_limits
+       WHERE user_id = (SELECT owner_id FROM projects WHERE id = NEW.project_id)
+     ), ${DEFAULT_STORAGE_LIMIT_BYTES})
+   BEGIN
+     SELECT RAISE(ABORT, 'storage limit exceeded');
+   END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_project_commit_files_enforce_owner_quota_update
+   BEFORE UPDATE OF commit_id, path, content ON project_commit_files
+   FOR EACH ROW
+   WHEN (
+     ${ownerStorageFor('(SELECT p.owner_id FROM project_commits pc INNER JOIN projects p ON p.id = pc.project_id WHERE pc.id = NEW.commit_id)')} -
+     CASE
+       WHEN (
+         SELECT p.owner_id
+         FROM project_commits pc
+         INNER JOIN projects p ON p.id = pc.project_id
+         WHERE pc.id = OLD.commit_id
+       ) = (
+         SELECT p.owner_id
+         FROM project_commits pc
+         INNER JOIN projects p ON p.id = pc.project_id
+         WHERE pc.id = NEW.commit_id
+       )
+       THEN LENGTH(CAST(OLD.content AS BLOB))
+       ELSE 0
+     END +
+     LENGTH(CAST(NEW.content AS BLOB))
+   ) >
+     COALESCE((
+       SELECT limit_bytes
+       FROM user_storage_limits
+       WHERE user_id = (
+         SELECT p.owner_id
+         FROM project_commits pc
+         INNER JOIN projects p ON p.id = pc.project_id
+         WHERE pc.id = NEW.commit_id
+       )
+     ), ${DEFAULT_STORAGE_LIMIT_BYTES})
+   BEGIN
+     SELECT RAISE(ABORT, 'storage limit exceeded');
+   END`,
   `CREATE TRIGGER IF NOT EXISTS trg_projects_enforce_owner_quota_update
    BEFORE UPDATE OF owner_id ON projects
    FOR EACH ROW
