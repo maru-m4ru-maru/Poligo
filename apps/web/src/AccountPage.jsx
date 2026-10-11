@@ -337,18 +337,18 @@ export default function AccountPage({ session }) {
           <button
             onClick={() => navigate('/dashboard')}
           >
-            <span className="stack-nav-icon">▦</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/folder-kanban.svg" alt="" aria-hidden="true" /></span>
             プロジェクト
           </button>
 
           <button className="active">
-            <span className="stack-nav-icon">◯</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/user-round.svg" alt="" aria-hidden="true" /></span>
             アカウント
           </button>
 
           {isAdmin && (
             <button onClick={() => navigate('/admin')}>
-              <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/admin-panel.svg" alt="" aria-hidden="true" /></span>
+              <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/shield-check.svg" alt="" aria-hidden="true" /></span>
               管理画面
             </button>
           )}
