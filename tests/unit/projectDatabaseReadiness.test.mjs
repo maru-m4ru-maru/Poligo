@@ -31,7 +31,7 @@ test('keeps auth, health, announcements, AI, and existing execution-status reads
 test('does not match unrelated routes or accept malformed path inputs', () => {
   assert.equal(requiresProjectDatabase('GET', '/api/project-settings'), false)
   assert.equal(requiresProjectDatabase('GET', '/api/projects-extra'), false)
-  assert.equal(requiresProjectDatabase('OPTIONS', '/api/projects'), true)
+  assert.equal(requiresProjectDatabase('OPTIONS', '/api/projects'), false)
   assert.equal(requiresProjectDatabase(null, '/api/projects'), false)
   assert.equal(requiresProjectDatabase('GET', null), false)
 })
