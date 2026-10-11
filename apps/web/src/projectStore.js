@@ -1,6 +1,9 @@
+import { normalizeProjectFileMap } from './projectFilePaths'
+
 const API_URL = import.meta.env.VITE_API_URL || ''
 const WORKSPACE_KEY = 'poligo-workspace-id'
 const CURRENT_PROJECT_KEY = 'poligo-current-project'
+const projectSaveQueues = new Map()
 
 function createId(prefix) {
   if (globalThis.crypto?.randomUUID) {
@@ -64,28 +67,46 @@ export async function getProject(id) {
 }
 
 export async function saveProject(project) {
-  const saved = await request(
-    '/api/projects/' + encodeURIComponent(project.id),
-    {
-      method: 'PUT',
-      body: JSON.stringify({
-        name: project.name,
-        files: project.files
-      })
+  const snapshot = {
+    id: project.id,
+    name: project.name,
+    files: normalizeProjectFileMap(project.files)
+  }
+  const previous = projectSaveQueues.get(snapshot.id) || Promise.resolve()
+  const operation = previous.catch(() => {}).then(async () => {
+    const saved = await request(
+      '/api/projects/' + encodeURIComponent(snapshot.id),
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: snapshot.name,
+          files: snapshot.files
+        })
+      }
+    )
+
+    localStorage.setItem(CURRENT_PROJECT_KEY, snapshot.id)
+    return saved
+  })
+
+  projectSaveQueues.set(snapshot.id, operation)
+
+  try {
+    return await operation
+  } finally {
+    if (projectSaveQueues.get(snapshot.id) === operation) {
+      projectSaveQueues.delete(snapshot.id)
     }
-  )
-
-  localStorage.setItem(CURRENT_PROJECT_KEY, project.id)
-
-  return saved
+  }
 }
 
 export async function createProject(name, files) {
+  const normalizedFiles = normalizeProjectFileMap(files)
   const project = await request('/api/projects', {
     method: 'POST',
     body: JSON.stringify({
       name: name?.trim() || 'Untitled Project',
-      files: { ...files }
+      files: normalizedFiles
     })
   })
 
@@ -126,7 +147,7 @@ export async function initializeWorkspace(defaultFiles, requestedProjectId = '')
       if (stored) {
         const parsed = JSON.parse(stored)
 
-        if (parsed && typeof parsed === 'object') {
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           legacyFiles = parsed
         }
       }
