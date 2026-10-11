@@ -1614,23 +1614,59 @@ function IDE({ projectId }) {
       return
     }
 
+    const validatedFiles = Object.create(null)
+
+    try {
+      for (const [path, value] of Object.entries(result.files)) {
+        const safePath = normalizeProjectFilePath(path)
+
+        if (
+          safePath !== path ||
+          typeof value !== 'string' ||
+          hasProjectFilePathConflict(validatedFiles, safePath)
+        ) {
+          throw new Error('Terminal Runner returned an invalid or conflicting file path.')
+        }
+
+        validatedFiles[safePath] = value
+      }
+    } catch (error) {
+      setFilePathError(
+        error instanceof Error
+          ? error.message
+          : 'Terminal Runner returned invalid files.'
+      )
+      return
+    }
+
     const next = { ...filesRef.current }
     let changed = false
 
-    for (const path of result.changedPaths) {
-      if (typeof path !== 'string') {
-        continue
-      }
+    try {
+      for (const path of result.changedPaths) {
+        const safePath = normalizeProjectFilePath(path)
 
-      if (Object.prototype.hasOwnProperty.call(result.files, path)) {
-        if (next[path] !== result.files[path]) {
-          next[path] = result.files[path]
+        if (safePath !== path) {
+          throw new Error('Terminal Runner returned an invalid changed-file path.')
+        }
+
+        if (Object.prototype.hasOwnProperty.call(validatedFiles, safePath)) {
+          if (next[safePath] !== validatedFiles[safePath]) {
+            next[safePath] = validatedFiles[safePath]
+            changed = true
+          }
+        } else if (Object.prototype.hasOwnProperty.call(next, safePath)) {
+          delete next[safePath]
           changed = true
         }
-      } else if (Object.prototype.hasOwnProperty.call(next, path)) {
-        delete next[path]
-        changed = true
       }
+    } catch (error) {
+      setFilePathError(
+        error instanceof Error
+          ? error.message
+          : 'Terminal Runner returned invalid changed-file paths.'
+      )
+      return
     }
 
     if (!changed) {
@@ -1651,6 +1687,7 @@ function IDE({ projectId }) {
       activeFileRef.current = fallback
       return fallback
     })
+    setFilePathError('')
   }
 
   function toggleFolder(path) {
@@ -1786,24 +1823,43 @@ function IDE({ projectId }) {
     }
 
     const movingPaths = new Set(movingEntries.map(([path]) => path))
+    const remainingFiles = Object.create(null)
+
+    for (const [path, value] of Object.entries(files)) {
+      if (!movingPaths.has(path)) {
+        remainingFiles[path] = value
+      }
+    }
+
     const updates = movingEntries.map(([path, value]) => [
       newPrefix + path.slice(sourcePath.length),
       value
     ])
 
-    if (updates.some(([path]) =>
-      Object.prototype.hasOwnProperty.call(files, path) &&
-      !movingPaths.has(path)
-    )) {
+    try {
+      for (const [path] of updates) {
+        const safePath = normalizeProjectFilePath(path)
+
+        if (
+          safePath !== path ||
+          hasProjectFilePathConflict(remainingFiles, safePath)
+        ) {
+          throw new Error('移動先のファイルまたはフォルダー名が競合しています。')
+        }
+      }
+    } catch (error) {
+      setFilePathError(
+        error instanceof Error
+          ? error.message
+          : '移動先のファイルパスが不正です。'
+      )
       return
     }
 
-    const nextFiles = {}
+    const nextFiles = Object.create(null)
 
-    for (const [path, value] of Object.entries(files)) {
-      if (!movingPaths.has(path)) {
-        nextFiles[path] = value
-      }
+    for (const [path, value] of Object.entries(remainingFiles)) {
+      nextFiles[path] = value
     }
 
     for (const [path, value] of updates) {
@@ -1818,10 +1874,12 @@ function IDE({ projectId }) {
       return path
     }
 
+    filesRef.current = nextFiles
     setFiles(nextFiles)
     setOpenFiles(current => current.map(mapMovedPath))
     setActiveFile(current => mapMovedPath(current))
     setSaveStatus('saving')
+    setFilePathError('')
   }
 
   function handleFolderDrop(event, path) {
