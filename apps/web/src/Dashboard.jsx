@@ -49,6 +49,7 @@ const TEMPLATES = [
         version: '1.0.0',
         private: true,
         type: 'module',
+        main: 'main.js',
         scripts: {
           start: 'node main.js'
         },
