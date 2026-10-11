@@ -2288,25 +2288,79 @@ async function handleSourceControlRequest(request, response) {
 }
 async function deleteProject(projectId, ownerId) {
   return withOwnerMutationLock(ownerId, async () => {
-  const database = getDatabase()
-  const current = await getProjectById(projectId, ownerId)
+    const database = getDatabase()
+    const current = await getProjectById(projectId, ownerId)
 
-  if (!current) {
-    return false
-  }
-
-  await database.batch([
-    {
-      sql: 'DELETE FROM project_files WHERE project_id = ?',
-      args: [projectId]
-    },
-    {
-      sql: 'DELETE FROM projects WHERE id = ? AND owner_id = ?',
-      args: [projectId, ownerId]
+    if (!current) {
+      return false
     }
-  ], 'immediate')
 
-  return true
+    const terminalStatement = await database.prepare(
+      'SELECT id FROM terminal_sessions WHERE project_id = ? AND owner_id = ?'
+    )
+    const terminalRows = await terminalStatement.all([projectId, ownerId])
+
+    for (const row of terminalRows) {
+      const id = String(row.id)
+      const owner = await loadTerminalOwner(id)
+
+      if (owner) {
+        const cleaned = await expireTerminalOwner(id, owner)
+
+        if (!cleaned) {
+          throw new Error('terminal cleanup failed; project was not deleted')
+        }
+
+        continue
+      }
+
+      if (!terminalRunnerUrl) {
+        throw new Error('terminal cleanup failed; project was not deleted')
+      }
+
+      try {
+        await runnerTerminalRequest(
+          '/v1/terminals/' + encodeURIComponent(id),
+          {
+            method: 'DELETE'
+          }
+        )
+      } catch (error) {
+        const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+        if (!message.includes('404') && !message.includes('not found')) {
+          throw new Error('terminal cleanup failed; project was not deleted')
+        }
+      }
+
+      await deleteTerminalOwnerRecord(id)
+      terminalOwners.delete(id)
+    }
+
+    await database.batch([
+      {
+        sql: 'DELETE FROM project_commit_files WHERE commit_id IN (SELECT id FROM project_commits WHERE project_id = ?)',
+        args: [projectId]
+      },
+      {
+        sql: 'DELETE FROM project_commits WHERE project_id = ?',
+        args: [projectId]
+      },
+      {
+        sql: 'DELETE FROM project_files WHERE project_id = ?',
+        args: [projectId]
+      },
+      {
+        sql: 'DELETE FROM terminal_sessions WHERE project_id = ? AND owner_id = ?',
+        args: [projectId, ownerId]
+      },
+      {
+        sql: 'DELETE FROM projects WHERE id = ? AND owner_id = ?',
+        args: [projectId, ownerId]
+      }
+    ], 'immediate')
+
+    return true
   })
 }
 
