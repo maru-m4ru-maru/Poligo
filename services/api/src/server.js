@@ -13,7 +13,7 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
-import { getOriginPolicy } from './authPolicy.js'
+import { getOriginPolicy, selectCorsOrigin } from './authPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
@@ -1588,7 +1588,14 @@ function appendCommitRetentionDeletes(statements, commitIds, ownerId) {
 }
 
 function setCorsHeaders(response) {
-  response.setHeader('Access-Control-Allow-Origin', allowedOrigin)
+  const requestOrigin = response.req?.headers?.origin
+  const corsOrigin = selectCorsOrigin(
+    requestOrigin,
+    allowedOrigins,
+    allowedOrigin
+  )
+
+  response.setHeader('Access-Control-Allow-Origin', corsOrigin)
   response.setHeader('Access-Control-Allow-Credentials', 'true')
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Poligo-Workspace')
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
