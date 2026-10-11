@@ -2271,20 +2271,7 @@ async function handleDashboardRequest(request, response) {
 
   const database = getDatabase()
   const ownerId = session.user.id
-  const workspaceId = getWorkspaceId(request)
-
-  if (workspaceId !== ownerId) {
-    await database.batch([
-      {
-        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
-        args: [ownerId, workspaceId]
-      }
-    ], 'immediate')
-  }
-
-  const ownerIds = workspaceId === ownerId
-    ? [ownerId]
-    : [ownerId, workspaceId]
+  const ownerIds = [ownerId]
 
   const ownerPlaceholders = ownerIds.map(() => '?').join(', ')
 
@@ -5620,7 +5607,9 @@ const server = http.createServer(async (request, response) => {
           ? 400
           : error.message === 'authentication required'
             ? 401
-            : 500
+            : error.message === 'storage limit exceeded'
+              ? 409
+              : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'workspace claim failed'
