@@ -28,8 +28,8 @@ test('keeps recent commits and removes the oldest snapshots when the history byt
   })
 
   assert.equal(plan.ok, true)
-  assert.deepEqual(plan.deleteIds, ['old', 'recent'])
-  assert.equal(plan.remainingBytes, 20)
+  assert.deepEqual(plan.deleteIds, ['old'])
+  assert.equal(plan.remainingBytes, 50)
 })
 
 test('prunes commits from the target project when its per-project count reaches the limit', () => {
