@@ -19,7 +19,8 @@ export function createRunnerReadinessProbe({
       return false
     }
 
-    const root = runnerUrl.trim().replace(/\\/+$/, '')
+    let root = runnerUrl.trim()
+    while (root.endsWith('/')) root = root.slice(0, -1)
     let healthUrl
 
     try {
