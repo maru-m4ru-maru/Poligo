@@ -102,11 +102,31 @@ test('keeps regular browser JavaScript in browser preview mode', () => {
   })
 })
 
-test('does not change language for TypeScript without an explicit Node runtime', () => {
+test('keeps regular TypeScript projects on the TypeScript execution path', () => {
   assert.equal(getExecutionLanguage({
     'main.ts': 'console.log("TypeScript")',
-    'package.json': JSON.stringify({ poligo: { runtime: 'node' } })
+    'package.json': JSON.stringify({ type: 'module' })
   }, 'main.ts', 'typescript'), 'typescript')
+})
+
+test('supports Node 24 native TypeScript entrypoints only for explicit Node projects', () => {
+  const files = {
+    'main.ts': 'interface Message { text: string }\nconst value: Message = { text: "Node TypeScript" }\nconsole.log(value.text)',
+    'main.mts': 'export const message: string = "ESM TypeScript"',
+    'main.cts': 'const message: string = "CommonJS TypeScript"',
+    'package.json': JSON.stringify({
+      type: 'module',
+      main: 'main.ts',
+      poligo: { runtime: 'node' }
+    })
+  }
+
+  assert.deepEqual(getExecutionTarget(files, 'main.ts', 'typescript'), {
+    language: 'node',
+    entrypoint: 'main.ts'
+  })
+  assert.equal(getExecutionTarget(files, 'main.mts', 'typescript').entrypoint, 'main.mts')
+  assert.equal(getExecutionTarget(files, 'main.cts', 'typescript').entrypoint, 'main.cts')
 })
 
 test('keeps the editor language when Node.js metadata is missing or invalid', () => {
