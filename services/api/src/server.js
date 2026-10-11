@@ -6192,17 +6192,18 @@ const server = http.createServer(async (request, response) => {
       await handleProjectRequest(request, response)
     } catch (error) {
       const status =
-        error.message === 'invalid workspace id' ||
-        error.message.includes('required') ||
-        error.message.includes('invalid project') ||
-        error.message.includes('project files') ||
-        error.message.includes('project is too large') ||
-        error.message.includes('too many project files') ||
-        error.message.includes('storage limit exceeded')
-          ? 400
-          : error.message === 'authentication required'
-            ? 401
-            : 500
+        error.message === 'authentication required'
+          ? 401
+          : error.message.includes('storage limit exceeded')
+            ? 409
+            : error.message === 'invalid workspace id' ||
+                error.message.includes('required') ||
+                error.message.includes('invalid project') ||
+                error.message.includes('project files') ||
+                error.message.includes('project is too large') ||
+                error.message.includes('too many project files')
+              ? 400
+              : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
@@ -6221,8 +6222,10 @@ const server = http.createServer(async (request, response) => {
       const status =
         error.message === 'authentication required'
           ? 401
-          : error.message === 'storage limit exceeded'
-            ? 400
+          : error.message.includes('storage limit exceeded') ||
+              error.message.includes('project changed while saving') ||
+              error.message.includes('project revision claim was lost')
+            ? 409
             : 500
 
       send(response, status, {
@@ -6239,13 +6242,18 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'project deletion failed'
       const status =
-        error.message === 'authentication required'
+        message === 'authentication required'
           ? 401
-          : 500
+          : message.includes('project terminal cleanup failed')
+            ? 503
+            : message.includes('project terminal ownership mismatch')
+              ? 409
+              : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'project request failed'
+        error: message
       })
     }
     return
