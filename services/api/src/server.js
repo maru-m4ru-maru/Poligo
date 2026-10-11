@@ -12,6 +12,7 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin } from './adminPolicy.js'
+import { isAllowedWorkspaceId } from './workspacePolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -49,7 +50,6 @@ const EXECUTION_MAX_FILE_SIZE = 1_024
 const MAX_EXECUTION_ARGUMENTS = 32
 const MAX_EXECUTION_ARGUMENT_BYTES = 512
 const MAX_EXECUTION_STDIN_BYTES = 1_000_000
-const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
 let databaseInitializationPromise = Promise.resolve(false)
 let databaseInitializationError = null
@@ -1578,11 +1578,23 @@ async function readJson(request) {
   return body ? JSON.parse(body) : {}
 }
 
-function getWorkspaceId(request) {
+async function getWorkspaceId(request, sessionUserId) {
   const workspaceId = request.headers['x-poligo-workspace']
 
-  if (typeof workspaceId !== 'string' || !WORKSPACE_PATTERN.test(workspaceId)) {
+  if (!isAllowedWorkspaceId(workspaceId, sessionUserId)) {
     throw new Error('invalid workspace id')
+  }
+
+  if (workspaceId !== sessionUserId) {
+    const database = getDatabase()
+    const accountStatement = await database.prepare(
+      'SELECT id FROM "user" WHERE id = ? LIMIT 1'
+    )
+    const accounts = await accountStatement.all([workspaceId])
+
+    if (accounts.length) {
+      throw new Error('invalid workspace id')
+    }
   }
 
   return workspaceId
@@ -1680,7 +1692,7 @@ async function claimWorkspace(request, response) {
     return
   }
 
-  const workspaceId = getWorkspaceId(request)
+  const workspaceId = await getWorkspaceId(request, session.user.id)
   const database = getDatabase()
   const existingStatement = await database.prepare(
     'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
@@ -2271,7 +2283,7 @@ async function handleDashboardRequest(request, response) {
 
   const database = getDatabase()
   const ownerId = session.user.id
-  const workspaceId = getWorkspaceId(request)
+  const workspaceId = await getWorkspaceId(request, ownerId)
 
   if (workspaceId !== ownerId) {
     await database.batch([
