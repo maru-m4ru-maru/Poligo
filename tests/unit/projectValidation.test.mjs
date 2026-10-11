@@ -68,3 +68,24 @@ test('enforces file count and content byte quotas', () => {
     /project is too large/
   )
 })
+
+test('validates the payload envelope and preserves special-looking filenames safely', () => {
+  assert.throws(() => normalizeProjectPayload(null), /payload must be an object/)
+  assert.throws(() => normalizeProjectPayload([]), /payload must be an object/)
+  assert.throws(() => normalizeProjectPayload({
+    name: 'Bad\nName',
+    files: { 'main.js': '' }
+  }), /project name is invalid/)
+
+  const files = Object.fromEntries([
+    ['__proto__', 'safe text file'],
+    ['constructor', 'safe text file'],
+    ['toString', 'safe text file']
+  ])
+  const result = normalizeProjectPayload({ name: 'Safe', files })
+
+  assert.equal(result.files['__proto__'], 'safe text file')
+  assert.equal(result.files.constructor, 'safe text file')
+  assert.equal(result.files.toString, 'safe text file')
+  assert.equal(Object.keys(result.files).length, 3)
+})
