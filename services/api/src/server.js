@@ -11,7 +11,7 @@ import {
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
-import { isConfiguredAdmin } from './adminPolicy.js'
+import { isConfiguredAdmin, isDisposableE2EAccountEmail } from './adminPolicy.js'
 import { createKeyedLock } from './ownerMutationLock.js'
 import { calculateStorageBytes } from './storageAccounting.js'
 import {
@@ -2074,6 +2074,13 @@ async function ensureInitialCommit(projectId, ownerId) {
   ]
 
   const storedFiles = encryptProjectSecrets(project.files)
+  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+  const snapshotBytes = getStoredFileBytes(storedFiles)
+
+  if (currentStorageBytes + snapshotBytes > storageLimitBytes) {
+    throw new Error('storage limit exceeded')
+  }
 
   for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
@@ -2113,6 +2120,13 @@ async function commitProject(projectId, ownerId, payload) {
   ]
 
   const storedFiles = encryptProjectSecrets(project.files)
+  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+  const snapshotBytes = getStoredFileBytes(storedFiles)
+
+  if (currentStorageBytes + snapshotBytes > storageLimitBytes) {
+    throw new Error('storage limit exceeded')
+  }
 
   for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
@@ -3903,7 +3917,7 @@ async function handleAdminUsersRequest(request, response) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
-    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(String(target.email || '').trim().toLowerCase())) {
+    if (!isDisposableE2EAccountEmail(target.email)) {
       throw new Error('test account deletion is restricted to generated E2E accounts')
     }
 
@@ -5802,7 +5816,8 @@ const server = http.createServer(async (request, response) => {
       const message = error instanceof Error ? error.message : 'source control request failed'
       const status =
         message === 'invalid workspace id' ||
-        message === 'commit message is required'
+        message === 'commit message is required' ||
+        message === 'storage limit exceeded'
           ? 400
           : message === 'authentication required'
             ? 401
