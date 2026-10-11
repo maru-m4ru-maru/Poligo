@@ -104,3 +104,52 @@ export function buildProjectUpdateStatements({
     statements
   }
 }
+
+export function buildProjectDeleteStatements({ projectId, ownerId }) {
+  return [
+    {
+      sql: `DELETE FROM project_commit_files
+        WHERE commit_id IN (
+          SELECT id FROM project_commits
+          WHERE project_id = ?
+            AND EXISTS (
+              SELECT 1 FROM projects
+              WHERE id = ? AND owner_id = ?
+            )
+        )`,
+      args: [projectId, projectId, ownerId]
+    },
+    {
+      sql: `DELETE FROM project_commits
+        WHERE project_id = ?
+          AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE id = ? AND owner_id = ?
+          )`,
+      args: [projectId, projectId, ownerId]
+    },
+    {
+      sql: `DELETE FROM project_files
+        WHERE project_id = ?
+          AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE id = ? AND owner_id = ?
+          )`,
+      args: [projectId, projectId, ownerId]
+    },
+    {
+      sql: `DELETE FROM terminal_sessions
+        WHERE project_id = ?
+          AND owner_id = ?
+          AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE id = ? AND owner_id = ?
+          )`,
+      args: [projectId, ownerId, projectId, ownerId]
+    },
+    {
+      sql: 'DELETE FROM projects WHERE id = ? AND owner_id = ?',
+      args: [projectId, ownerId]
+    }
+  ]
+}
