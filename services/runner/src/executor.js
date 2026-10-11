@@ -24,6 +24,7 @@ const maxStdinBytes = Number(process.env.MAX_EXECUTION_STDIN_BYTES || 1_000_000)
 const maxEnvironmentVariables = Number(process.env.MAX_ENVIRONMENT_VARIABLES || 64)
 const maxEnvironmentBytes = Number(process.env.MAX_ENVIRONMENT_BYTES || 16_384)
 const concurrency = Number(process.env.EXECUTION_CONCURRENCY || 1)
+const maxQueuedJobs = Number(process.env.MAX_QUEUED_EXECUTIONS || 64)
 
 const jobs = new Map()
 const queue = []
@@ -50,15 +51,35 @@ function normalizeFilePath(value) {
   if (
     typeof value !== 'string' ||
     !value ||
-    value.includes('\0') ||
+    value.length > 240 ||
+    ['__proto__', 'prototype', 'constructor'].includes(value) ||
+    /[\u0000-\u001f\u007f]/.test(value) ||
     value.startsWith('/') ||
     value.includes('\\') ||
-    value.split('/').some(part => part === '..' || part === '.')
+    value.split('/').some(part =>
+      !part ||
+      part === '..' ||
+      part === '.'
+    )
   ) {
     throw new Error('invalid file path')
   }
 
   return value
+}
+
+function assertNoFileDirectoryConflicts(paths) {
+  const pathSet = new Set(paths)
+
+  for (const filePath of pathSet) {
+    const parts = filePath.split('/')
+
+    for (let index = 1; index < parts.length; index += 1) {
+      if (pathSet.has(parts.slice(0, index).join('/'))) {
+        throw new Error('file path conflicts with a directory')
+      }
+    }
+  }
 }
 
 function truncate(value) {
@@ -172,6 +193,9 @@ async function prepareWorkspace(files) {
   if (entries.length > maxFiles) {
     throw new Error('too many files')
   }
+
+  const safePaths = entries.map(([name]) => normalizeFilePath(name))
+  assertNoFileDirectoryConflicts(safePaths)
 
   let totalBytes = 0
   await fs.mkdir(workRoot, { recursive: true, mode: 0o755 })
@@ -415,6 +439,10 @@ export function enqueueJob({
 
   if (jobs.has(id)) {
     throw new Error('execution id already exists')
+  }
+
+  if (queue.length >= maxQueuedJobs) {
+    throw new Error('execution queue is full')
   }
 
   const job = {
