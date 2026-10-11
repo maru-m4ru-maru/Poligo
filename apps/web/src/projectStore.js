@@ -1,4 +1,4 @@
-import { normalizeProjectFileMap } from './projectFilePaths'
+import { normalizeProjectFileMap } from './projectFilePaths.js'
 
 const API_URL = import.meta.env?.VITE_API_URL || ''
 const WORKSPACE_KEY = 'poligo-workspace-id'
