@@ -3,10 +3,10 @@ import test from 'node:test'
 import { normalizeProjectFileMap } from '../../services/api/src/projectFiles.js'
 
 test('accepts valid relative file paths and UTF-8 text', () => {
-  assert.deepEqual(normalizeProjectFileMap({
+  assert.deepEqual({ ...normalizeProjectFileMap({
     'src/main.js': 'console.log("ok")',
     '資料/説明.txt': '日本語'
-  }), {
+  }) }, {
     'src/main.js': 'console.log("ok")',
     '資料/説明.txt': '日本語'
   })
@@ -22,7 +22,15 @@ test('rejects traversal, absolute paths, backslashes, NUL and ambiguous componen
     'src/',
     './main.js',
     'bad\0name.js',
-    '__proto__'
+    'control\u0001name.js',
+    'C:/windows.js',
+    '__proto__',
+    'src/__proto__/value.js',
+    'constructor',
+    'prototype',
+    '.git/config',
+    'node_modules/pkg/index.js',
+    '.cache/state.json'
   ]
 
   for (const path of invalidPaths) {
@@ -67,4 +75,13 @@ test('rejects non-object maps and non-text file contents', () => {
   assert.throws(() => normalizeProjectFileMap(null), /project files must be an object/)
   assert.throws(() => normalizeProjectFileMap([]), /project files must be an object/)
   assert.throws(() => normalizeProjectFileMap({ a: 1 }), /project file content must be text/)
+})
+
+test('returns a prototype-safe file map', () => {
+  const files = normalizeProjectFileMap({
+    'src/main.js': 'console.log("ok")'
+  })
+
+  assert.equal(Object.getPrototypeOf(files), null)
+  assert.equal(files['src/main.js'], 'console.log("ok")')
 })
