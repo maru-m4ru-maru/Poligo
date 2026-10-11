@@ -2,6 +2,7 @@ import http from 'node:http'
 import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { createStartupReadiness } from './startupReadiness.js'
+import { requiresProjectDatabase } from './projectDatabaseReadiness.js'
 import { canQueueTerminalBridgeMessage, shouldCloseTerminalBridgeSocket } from './terminalBridgePolicy.js'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
@@ -82,6 +83,7 @@ const databaseInitializationPromise = startupReadiness.promise
 let databaseInitializationError = null
 let databaseInitializationComplete = false
 let databaseInitializationFailed = false
+let projectDatabaseReady = false
 const executionRateState = new Map()
 const aiRateState = new Map()
 const executionOwners = new Map()
@@ -5941,6 +5943,16 @@ const server = http.createServer(async (request, response) => {
       return
     }
   }
+  if (
+    !projectDatabaseReady &&
+    requiresProjectDatabase(request.method, requestPath)
+  ) {
+    response.setHeader('Retry-After', '5')
+    send(response, 503, {
+      error: 'project database initialization failed; check /api/health and API logs'
+    })
+    return
+  }
 
   if (request.url.startsWith('/api/auth/')) {
     setCorsHeaders(response)
@@ -6635,6 +6647,7 @@ server.listen(port, '0.0.0.0', () => {
 
     try {
       projectDatabaseInitialized = await initializeDatabase()
+      projectDatabaseReady = projectDatabaseInitialized
 
       if (projectDatabaseInitialized) {
         console.log('Poligo project database ready')
