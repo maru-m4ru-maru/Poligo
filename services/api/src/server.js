@@ -12,6 +12,7 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
+import { getOriginPolicy } from './authPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
@@ -28,7 +29,13 @@ const runnerToken = process.env.RUNNER_TOKEN || ''
 const terminalRunnerUrl = process.env.TERMINAL_RUNNER_URL || runnerUrl
 const terminalRunnerToken = process.env.TERMINAL_RUNNER_TOKEN || runnerToken
 const judge0Url = (process.env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/$/, '')
-const allowedOrigin = process.env.CORS_ORIGIN || '*'
+const runtimeEnvironment = process.env.NODE_ENV === 'production' || process.env.RENDER_GIT_COMMIT
+  ? 'production'
+  : 'development'
+const configuredOrigin = process.env.CORS_ORIGIN || ''
+const originPolicy = getOriginPolicy(configuredOrigin, runtimeEnvironment)
+const allowedOrigin = originPolicy.corsOrigin
+const allowedOrigins = originPolicy.allowedOrigins
 const openRouterApiKey = process.env.OPENROUTER_API_KEY || ''
 const openRouterSiteUrl = process.env.OPENROUTER_SITE_URL || 'https://poligo-web-2n2l.onrender.com'
 const openRouterModels = {
@@ -5451,12 +5458,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   const ticket = requestUrl.searchParams.get('ticket') || ''
   const origin = request.headers.origin || ''
   const owner = await loadTerminalOwner(id)
-  const allowedOrigins = allowedOrigin
-    .split(',')
-    .map(value => value.trim())
-    .filter(Boolean)
-  const originAllowed = allowedOrigins.includes('*') ||
-    allowedOrigins.includes(origin)
+  const originAllowed = allowedOrigins.includes(origin)
 
   if (!originAllowed) {
     console.warn('Terminal websocket rejected by origin policy', {
