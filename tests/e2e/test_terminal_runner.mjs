@@ -207,6 +207,22 @@ if (!pwdOutput.includes('/workspace')) {
 socket.send(
   JSON.stringify({
     type: 'input',
+    data: "printf 'POLIGO_ID:%s:%s\\\\n' \"$(id -u)\" \"$(id -g)\"\n"
+  })
+)
+
+const identityOutput = await waitForOutput(
+  socket,
+  output => output.includes('POLIGO_ID:1000:1000')
+)
+
+if (!identityOutput.includes('POLIGO_ID:1000:1000')) {
+  throw new Error('Docker terminal must run as unprivileged UID/GID 1000: ' + identityOutput)
+}
+
+socket.send(
+  JSON.stringify({
+    type: 'input',
     data: "printf 'PTY_OK\\n'\n"
   })
 )

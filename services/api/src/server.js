@@ -1,6 +1,8 @@
 import http from 'node:http'
 import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { createStartupReadiness } from './startupReadiness.js'
+import { canQueueTerminalBridgeMessage, shouldCloseTerminalBridgeSocket } from './terminalBridgePolicy.js'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
@@ -27,6 +29,7 @@ import {
   planCommitRetention
 } from './commitRetention.js'
 import { parseSourceControlRoute } from './sourceControlPolicy.js'
+import { consumeUserQuota, pruneUserQuotaState } from './rateLimitPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -57,6 +60,9 @@ const MAX_REQUEST_BYTES = 8_000_000
 const MAX_EXECUTION_ARCHIVE_BYTES = 3_000_000
 const EXECUTION_WINDOW_MS = 5 * 60 * 1000
 const EXECUTION_REQUESTS_PER_WINDOW = 12
+const AI_REQUEST_WINDOW_MS = 5 * 60 * 1000
+const AI_REQUESTS_PER_WINDOW = 10
+const OPENROUTER_TIMEOUT_MS = 25_000
 const EXECUTION_RECORD_TTL_MS = 10 * 60 * 1000
 const EXECUTION_CPU_TIME_LIMIT = 2
 const EXECUTION_WALL_TIME_LIMIT = 5
@@ -71,10 +77,13 @@ const MAX_EXECUTION_ARGUMENTS = 32
 const MAX_EXECUTION_ARGUMENT_BYTES = 512
 const MAX_EXECUTION_STDIN_BYTES = 1_000_000
 const authHandler = toNodeHandler(auth)
-let databaseInitializationPromise = Promise.resolve(false)
+const startupReadiness = createStartupReadiness()
+const databaseInitializationPromise = startupReadiness.promise
 let databaseInitializationError = null
 let databaseInitializationComplete = false
+let databaseInitializationFailed = false
 const executionRateState = new Map()
+const aiRateState = new Map()
 const executionOwners = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
@@ -135,17 +144,8 @@ const TERMINAL_CAPACITY_RECLAIM_IDLE_MS = Number(process.env.TERMINAL_CAPACITY_R
 const executionCleanupTimer = setInterval(() => {
   const now = Date.now()
 
-  for (const [userId, timestamps] of executionRateState) {
-    const recent = timestamps.filter(timestamp =>
-      now - timestamp < EXECUTION_WINDOW_MS
-    )
-
-    if (recent.length) {
-      executionRateState.set(userId, recent)
-    } else {
-      executionRateState.delete(userId)
-    }
-  }
+  pruneUserQuotaState(executionRateState, now, EXECUTION_WINDOW_MS)
+  pruneUserQuotaState(aiRateState, now, AI_REQUEST_WINDOW_MS)
 
   for (const [id, record] of executionOwners) {
     if (record.expiresAt <= now) {
@@ -1532,18 +1532,23 @@ function preparePythonSource(source, entrypoint, environment, packageName) {
 }
 
 function consumeExecutionQuota(userId) {
-  const now = Date.now()
-  const current = executionRateState.get(userId) || []
-  const recent = current.filter(timestamp => now - timestamp < EXECUTION_WINDOW_MS)
+  return consumeUserQuota(
+    executionRateState,
+    userId,
+    Date.now(),
+    EXECUTION_WINDOW_MS,
+    EXECUTION_REQUESTS_PER_WINDOW
+  )
+}
 
-  if (recent.length >= EXECUTION_REQUESTS_PER_WINDOW) {
-    const oldest = recent[0] || now
-    return Math.max(1, Math.ceil((EXECUTION_WINDOW_MS - (now - oldest)) / 1000))
-  }
-
-  recent.push(now)
-  executionRateState.set(userId, recent)
-  return 0
+function consumeAiQuota(userId) {
+  return consumeUserQuota(
+    aiRateState,
+    userId,
+    Date.now(),
+    AI_REQUEST_WINDOW_MS,
+    AI_REQUESTS_PER_WINDOW
+  )
 }
 
 function registerExecution(id, userId, backend = 'judge0') {
@@ -1676,20 +1681,18 @@ async function getWorkspaceId(request, sessionUserId) {
 }
 
 async function getSession(request) {
+  const initialized = await databaseInitializationPromise
+
+  if (!initialized) {
+    return null
+  }
+
   const session = await auth.api.getSession({
     headers: fromNodeHeaders(request.headers)
   })
 
   if (!session?.user?.id) {
     return session
-  }
-
-  if (!databaseInitializationComplete) {
-    const initialized = await databaseInitializationPromise
-
-    if (!initialized) {
-      return null
-    }
   }
 
   const database = getDatabase()
@@ -4322,13 +4325,16 @@ async function persistTerminalOwner(id, owner) {
   const database = getDatabase()
   const storedFiles = JSON.stringify(encryptProjectSecrets(owner.baseFiles))
 
-  await database.batch([
+  const results = await database.batch([
     {
       sql: `INSERT INTO terminal_sessions (
         id, owner_id, project_id, base_files, created_at, updated_at, expires_at,
         websocket_ticket_hash, ticket_expires_at, ticket_used
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`,
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE EXISTS (
+        SELECT 1 FROM projects WHERE id = ? AND owner_id = ?
+      )`,
       args: [
         id,
         owner.userId,
@@ -4339,10 +4345,16 @@ async function persistTerminalOwner(id, owner) {
         owner.expiresAt,
         owner.websocketTicketHash || (owner.websocketTicket ? hashWebSocketTicket(owner.websocketTicket) : ''),
         owner.websocketTicketExpiresAt || 0,
-        owner.websocketTicketUsed ? 1 : 0
+        owner.websocketTicketUsed ? 1 : 0,
+        owner.projectId,
+        owner.userId
       ]
     }
   ], 'immediate')
+
+  if (Number(results[0]?.rowsAffected) !== 1) {
+    throw new Error('project no longer exists for terminal session')
+  }
 }
 
 async function updateTerminalOwnerRecord(id, owner) {
@@ -4544,31 +4556,39 @@ async function loadTerminalOwner(id) {
 }
 
 async function registerTerminal(id, userId, projectId, files, websocketTicket) {
-  const now = Date.now()
-  const owner = {
-    userId,
-    projectId,
-    baseFiles: { ...files },
-    websocketTicket,
-    websocketTicketHash: hashWebSocketTicket(websocketTicket),
-    websocketTicketExpiresAt: now + 60_000,
-    websocketTicketUsed: false,
-    createdAt: now,
-    expiresAt: now + TERMINAL_RECORD_TTL_MS,
-    cleanupInProgress: false,
-    revoked: false
-  }
+  return withOwnerMutationLock(userId, async () => {
+    const project = await getProjectById(projectId, userId)
 
-  terminalOwners.set(id, owner)
+    if (!project) {
+      throw new Error('project not found')
+    }
 
-  try {
-    await persistTerminalOwner(id, owner)
-  } catch (error) {
-    terminalOwners.delete(id)
-    throw error
-  }
+    const now = Date.now()
+    const owner = {
+      userId,
+      projectId,
+      baseFiles: { ...files },
+      websocketTicket,
+      websocketTicketHash: hashWebSocketTicket(websocketTicket),
+      websocketTicketExpiresAt: now + 60_000,
+      websocketTicketUsed: false,
+      createdAt: now,
+      expiresAt: now + TERMINAL_RECORD_TTL_MS,
+      cleanupInProgress: false,
+      revoked: false
+    }
 
-  return owner
+    terminalOwners.set(id, owner)
+
+    try {
+      await persistTerminalOwner(id, owner)
+    } catch (error) {
+      terminalOwners.delete(id)
+      throw error
+    }
+
+    return owner
+  })
 }
 
 function retainTerminal(id) {
@@ -5571,6 +5591,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       )
 
       const queue = []
+      let queuedBytes = 0
       let runnerReady = false
 
       client.on('message', data => {
@@ -5583,14 +5604,28 @@ async function handleTerminalUpgrade(request, socket, head, id) {
         const message = Buffer.isBuffer(data)
           ? data.toString('utf8')
           : String(data)
+        const messageBytes = Buffer.byteLength(message, 'utf8')
 
         if (runnerSocket.readyState === WebSocket.OPEN) {
+          if (shouldCloseTerminalBridgeSocket(runnerSocket.bufferedAmount)) {
+            client.close(1013, 'terminal input backlog')
+            runnerSocket.terminate()
+            return
+          }
+
           runnerSocket.send(message)
-        } else if (
-          runnerSocket.readyState === WebSocket.CONNECTING &&
-          queue.length < 128
-        ) {
-          queue.push(message)
+        } else if (runnerSocket.readyState === WebSocket.CONNECTING) {
+          if (canQueueTerminalBridgeMessage({
+            queuedMessages: queue.length,
+            queuedBytes,
+            messageBytes
+          })) {
+            queue.push(message)
+            queuedBytes += messageBytes
+          } else {
+            client.close(1013, 'terminal connection queue is full')
+            runnerSocket.terminate()
+          }
         }
       })
 
@@ -5599,8 +5634,16 @@ async function handleTerminalUpgrade(request, socket, head, id) {
         console.info('Terminal runner websocket connected', { id })
 
         for (const message of queue.splice(0)) {
+          if (shouldCloseTerminalBridgeSocket(runnerSocket.bufferedAmount)) {
+            client.close(1013, 'terminal input backlog')
+            runnerSocket.terminate()
+            return
+          }
+
           runnerSocket.send(message)
         }
+
+        queuedBytes = 0
       })
 
       runnerSocket.on('unexpected-response', (upstreamRequest, response) => {
@@ -5645,6 +5688,12 @@ async function handleTerminalUpgrade(request, socket, head, id) {
           : String(data)
 
         if (client.readyState === WebSocket.OPEN) {
+          if (shouldCloseTerminalBridgeSocket(client.bufferedAmount)) {
+            client.close(1013, 'terminal output backlog')
+            runnerSocket.terminate()
+            return
+          }
+
           client.send(message)
         }
       })
@@ -5715,6 +5764,17 @@ async function handleAiAssist(request, response) {
     return
   }
 
+  const retryAfter = consumeAiQuota(session.user.id)
+
+  if (retryAfter) {
+    response.setHeader('Retry-After', String(retryAfter))
+    send(response, 429, {
+      error: 'AI request rate limit exceeded',
+      retryAfter
+    })
+    return
+  }
+
   const payload = await readJson(request)
   const prompt = typeof payload.prompt === 'string'
     ? payload.prompt.trim().slice(0, 12_000)
@@ -5778,6 +5838,7 @@ async function handleAiAssist(request, response) {
         'HTTP-Referer': openRouterSiteUrl,
         'X-Title': 'Poligo'
       },
+      signal: AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
       body: JSON.stringify({
         model: selectedModel.model,
         messages: [
@@ -5859,8 +5920,39 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  const requestPath = new URL(
+    request.url || '/',
+    'http://localhost'
+  ).pathname
+  const isHealthRequest =
+    (request.method === 'GET' || request.method === 'HEAD') &&
+    requestPath === '/api/health'
+
+  if (!isHealthRequest) {
+    const startupReady = await databaseInitializationPromise
+
+    if (!startupReady) {
+      response.setHeader('Retry-After', '1')
+      send(response, 503, {
+        error: databaseInitializationError
+          ? 'database initialization failed; check /api/health and API logs'
+          : 'database initialization is still in progress'
+      })
+      return
+    }
+  }
+
   if (request.url.startsWith('/api/auth/')) {
     setCorsHeaders(response)
+    const authReady = await databaseInitializationPromise
+
+    if (!authReady) {
+      send(response, 503, {
+        error: 'authentication database initialization failed; check /api/health and API logs'
+      })
+      return
+    }
+
     await authHandler(request, response)
     return
   }
@@ -5965,12 +6057,12 @@ const server = http.createServer(async (request, response) => {
       database: {
         ...databaseStatus,
         initialization: !databaseInitializationComplete
-          ? databaseInitializationError
+          ? 'pending'
+          : databaseInitializationFailed
             ? 'failed'
-            : 'pending'
-          : databaseInitializationError
-            ? 'degraded'
-            : 'ready'
+            : databaseInitializationError
+              ? 'degraded'
+              : 'ready'
       }
     })
     return
@@ -6537,41 +6629,55 @@ async function cleanupDisposableE2EAccountsOnStartup() {
 server.listen(port, '0.0.0.0', () => {
   console.log('Poligo API listening on ' + port)
 
-  databaseInitializationPromise = (async () => {
-    const projectDatabaseInitialized = await initializeDatabase()
+  void (async () => {
+    let projectDatabaseInitialized = false
     let projectDatabaseError = null
 
-    if (projectDatabaseInitialized) {
-      console.log('Poligo project database ready')
-    } else {
-      const databaseStatus = getDatabaseStatus()
-      projectDatabaseError = databaseStatus.error ||
-        (databaseStatus.status === 'not_configured'
-          ? 'Turso database is not configured'
-          : 'Project database initialization did not complete')
+    try {
+      projectDatabaseInitialized = await initializeDatabase()
 
-      console.error('Poligo project database initialization failed: ' + projectDatabaseError)
+      if (projectDatabaseInitialized) {
+        console.log('Poligo project database ready')
+      } else {
+        const databaseStatus = getDatabaseStatus()
+        projectDatabaseError = databaseStatus.error ||
+          (databaseStatus.status === 'not_configured'
+            ? 'Turso database is not configured'
+            : 'Project database initialization did not complete')
+
+        console.error('Poligo project database initialization failed: ' + projectDatabaseError)
+      }
+
+      await initializeAuthDatabase()
+      console.log('Poligo authentication database ready')
+
+      if (projectDatabaseInitialized) {
+        await restoreTerminalOwners()
+        console.log('Poligo terminal sessions restored')
+      } else {
+        console.warn('Poligo terminal sessions were not restored because the project database is unavailable')
+      }
+
+      if (
+        projectDatabaseInitialized &&
+        process.env.POLIGO_CLEANUP_DISPOSABLE_E2E_ACCOUNTS_ON_START === '1'
+      ) {
+        await cleanupDisposableE2EAccountsOnStartup()
+      }
+
+      databaseInitializationComplete = true
+      databaseInitializationFailed = false
+      databaseInitializationError = projectDatabaseError
+      startupReadiness.resolve(true)
+    } catch (error) {
+      databaseInitializationComplete = true
+      databaseInitializationFailed = true
+      databaseInitializationError = error instanceof Error
+        ? error.message
+        : String(error)
+
+      console.error('Poligo database initialization failed: ' + databaseInitializationError)
+      startupReadiness.resolve(false)
     }
-
-    await initializeAuthDatabase()
-    await restoreTerminalOwners()
-    console.log('Poligo authentication database ready')
-    console.log('Poligo terminal sessions restored')
-
-    if (process.env.POLIGO_CLEANUP_DISPOSABLE_E2E_ACCOUNTS_ON_START === '1') {
-      await cleanupDisposableE2EAccountsOnStartup()
-    }
-
-    databaseInitializationComplete = true
-    databaseInitializationError = projectDatabaseError
-    return true
-  })().catch(error => {
-    databaseInitializationComplete = false
-    databaseInitializationError = error instanceof Error
-      ? error.message
-      : String(error)
-
-    console.error('Poligo database initialization failed: ' + databaseInitializationError)
-    return false
-  })
+  })()
 })

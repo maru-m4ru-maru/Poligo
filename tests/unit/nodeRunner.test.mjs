@@ -180,6 +180,26 @@ test('Node.js executes inside the isolated Docker sandbox', {
     assert.equal(result.result.stdout.trim(), 'commonjs-ok')
   })
 
+  await t.test('Node 24 strips erasable TypeScript types at runtime', async () => {
+    const result = await executeNode({
+      entrypoint: 'main.ts',
+      files: {
+        'main.ts': [
+          'interface Greeting { text: string }',
+          'const greeting: Greeting = { text: "native-typescript-ok" }',
+          'console.log(greeting.text)'
+        ].join('\n'),
+        'package.json': JSON.stringify({
+          type: 'module',
+          poligo: { runtime: 'node' }
+        })
+      }
+    })
+
+    assert.equal(result.status, 'succeeded', result.result?.stderr)
+    assert.equal(result.result.stdout.trim(), 'native-typescript-ok')
+  })
+
   await t.test('stdout, stderr and non-zero exit codes are reported separately', async () => {
     const result = await executeNode({
       files: {
