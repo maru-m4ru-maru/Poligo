@@ -2424,17 +2424,24 @@ function IDE({ projectId }) {
 
     try {
       for (const edit of edits) {
-        const path = typeof edit?.path === 'string' ? edit.path.trim() : ''
-
-        if (isSecretEnvFile(path)) {
-          throw new Error('環境変数ファイルはPoligo AIから直接変更できません。')
-        }
-
+        const rawPath = typeof edit?.path === 'string' ? edit.path.trim() : ''
         const oldText = typeof edit?.oldText === 'string' ? edit.oldText : null
         const newText = typeof edit?.newText === 'string' ? edit.newText : null
 
-        if (!path || oldText === null || newText === null) {
+        if (!rawPath || oldText === null || newText === null) {
           throw new Error('AIが無効な変更情報を返しました。')
+        }
+
+        let path
+
+        try {
+          path = normalizeProjectFilePath(rawPath)
+        } catch {
+          throw new Error('AIが使用できないファイルパスを指定しました。')
+        }
+
+        if (isSecretEnvFile(path)) {
+          throw new Error('環境変数ファイルはPoligo AIから直接変更できません。')
         }
 
         const exists = Object.prototype.hasOwnProperty.call(next, path)
@@ -2444,6 +2451,10 @@ function IDE({ projectId }) {
         }
 
         if (!exists && oldText === '') {
+          if (hasProjectFilePathConflict(next, path)) {
+            throw new Error(path + ' は既存のファイルまたはフォルダーと競合します。')
+          }
+
           next[path] = newText
           changedFiles.push(path)
           continue
