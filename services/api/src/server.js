@@ -1854,7 +1854,13 @@ async function listProjects(ownerId) {
       p.created_at,
       p.updated_at,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) +
+        COALESCE((
+          SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+          FROM project_commits pc
+          JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+          WHERE pc.project_id = p.id
+        ), 0) AS storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id = ?
@@ -2324,13 +2330,20 @@ async function handleDashboardRequest(request, response) {
     `SELECT
       COUNT(DISTINCT p.id) AS project_count,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes,
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS project_storage_bytes,
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM projects hp
+        JOIN project_commits pc ON pc.project_id = hp.id
+        JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE hp.owner_id IN (${ownerPlaceholders})
+      ), 0) AS history_storage_bytes,
       MAX(p.updated_at) AS last_updated
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id IN (${ownerPlaceholders})`
   )
-  const statsRows = await statsStatement.all(ownerIds)
+  const statsRows = await statsStatement.all([...ownerIds, ...ownerIds])
   const stats = statsRows[0] || {}
 
   const url = new URL(request.url, 'http://localhost')
@@ -2346,7 +2359,13 @@ async function handleDashboardRequest(request, response) {
       p.created_at,
       p.updated_at,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS project_storage_bytes,
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM project_commits pc
+        JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE pc.project_id = p.id
+      ), 0) AS history_storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id IN (${ownerPlaceholders})
@@ -2370,7 +2389,10 @@ async function handleDashboardRequest(request, response) {
     stats: {
       projectCount: Number(stats.project_count || 0),
       fileCount: Number(stats.file_count || 0),
-      storageBytes: Number(stats.storage_bytes || 0),
+      storageBytes: calculateStorageBytes(
+        stats.project_storage_bytes || 0,
+        stats.history_storage_bytes || 0
+      ),
       lastUpdated: Number(stats.last_updated || 0)
     },
     projects: projects.map(project => ({
@@ -2379,7 +2401,10 @@ async function handleDashboardRequest(request, response) {
       createdAt: Number(project.created_at),
       updatedAt: Number(project.updated_at),
       fileCount: Number(project.file_count || 0),
-      storageBytes: Number(project.storage_bytes || 0)
+      storageBytes: calculateStorageBytes(
+        project.project_storage_bytes || 0,
+        project.history_storage_bytes || 0
+      )
     }))
   })
 }
@@ -3564,6 +3589,12 @@ async function handleAdminUsersRequest(request, response) {
           FROM projects p
           LEFT JOIN project_files pf ON pf.project_id = p.id
           WHERE p.owner_id = u.id
+        ), 0) + COALESCE((
+          SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+          FROM projects hp
+          JOIN project_commits pc ON pc.project_id = hp.id
+          JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+          WHERE hp.owner_id = u.id
         ), 0) AS storage_bytes,
         COALESCE(usl.limit_bytes, ?) AS storage_limit_bytes
       FROM "user" u
