@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildProjectUpdateStatements } from '../../services/api/src/projectWritePolicy.js'
+import { buildProjectDeleteStatements, buildProjectUpdateStatements } from '../../services/api/src/projectWritePolicy.js'
 
 function build(overrides = {}) {
   return buildProjectUpdateStatements({
@@ -67,4 +67,26 @@ test('empty projects still restore the original project name after claiming the 
   assert.equal(statements.length, 3)
   assert.equal(statements.at(-1).args[0], 'Updated project')
   assert.equal(statements.at(-1).args.at(-1), writeToken)
+})
+
+test('project deletion removes history and terminal records before the project row', () => {
+  const statements = buildProjectDeleteStatements({
+    projectId: 'project-one',
+    ownerId: 'user-one'
+  })
+
+  assert.equal(statements.length, 5)
+  assert.match(statements[0].sql, /DELETE FROM project_commit_files/)
+  assert.match(statements[1].sql, /DELETE FROM project_commits/)
+  assert.match(statements[2].sql, /DELETE FROM project_files/)
+  assert.match(statements[3].sql, /DELETE FROM terminal_sessions/)
+  assert.match(statements[4].sql, /DELETE FROM projects WHERE id = \? AND owner_id = \?/)
+
+  for (const statement of statements.slice(0, 4)) {
+    assert.match(statement.sql, /EXISTS\s*\(\s*SELECT 1 FROM projects/)
+    assert.ok(statement.args.includes('project-one'))
+    assert.ok(statement.args.includes('user-one'))
+  }
+
+  assert.deepEqual(statements[4].args, ['project-one', 'user-one'])
 })
