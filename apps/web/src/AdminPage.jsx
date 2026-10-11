@@ -118,7 +118,11 @@ export default function AdminPage({ session }) {
       )
       setUsers(current => current.map(item =>
         item.id === user.id
-          ? { ...item, storageLimitBytes: result.user.storageLimitBytes }
+          ? {
+              ...item,
+              storageLimitBytes: result.user.storageLimitBytes,
+              historyStorageLimitBytes: result.user.storageLimitBytes * 2
+            }
           : item
       ))
       setSuccess(user.email + ' の保存容量上限を ' + value + ' MiB に変更しました。')
@@ -142,7 +146,11 @@ export default function AdminPage({ session }) {
       setStorageDrafts(current => ({ ...current, [user.id]: DEFAULT_STORAGE_LIMIT_MIB }))
       setUsers(current => current.map(item =>
         item.id === user.id
-          ? { ...item, storageLimitBytes: DEFAULT_STORAGE_LIMIT_MIB * 1024 * 1024 }
+          ? {
+              ...item,
+              storageLimitBytes: DEFAULT_STORAGE_LIMIT_MIB * 1024 * 1024,
+              historyStorageLimitBytes: DEFAULT_STORAGE_LIMIT_MIB * 1024 * 1024 * 2
+            }
           : item
       ))
       setSuccess(user.email + ' の保存容量上限を標準値に戻しました。')
@@ -353,7 +361,8 @@ export default function AdminPage({ session }) {
                           <strong>{user.username ? '@' + user.username : 'ユーザー名未設定'}</strong>
                           <span>{user.name || '表示名未設定'} · {user.email}</span>
                           <small>ID: {user.id}</small>
-                          <small>登録: {formatDate(user.createdAt)} · 使用量: {formatBytes(user.storageBytes)} / {formatBytes(user.storageLimitBytes)}</small>
+                          <small>登録: {formatDate(user.createdAt)} · ファイル: {formatBytes(user.storageBytes)} / {formatBytes(user.storageLimitBytes)}</small>
+                          <small>ソース履歴: {formatBytes(user.historyStorageBytes || 0)} / {formatBytes(user.historyStorageLimitBytes || user.storageLimitBytes * 2)}</small>
                           {user.banReason && <small>BAN理由: {user.banReason}</small>}
                         </div>
                         <div className="admin-user-badges">
