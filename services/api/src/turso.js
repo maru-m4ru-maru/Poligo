@@ -1,4 +1,5 @@
 import { connect } from '@tursodatabase/serverless'
+import { PROJECT_STORAGE_QUOTA_TRIGGERS } from './storageQuota.js'
 import {
   encryptSecret,
   isEncryptedSecret
@@ -111,7 +112,8 @@ export async function initializeDatabase() {
         ticket_used INTEGER NOT NULL DEFAULT 1
       )`,
       'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_owner_project ON terminal_sessions(owner_id, project_id)',
-      'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_expires_at ON terminal_sessions(expires_at)'
+      'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_expires_at ON terminal_sessions(expires_at)',
+      ...PROJECT_STORAGE_QUOTA_TRIGGERS
     ], 'immediate')
 
     const secretRows = await database.prepare(
