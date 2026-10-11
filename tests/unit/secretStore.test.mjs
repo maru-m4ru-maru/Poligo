@@ -50,7 +50,7 @@ test('only environment secret files are encrypted in project payloads', () => {
   assert.equal(isEncryptedSecret(encrypted['.env']), true)
   assert.equal(isEncryptedSecret(encrypted['.env.production']), true)
   assert.equal(isEncryptedSecret(encrypted['config/.env.staging']), true)
-  assert.equal(encrypted['.env.example'], '.env.example' === '.env.example' ? 'TOKEN=replace-me' : '')
+  assert.equal(encrypted['.env.example'], files['.env.example'])
   assert.equal(encrypted['main.js'], files['main.js'])
   assert.deepEqual(decryptProjectSecrets(encrypted), files)
 })
