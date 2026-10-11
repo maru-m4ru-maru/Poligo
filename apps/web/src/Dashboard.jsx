@@ -283,24 +283,7 @@ function TemplateIcon({ type }) {
     )
   }
 
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect x="4" y="4" width="16" height="16" rx="3" fill="#52647A" />
-      <path
-        d="m9 9 2.2 2.2L9 13.5M13 15h2"
-        stroke="#EAF0F7"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+  return <span className="stack-template-generic-icon" aria-hidden="true" />
 }
 export default function Dashboard({ session }) {
   const [data, setData] = useState(null)
