@@ -1780,6 +1780,40 @@ async function getOwnerId(request) {
   return session.user.id
 }
 
+async function transferWorkspaceOwnership(workspaceId, userId) {
+  const database = getDatabase()
+  const existingStatement = await database.prepare(
+    'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
+  )
+  const existing = await existingStatement.all([workspaceId])
+  const projectCount = Number(existing[0]?.count || 0)
+
+  if (workspaceId === userId) {
+    return projectCount
+  }
+
+  await withOwnerMutationLock(userId, async () => {
+    await database.batch(
+      buildWorkspaceClaimStatements(workspaceId, userId, Date.now()),
+      'immediate'
+    )
+
+    for (const owner of terminalOwners.values()) {
+      if (owner.userId === workspaceId) {
+        owner.userId = userId
+        owner.websocketTicket = ''
+        owner.websocketTicketHash = ''
+        owner.websocketTicketExpiresAt = 0
+        owner.websocketTicketUsed = true
+      }
+    }
+
+    closeTerminalConnectionsForUser(workspaceId)
+  })
+
+  return projectCount
+}
+
 async function claimWorkspace(request, response) {
   const session = await getSession(request)
 
@@ -1791,32 +1825,7 @@ async function claimWorkspace(request, response) {
   }
 
   const workspaceId = await getWorkspaceId(request, session.user.id)
-  const database = getDatabase()
-  const existingStatement = await database.prepare(
-    'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
-  )
-  const existing = await existingStatement.all([workspaceId])
-
-  const count = Number(existing[0]?.count || 0)
-
-  if (count > 0 && workspaceId !== session.user.id) {
-    await database.batch(
-      buildWorkspaceClaimStatements(workspaceId, session.user.id, Date.now()),
-      'immediate'
-    )
-
-    for (const owner of terminalOwners.values()) {
-      if (owner.userId === workspaceId) {
-        owner.userId = session.user.id
-        owner.websocketTicket = ''
-        owner.websocketTicketHash = ''
-        owner.websocketTicketExpiresAt = 0
-        owner.websocketTicketUsed = true
-      }
-    }
-
-    closeTerminalConnectionsForUser(workspaceId)
-  }
+  const count = await transferWorkspaceOwnership(workspaceId, session.user.id)
 
   send(response, 200, {
     ok: true,
@@ -2455,17 +2464,10 @@ async function handleDashboardRequest(request, response) {
   const workspaceId = await getWorkspaceId(request, ownerId)
 
   if (workspaceId !== ownerId) {
-    await database.batch([
-      {
-        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
-        args: [ownerId, workspaceId]
-      }
-    ], 'immediate')
+    await transferWorkspaceOwnership(workspaceId, ownerId)
   }
 
-  const ownerIds = workspaceId === ownerId
-    ? [ownerId]
-    : [ownerId, workspaceId]
+  const ownerIds = [ownerId]
 
   const ownerPlaceholders = ownerIds.map(() => '?').join(', ')
 
@@ -2481,6 +2483,16 @@ async function handleDashboardRequest(request, response) {
   )
   const statsRows = await statsStatement.all(ownerIds)
   const stats = statsRows[0] || {}
+  const historyStatsStatement = await database.prepare(
+    `SELECT
+      COALESCE(SUM(LENGTH(CAST(pcf.content AS BLOB))), 0) AS history_storage_bytes
+    FROM project_commits pc
+    JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+    JOIN projects p ON p.id = pc.project_id
+    WHERE p.owner_id IN (${ownerPlaceholders})`
+  )
+  const historyStatsRows = await historyStatsStatement.all(ownerIds)
+  const historyStorageBytes = Number(historyStatsRows[0]?.history_storage_bytes || 0)
 
   const url = new URL(request.url, 'http://localhost')
   const requestedLimit = Number(url.searchParams.get('limit'))
@@ -2520,6 +2532,8 @@ async function handleDashboardRequest(request, response) {
       projectCount: Number(stats.project_count || 0),
       fileCount: Number(stats.file_count || 0),
       storageBytes: Number(stats.storage_bytes || 0),
+      historyStorageBytes,
+      historyStorageLimitBytes: storageLimitBytes * COMMIT_HISTORY_STORAGE_MULTIPLIER,
       lastUpdated: Number(stats.last_updated || 0)
     },
     projects: projects.map(project => ({
