@@ -6,6 +6,7 @@ import path from 'node:path'
 import pty from 'node-pty'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { appendUtf8Tail } from './outputBuffer.js'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = process.env.TERMINAL_RUN_ROOT || '/tmp/poligo-terminal-sessions'
@@ -194,11 +195,11 @@ async function writeInitialFiles(workspace, uid, files) {
 
 function appendOutput(session, data) {
   session.lastUsedAt = Date.now()
-  session.outputBuffer += data
-
-  if (session.outputBuffer.length > maxOutputBytes) {
-    session.outputBuffer = session.outputBuffer.slice(-maxOutputBytes)
-  }
+  session.outputBuffer = appendUtf8Tail(
+    session.outputBuffer,
+    data,
+    maxOutputBytes
+  )
 
   const socket = session.socket
 
