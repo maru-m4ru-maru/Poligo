@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import Docker from 'dockerode'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { normalizeTerminalFilePath, normalizeTerminalFiles } from './terminalPaths.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -33,26 +34,7 @@ const cleanupTimer = setInterval(() => {
 cleanupTimer.unref?.()
 
 function normalizeFilePath(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    value.length > 240 ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    value.includes('\\') ||
-    value.split('/').some(part =>
-      !part ||
-      part === '..' ||
-      part === '.' ||
-      part === '.terminal-cache' ||
-      part === '.tmp' ||
-      part === '.cache'
-    )
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  return value
+  return normalizeTerminalFilePath(value)
 }
 function normalizeId(value) {
   if (
@@ -107,40 +89,10 @@ async function ensureImage() {
 }
 
 function normalizeFiles(files) {
-  if (!files || typeof files !== 'object' || Array.isArray(files)) {
-    throw new Error('terminal files must be an object')
-  }
-
-  const entries = Object.entries(files)
-
-  if (!entries.length) {
-    throw new Error('terminal workspace is empty')
-  }
-
-  if (entries.length > maxFiles) {
-    throw new Error('too many terminal files')
-  }
-
-  let totalBytes = 0
-  const normalized = {}
-
-  for (const [name, content] of entries) {
-    const safePath = normalizeFilePath(name)
-
-    if (typeof content !== 'string') {
-      throw new Error('terminal file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(content, 'utf8')
-
-    if (totalBytes > maxBytes) {
-      throw new Error('terminal workspace is too large')
-    }
-
-    normalized[safePath] = content
-  }
-
-  return normalized
+  return normalizeTerminalFiles(files, {
+    maxFiles,
+    maxBytes
+  })
 }
 
 async function createWorkspaceArchive(files) {
@@ -236,9 +188,13 @@ async function writeWorkspaceArchive(container, archive) {
 }
 
 function normalizeArchivePath(name) {
-  let value = String(name || '')
-    .replace(/^\.\//, '')
-    .replace(/^\/+/, '')
+  const rawName = String(name || '')
+
+  if (rawName.startsWith('/') || rawName.includes('\0') || rawName.includes('\\')) {
+    return ''
+  }
+
+  let value = rawName.replace(/^\.\//, '')
 
   if (value === 'workspace') {
     return ''
@@ -248,15 +204,15 @@ function normalizeArchivePath(name) {
     value = value.slice('workspace/'.length)
   }
 
-  if (
-    !value ||
-    value.includes('\0') ||
-    value.split('/').some(part => part === '..' || part === '.')
-  ) {
+  if (!value) {
     return ''
   }
 
-  return value
+  try {
+    return normalizeFilePath(value)
+  } catch {
+    return ''
+  }
 }
 
 async function readWorkspaceArchive(container) {
