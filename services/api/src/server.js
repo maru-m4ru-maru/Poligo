@@ -5088,7 +5088,6 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   )
   const ticket = requestUrl.searchParams.get('ticket') || ''
   const origin = request.headers.origin || ''
-  const owner = await loadTerminalOwner(id)
   const originAllowed = allowedOrigins.includes(origin)
 
   if (!originAllowed) {
@@ -5099,6 +5098,8 @@ async function handleTerminalUpgrade(request, socket, head, id) {
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
   }
+
+  const owner = await loadTerminalOwner(id)
 
   if (
     !owner ||
