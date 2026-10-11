@@ -11,7 +11,8 @@ import {
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
-import { isConfiguredAdmin } from './adminPolicy.js'
+import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
+import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId } from './workspacePolicy.js'
 
 const port = Number(process.env.PORT || 10000)
@@ -1601,9 +1602,32 @@ async function getWorkspaceId(request, sessionUserId) {
 }
 
 async function getSession(request) {
-  return auth.api.getSession({
+  const session = await auth.api.getSession({
     headers: fromNodeHeaders(request.headers)
   })
+
+  if (!session?.user?.id) {
+    return session
+  }
+
+  if (!databaseInitializationComplete) {
+    const initialized = await databaseInitializationPromise
+
+    if (!initialized) {
+      return null
+    }
+  }
+
+  const database = getDatabase()
+  const bannedStatement = await database.prepare(
+    'SELECT user_id FROM user_bans WHERE user_id = ? LIMIT 1'
+  )
+  const bannedRows = await bannedStatement.all([session.user.id])
+  const bannedUserIds = new Set(bannedRows.map(row => String(row.user_id)))
+
+  return shouldRejectBannedSession(session, bannedUserIds)
+    ? null
+    : session
 }
 
 function getConfiguredAdminSet(value, normalize) {
@@ -3852,7 +3876,7 @@ async function handleAdminUsersRequest(request, response) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
-    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(email)) {
+    if (!isGeneratedE2EAccountEmail(target.email)) {
       throw new Error('test account deletion is restricted to generated E2E accounts')
     }
 
