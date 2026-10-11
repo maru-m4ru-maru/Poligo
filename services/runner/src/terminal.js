@@ -17,6 +17,7 @@ const nanoCpus = Number(process.env.TERMINAL_NANO_CPUS || 500_000_000)
 const pidsLimit = Number(process.env.TERMINAL_PIDS_LIMIT || 128)
 const idleTtlMs = Number(process.env.TERMINAL_IDLE_TTL_MS || 30 * 60 * 1000)
 const maxOutputBytes = Number(process.env.TERMINAL_MAX_OUTPUT_BYTES || 65_536)
+const maxSocketBufferBytes = 1_048_576
 const terminalNetworkMode = process.env.TERMINAL_NETWORK_MODE || 'none'
 
 const sessions = new Map()
@@ -73,14 +74,21 @@ function appendOutput(session, data) {
     maxOutputBytes
   )
 
-  if (session.socket?.readyState === 1) {
-    session.socket.send(
-      JSON.stringify({
-        type: 'output',
-        data
-      })
-    )
+  const socket = session.socket
+
+  if (
+    socket?.readyState !== 1 ||
+    socket.bufferedAmount >= maxSocketBufferBytes
+  ) {
+    return
   }
+
+  const output = appendUtf8Tail('', data, maxOutputBytes)
+
+  socket.send(JSON.stringify({
+    type: 'output',
+    data: output
+  }))
 }
 
 async function ensureImage() {
