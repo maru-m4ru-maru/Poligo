@@ -2,6 +2,7 @@ import http from 'node:http'
 import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { createStartupReadiness } from './startupReadiness.js'
+import { canQueueTerminalBridgeMessage, shouldCloseTerminalBridgeSocket } from './terminalBridgePolicy.js'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
@@ -5571,6 +5572,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       )
 
       const queue = []
+      let queuedBytes = 0
       let runnerReady = false
 
       client.on('message', data => {
@@ -5583,14 +5585,28 @@ async function handleTerminalUpgrade(request, socket, head, id) {
         const message = Buffer.isBuffer(data)
           ? data.toString('utf8')
           : String(data)
+        const messageBytes = Buffer.byteLength(message, 'utf8')
 
         if (runnerSocket.readyState === WebSocket.OPEN) {
+          if (shouldCloseTerminalBridgeSocket(runnerSocket.bufferedAmount)) {
+            client.close(1013, 'terminal input backlog')
+            runnerSocket.terminate()
+            return
+          }
+
           runnerSocket.send(message)
-        } else if (
-          runnerSocket.readyState === WebSocket.CONNECTING &&
-          queue.length < 128
-        ) {
-          queue.push(message)
+        } else if (runnerSocket.readyState === WebSocket.CONNECTING) {
+          if (canQueueTerminalBridgeMessage({
+            queuedMessages: queue.length,
+            queuedBytes,
+            messageBytes
+          })) {
+            queue.push(message)
+            queuedBytes += messageBytes
+          } else {
+            client.close(1013, 'terminal connection queue is full')
+            runnerSocket.terminate()
+          }
         }
       })
 
@@ -5599,8 +5615,16 @@ async function handleTerminalUpgrade(request, socket, head, id) {
         console.info('Terminal runner websocket connected', { id })
 
         for (const message of queue.splice(0)) {
+          if (shouldCloseTerminalBridgeSocket(runnerSocket.bufferedAmount)) {
+            client.close(1013, 'terminal input backlog')
+            runnerSocket.terminate()
+            return
+          }
+
           runnerSocket.send(message)
         }
+
+        queuedBytes = 0
       })
 
       runnerSocket.on('unexpected-response', (upstreamRequest, response) => {
@@ -5645,6 +5669,12 @@ async function handleTerminalUpgrade(request, socket, head, id) {
           : String(data)
 
         if (client.readyState === WebSocket.OPEN) {
+          if (shouldCloseTerminalBridgeSocket(client.bufferedAmount)) {
+            client.close(1013, 'terminal output backlog')
+            runnerSocket.terminate()
+            return
+          }
+
           client.send(message)
         }
       })
