@@ -20,6 +20,8 @@ RUN npm install --omit=dev
 
 COPY services/runner/src ./src
 
+COPY packages/protocol/src /packages/protocol/src
+
 ENV NODE_ENV=production
 ENV PORT=10001
 

@@ -38,6 +38,41 @@ jobs:
       - run: npm install --prefix services/runner
       - run: npm audit --audit-level=moderate --prefix services/runner
       - run: node --test tests/unit/*.test.mjs
+      - name: Build and verify production runner image
+        run: |
+          set -euo pipefail
+          docker build -t poligo-runner-ci -f services/runner/Dockerfile .
+          docker run -d --name poligo-runner-ci \
+            -p 10002:10001 \
+            -e PORT=10001 \
+            -e RUNNER_TOKEN=runner-ci-token \
+            -e TERMINAL_BACKEND=process \
+            poligo-runner-ci
+          cleanup() {
+            docker logs poligo-runner-ci || true
+            docker rm -f poligo-runner-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in $(seq 1 100); do
+            if curl --silent --fail http://127.0.0.1:10002/health >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' poligo-runner-ci 2>/dev/null || true)" != true ]; then
+              docker logs poligo-runner-ci || true
+              exit 1
+            fi
+            sleep 0.2
+          done
+          if [ "$ready" != true ]; then
+            docker logs poligo-runner-ci || true
+            echo "Production runner image did not become ready" >&2
+            exit 1
+          fi
+          curl --silent --fail http://127.0.0.1:10002/v1/languages \
+            -H 'Authorization: Bearer runner-ci-token' |
+            node -e 'let data = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", chunk => data += chunk); process.stdin.on("end", () => { const result = JSON.parse(data); if (!Array.isArray(result.languages) || !result.languages.includes("node")) process.exit(1); console.log("PRODUCTION RUNNER IMAGE: PASS", result.languages.join(", ")); })'
       - name: Run Docker terminal end-to-end test
         run: |
           set -euo pipefail
