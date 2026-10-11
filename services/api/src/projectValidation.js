@@ -4,10 +4,10 @@ export function isValidProjectFilePath(value) {
     !value ||
     value.length > 240 ||
     value === '__proto__' ||
-    value.includes('\\0') ||
-    value.includes('\\\\') ||
+    value.includes('\0') ||
+    value.includes('\\') ||
     value.startsWith('/') ||
-    /[\\u0000-\\u001f\\u007f]/.test(value)
+    /[\u0000-\u001f\u007f]/.test(value)
   ) {
     return false
   }
