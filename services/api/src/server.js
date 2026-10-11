@@ -1858,7 +1858,7 @@ async function getProjectById(projectId, ownerId) {
   )
   const fileRows = await fileStatement.all([projectId])
 
-  const files = {}
+  const files = Object.create(null)
 
   for (const file of fileRows) {
     files[file.path] = file.content
