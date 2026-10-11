@@ -13,6 +13,7 @@ import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin, isDisposableE2EAccountEmail } from './adminPolicy.js'
 import { DEFAULT_STORAGE_LIMIT_BYTES } from './storageQuota.js'
+import { getRequestInputStatus, readJsonBody } from './requestInput.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -1565,17 +1566,7 @@ function send(response, status, body) {
 }
 
 async function readJson(request) {
-  let body = ''
-
-  for await (const chunk of request) {
-    body += chunk
-
-    if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BYTES) {
-      throw new Error('request too large')
-    }
-  }
-
-  return body ? JSON.parse(body) : {}
+  return readJsonBody(request, MAX_REQUEST_BYTES)
 }
 
 function getWorkspaceId(request) {
@@ -1756,9 +1747,10 @@ function normalizeProjectPayload(payload) {
       typeof path !== 'string' ||
       path.length === 0 ||
       path.length > 240 ||
-      path.includes('\\') ||
+      /[\\u0000-\\u001f\\u007f]/.test(path) ||
+      path.includes('\\\\') ||
       path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
+      path.split('/').some(part => !part || part === '..' || part === '.')
     ) {
       throw new Error('invalid project file path')
     }
@@ -1774,6 +1766,18 @@ function normalizeProjectPayload(payload) {
     }
 
     files[path] = value
+  }
+
+  const filePaths = new Set(Object.keys(files))
+
+  for (const path of filePaths) {
+    const parts = path.split('/')
+
+    for (let index = 1; index < parts.length; index += 1) {
+      if (filePaths.has(parts.slice(0, index).join('/'))) {
+        throw new Error('project file path conflicts with a directory')
+      }
+    }
   }
 
   if (Object.keys(files).length > MAX_FILES) {
@@ -3923,6 +3927,14 @@ async function handleAdminUsersRequest(request, response) {
       {
         sql: 'DELETE FROM user_storage_limits WHERE user_id = ?',
         args: [userId]
+      },
+      {
+        sql: 'DELETE FROM user_bans WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM announcements WHERE target_user_id = ? OR created_by = ?',
+        args: [userId, userId]
       },
       {
         sql: 'DELETE FROM "session" WHERE userId = ?',
