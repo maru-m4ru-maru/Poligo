@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@tursodatabase/serverless": "1.4.0",
-    "@better-auth/kysely-adapter": "1.7.6",
+    "@better-auth/kysely-adapter": "1.7.7",
     "@libsql/kysely-libsql": "0.4.1",
     "better-auth": "1.7.7",
     "kysely": "0.29.6",
