@@ -5,6 +5,8 @@ import {
   normalizeUsername
 } from '../../services/api/src/registrationPolicy.js'
 
+const uuid = 'a'.repeat(32)
+
 test('accepts usernames with letters, numbers, and underscores', () => {
   assert.equal(normalizeUsername('maru_m4ru_maru'), 'maru_m4ru_maru')
   assert.equal(normalizeUsername('ABC_123'), 'ABC_123')
@@ -25,17 +27,17 @@ test('rejects invalid, short, overlong, or whitespace usernames', () => {
 })
 
 test('normalizes valid email addresses to lowercase', () => {
-  assert.equal(normalizeEmailAddress('  Person@Example.com '), 'person@example.com')
+  assert.equal(normalizeEmailAddress('  Person@Gmail.com '), 'person@gmail.com')
 })
 
-test('rejects malformed email addresses', () => {
+test('rejects malformed and reserved testing email addresses', () => {
   for (const email of [
     '',
     'person',
-    '@example.com',
-    'person@@example.com',
-    'person..dots@example.com',
-    'person@example',
+    '@gmail.com',
+    'person@@gmail.com',
+    'person..dots@gmail.com',
+    'person@gmail',
     'person@example.invalid',
     'person@example.test',
     'person@example..com',
@@ -46,9 +48,28 @@ test('rejects malformed email addresses', () => {
   }
 })
 
-test('rejects common disposable email domains', () => {
-  assert.throws(
-    () => normalizeEmailAddress('someone@mailinator.com'),
-    /使い捨てメール/
+test('allows only generated Poligo E2E addresses on the reserved example.com domain', () => {
+  const email = `poligo-typescript-${uuid}@example.com`
+
+  assert.equal(normalizeEmailAddress(email), email)
+  assert.equal(
+    normalizeEmailAddress(`  POLIGO-TYPESCRIPT-${uuid}@EXAMPLE.COM  `),
+    email
   )
+  assert.throws(
+    () => normalizeEmailAddress('person@example.com'),
+    /使い捨てメールアドレス/
+  )
+})
+
+test('rejects common disposable email domains', () => {
+  for (const email of [
+    'someone@mailinator.com',
+    'someone@tempmail.com'
+  ]) {
+    assert.throws(
+      () => normalizeEmailAddress(email),
+      /使い捨てメールアドレス/
+    )
+  }
 })
