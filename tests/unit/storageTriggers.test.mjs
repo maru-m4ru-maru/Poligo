@@ -82,7 +82,7 @@ db.execute("INSERT INTO project_commit_files (commit_id, path, content) VALUES (
 
 db.execute("DELETE FROM project_commit_files WHERE commit_id = 'alice-commit-1'")
 db.execute("DELETE FROM project_commits WHERE id = 'alice-commit-1'")
-for index in range(3, 51):
+for index in range(3, 52):
     db.execute("INSERT INTO project_commits (id, project_id) VALUES (?, 'alice-project')", ("alice-commit-" + str(index),))
 must_reject(
     "INSERT INTO project_commits (id, project_id) VALUES (?, ?)",
