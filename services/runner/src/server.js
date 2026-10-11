@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { existsSync } from 'node:fs'
 import { WebSocketServer } from 'ws'
 const terminalBackend = process.env.TERMINAL_BACKEND === 'process'
@@ -27,20 +28,9 @@ function send(response, status, body) {
 }
 
 async function readJson(request) {
-  let body = ''
-  let size = 0
-
-  for await (const chunk of request) {
-    size += Buffer.byteLength(chunk)
-
-    if (size > maxRequestBytes) {
-      throw new Error('request too large')
-    }
-
-    body += chunk
-  }
-
-  return body ? JSON.parse(body) : {}
+  return readJsonBody(request, {
+    maxBytes: maxRequestBytes
+  })
 }
 
 function authorized(request) {
@@ -66,13 +56,22 @@ const server = http.createServer(async (request, response) => {
     (request.method === 'GET' || request.method === 'HEAD') &&
     requestPath === '/health'
   ) {
+    const dockerReady = existsSync(
+      process.env.DOCKER_SOCKET || '/var/run/docker.sock'
+    )
+    const terminalBackend = process.env.TERMINAL_BACKEND === 'process'
+      ? 'process'
+      : 'docker'
+    const terminalReady = terminalBackend === 'process'
+      ? process.getuid?.() === 0
+      : dockerReady
+    const executionReady = dockerReady
     const health = {
-      status: 'ok',
+      status: terminalReady && executionReady ? 'ok' : 'degraded',
       service: 'runner',
-      terminalBackend: process.env.TERMINAL_BACKEND === 'process' ? 'process' : 'docker',
-      terminalReady: process.env.TERMINAL_BACKEND === 'process'
-        ? process.getuid?.() === 0
-        : existsSync(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
+      terminalBackend,
+      terminalReady,
+      executionReady
     }
 
     if (request.method === 'HEAD') {
@@ -246,8 +245,17 @@ const server = http.createServer(async (request, response) => {
         status: job.status
       })
     } catch (error) {
-      send(response, 400, {
-        error: error instanceof Error ? error.message : 'invalid request'
+      const message = error instanceof Error ? error.message : 'invalid request'
+      const status =
+        message.includes('execution queue is currently full') ||
+        message.includes('execution capacity is currently full')
+          ? 429
+          : message === 'request too large'
+            ? 413
+            : 400
+
+      send(response, status, {
+        error: message
       })
     }
 

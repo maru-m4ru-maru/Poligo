@@ -26,7 +26,7 @@ const LANGUAGES = [
   { name: 'PHP', icon: '/icons/php.svg' },
   { name: 'Ruby', icon: '/icons/ruby.svg' },
   { name: 'Kotlin', icon: '/icons/kotlin.svg' },
-  { name: 'C#', icon: '/icons/csharp.svg' }
+  { name: 'C#', icon: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png' }
 ]
 
 export default function HomePage({ session }) {
@@ -54,9 +54,6 @@ export default function HomePage({ session }) {
           ) : (
             <>
               <button onClick={() => navigate('/signin')}>サインイン</button>
-              <button onClick={() => navigate('/terms')}>
-                利用規約
-              </button>
               <button className="home-nav-primary" onClick={() => navigate('/createaccount')}>
                 アカウントを作成
               </button>

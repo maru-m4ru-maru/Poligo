@@ -19,6 +19,7 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: pnpm install --no-frozen-lockfile
+      - run: pnpm audit --audit-level=moderate
       - run: pnpm build:web
 
   services:
@@ -35,9 +36,36 @@ jobs:
       - run: node --check services/api/src/adminPolicy.js
       - run: node --check services/api/src/terminalSync.js
       - run: npm install --prefix services/runner
+      - run: npm audit --audit-level=moderate --prefix services/runner
       - run: node --test tests/unit/*.test.mjs
-      - run: node --check services/runner/src/languages.js
-      - run: node --check services/runner/src/executor.js
-      - run: node --check services/runner/src/server.js
+      - name: Run Docker terminal end-to-end test
+        run: |
+          set -euo pipefail
+          PORT=10001 RUNNER_TOKEN=terminal-e2e-token node services/runner/src/server.js > /tmp/poligo-terminal-runner-e2e.log 2>&1 &
+          runner_pid=$!
+          cleanup() {
+            kill "$runner_pid" 2>/dev/null || true
+            wait "$runner_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in $(seq 1 100); do
+            if curl --silent --fail http://127.0.0.1:10001/health >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$runner_pid" 2>/dev/null; then
+              cat /tmp/poligo-terminal-runner-e2e.log
+              exit 1
+            fi
+            sleep 0.2
+          done
+          if [ "$ready" != true ]; then
+            cat /tmp/poligo-terminal-runner-e2e.log
+            echo "Terminal runner did not become ready" >&2
+            exit 1
+          fi
+          node tests/e2e/test_terminal_runner.mjs
+      - run: find services/api/src services/runner/src -type f -name '*.js' -print0 | xargs -0 -n 1 node --check
       - run: python3 -m py_compile tests/e2e/test_terminal_production.py
       - run: python3 -m py_compile tests/e2e/test_admin_controls_production.py

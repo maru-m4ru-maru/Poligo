@@ -3,6 +3,7 @@ import {
   encryptSecret,
   isEncryptedSecret
 } from './secretStore.js'
+import { STORAGE_LIMIT_TRIGGERS } from './storageTriggers.js'
 
 const url = process.env.TURSO_DATABASE_URL || ''
 const authToken = process.env.TURSO_AUTH_TOKEN || ''
@@ -161,6 +162,8 @@ export async function initializeDatabase() {
     if (commitSecretUpdates.length) {
       await database.batch(commitSecretUpdates, 'immediate')
     }
+
+    await database.batch(STORAGE_LIMIT_TRIGGERS, 'immediate')
 
     status = 'online'
     error = null

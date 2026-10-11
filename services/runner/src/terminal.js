@@ -3,12 +3,13 @@ import { PassThrough } from 'node:stream'
 import Docker from 'dockerode'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { assertNoFileDirectoryConflicts, normalizeRunnerFilePath as normalizeFilePath } from './filePaths.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
 })
 
-const terminalImage = process.env.TERMINAL_IMAGE || 'node:22-bookworm'
+const terminalImage = process.env.TERMINAL_IMAGE || 'node:24.21.0-bookworm-slim'
 const maxFiles = Number(process.env.TERMINAL_MAX_FILES || 200)
 const maxBytes = Number(process.env.TERMINAL_MAX_PROJECT_BYTES || 5_000_000)
 const memoryBytes = Number(process.env.TERMINAL_MEMORY_BYTES || 536_870_912)
@@ -32,28 +33,7 @@ const cleanupTimer = setInterval(() => {
 
 cleanupTimer.unref?.()
 
-function normalizeFilePath(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    value.length > 240 ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    value.includes('\\') ||
-    value.split('/').some(part =>
-      !part ||
-      part === '..' ||
-      part === '.' ||
-      part === '.terminal-cache' ||
-      part === '.tmp' ||
-      part === '.cache'
-    )
-  ) {
-    throw new Error('invalid file path')
-  }
 
-  return value
-}
 function normalizeId(value) {
   if (
     typeof value !== 'string' ||
@@ -122,7 +102,7 @@ function normalizeFiles(files) {
   }
 
   let totalBytes = 0
-  const normalized = {}
+  const normalized = Object.create(null)
 
   for (const [name, content] of entries) {
     const safePath = normalizeFilePath(name)
@@ -139,6 +119,8 @@ function normalizeFiles(files) {
 
     normalized[safePath] = content
   }
+
+  assertNoFileDirectoryConflicts(Object.keys(normalized))
 
   return normalized
 }
@@ -723,7 +705,8 @@ export async function attachTerminalSocket(id, socket) {
 
     if (
       payload?.type === 'input' &&
-      typeof payload.data === 'string'
+      typeof payload.data === 'string' &&
+      Buffer.byteLength(payload.data, 'utf8') <= 65_536
     ) {
       session.stream.write(payload.data)
       return

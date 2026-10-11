@@ -59,6 +59,8 @@ function formatBytes(bytes) {
 export default function AccountPage({ session }) {
   const [usageBytes, setUsageBytes] = useState(0)
   const [storageLimitBytes, setStorageLimitBytes] = useState(DEFAULT_STORAGE_LIMIT)
+  const [historyUsageBytes, setHistoryUsageBytes] = useState(0)
+  const [historyStorageLimitBytes, setHistoryStorageLimitBytes] = useState(DEFAULT_STORAGE_LIMIT * 2)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
@@ -100,6 +102,11 @@ export default function AccountPage({ session }) {
         }
 
         setUsageBytes(Number(result.stats?.storageBytes || 0))
+        setHistoryUsageBytes(Number(result.stats?.historyStorageBytes || 0))
+        setHistoryStorageLimitBytes(Number(
+          result.stats?.historyStorageLimitBytes ||
+          Number(result.user?.storageLimitBytes || DEFAULT_STORAGE_LIMIT) * 2
+        ))
         setStorageLimitBytes(
           Number(
             result.user?.storageLimitBytes ||
@@ -198,7 +205,8 @@ export default function AccountPage({ session }) {
         user.id === userId
           ? {
               ...user,
-              storageLimitBytes: value * 1024 * 1024
+              storageLimitBytes: value * 1024 * 1024,
+              historyStorageLimitBytes: value * 1024 * 1024 * 2
             }
           : user
       ))
@@ -242,7 +250,8 @@ export default function AccountPage({ session }) {
         user.id === userId
           ? {
               ...user,
-              storageLimitBytes: DEFAULT_STORAGE_LIMIT
+              storageLimitBytes: DEFAULT_STORAGE_LIMIT,
+              historyStorageLimitBytes: DEFAULT_STORAGE_LIMIT * 2
             }
           : user
       ))
@@ -337,18 +346,18 @@ export default function AccountPage({ session }) {
           <button
             onClick={() => navigate('/dashboard')}
           >
-            <span className="stack-nav-icon">▦</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/folder-kanban.svg" alt="" aria-hidden="true" /></span>
             プロジェクト
           </button>
 
           <button className="active">
-            <span className="stack-nav-icon">◯</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/user-round.svg" alt="" aria-hidden="true" /></span>
             アカウント
           </button>
 
           {isAdmin && (
             <button onClick={() => navigate('/admin')}>
-              <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/admin-panel.svg" alt="" aria-hidden="true" /></span>
+              <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/shield-check.svg" alt="" aria-hidden="true" /></span>
               管理画面
             </button>
           )}
@@ -424,7 +433,12 @@ export default function AccountPage({ session }) {
                     ? '0% 使用中'
                     : usagePercent.toFixed(2) + '% 使用中'}
               </span>
-              <span>上限 {formatBytes(storageLimitBytes)}</span>
+              <span>ファイル上限 {formatBytes(storageLimitBytes)}</span>
+            </div>
+
+            <div className="account-settings-storage-meta">
+              <span>ソース履歴 {formatBytes(historyUsageBytes)}</span>
+              <span>履歴上限 {formatBytes(historyStorageLimitBytes)}</span>
             </div>
 
             {error && (
@@ -433,7 +447,13 @@ export default function AccountPage({ session }) {
 
             {!loading && !error && usageBytes > storageLimitBytes && (
               <p className="account-settings-warning">
-                保存容量の上限を超えています。追加容量については運営者へご相談ください。
+                プロジェクトファイルの保存容量上限を超えています。追加容量については運営者へご相談ください。
+              </p>
+            )}
+
+            {!loading && !error && historyUsageBytes > historyStorageLimitBytes && (
+              <p className="account-settings-warning">
+                ソース履歴の保存上限を超えています。古いプロジェクトを削除して容量を空けてください。
               </p>
             )}
           </section>
@@ -505,7 +525,10 @@ export default function AccountPage({ session }) {
                           <strong>{user.name || '未設定'}</strong>
                           <span>{user.email}</span>
                           <small>
-                            {usageMiB} MiB 使用中
+                            ファイル: {usageMiB} MiB / {Math.round(user.storageLimitBytes / (1024 * 1024))} MiB
+                          </small>
+                          <small>
+                            履歴: {formatBytes(user.historyStorageBytes || 0)} / {formatBytes(user.historyStorageLimitBytes || user.storageLimitBytes * 2)}
                             {user.isAdmin ? ' / 管理者' : ''}
                           </small>
                         </div>

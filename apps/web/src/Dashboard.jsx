@@ -255,7 +255,7 @@ const TEMPLATE_ICONS = {
   PHP: '/icons/php.svg',
   Ruby: '/icons/ruby.svg',
   Kotlin: '/icons/kotlin.svg',
-  'C#': '/icons/csharp.svg',
+  'C#': 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
   TypeScript: '/icons/typescript.svg'
 }
 
@@ -283,24 +283,7 @@ function TemplateIcon({ type }) {
     )
   }
 
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect x="4" y="4" width="16" height="16" rx="3" fill="#52647A" />
-      <path
-        d="m9 9 2.2 2.2L9 13.5M13 15h2"
-        stroke="#EAF0F7"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+  return <img src="/icons/file-code.svg" alt="" className="stack-template-brand-icon" aria-hidden="true" />
 }
 export default function Dashboard({ session }) {
   const [data, setData] = useState(null)
@@ -583,7 +566,7 @@ export default function Dashboard({ session }) {
               document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' })
             }}
           >
-            <span className="stack-nav-icon">▦</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/folder-kanban.svg" alt="" aria-hidden="true" /></span>
             プロジェクト
           </button>
 
@@ -594,7 +577,7 @@ export default function Dashboard({ session }) {
               window.location.hash = '/account'
             }}
           >
-            <span className="stack-nav-icon">◯</span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/user-round.svg" alt="" aria-hidden="true" /></span>
             アカウント
           </button>
 
@@ -605,7 +588,7 @@ export default function Dashboard({ session }) {
                 window.location.hash = '/admin'
               }}
             >
-              <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/admin-panel.svg" alt="" aria-hidden="true" /></span>
+              <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/shield-check.svg" alt="" aria-hidden="true" /></span>
               管理画面
             </button>
           )}

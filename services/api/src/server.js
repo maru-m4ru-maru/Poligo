@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
@@ -11,7 +12,21 @@ import {
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
-import { isConfiguredAdmin } from './adminPolicy.js'
+import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
+import { getOriginPolicy, selectCorsOrigin } from './authPolicy.js'
+import { shouldRejectBannedSession } from './sessionPolicy.js'
+import { isAllowedWorkspaceId, buildWorkspaceClaimStatements } from './workspacePolicy.js'
+import { normalizeProjectFileMap } from './projectFiles.js'
+import { buildProjectDeleteStatements, buildProjectUpdateStatements } from './projectWritePolicy.js'
+import { withOwnerMutationLock } from './ownerMutationLock.js'
+import { canAcceptTerminalUpgrade } from './terminalAccessPolicy.js'
+import {
+  COMMIT_HISTORY_STORAGE_MULTIPLIER,
+  MAX_COMMITS_PER_ACCOUNT,
+  MAX_COMMITS_PER_PROJECT,
+  planCommitRetention
+} from './commitRetention.js'
+import { parseSourceControlRoute } from './sourceControlPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -19,7 +34,13 @@ const runnerToken = process.env.RUNNER_TOKEN || ''
 const terminalRunnerUrl = process.env.TERMINAL_RUNNER_URL || runnerUrl
 const terminalRunnerToken = process.env.TERMINAL_RUNNER_TOKEN || runnerToken
 const judge0Url = (process.env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/$/, '')
-const allowedOrigin = process.env.CORS_ORIGIN || '*'
+const runtimeEnvironment = process.env.NODE_ENV === 'production' || process.env.RENDER_GIT_COMMIT
+  ? 'production'
+  : 'development'
+const configuredOrigin = process.env.CORS_ORIGIN || ''
+const originPolicy = getOriginPolicy(configuredOrigin, runtimeEnvironment)
+const allowedOrigin = originPolicy.corsOrigin
+const allowedOrigins = originPolicy.allowedOrigins
 const openRouterApiKey = process.env.OPENROUTER_API_KEY || ''
 const openRouterSiteUrl = process.env.OPENROUTER_SITE_URL || 'https://poligo-web-2n2l.onrender.com'
 const openRouterModels = {
@@ -49,7 +70,6 @@ const EXECUTION_MAX_FILE_SIZE = 1_024
 const MAX_EXECUTION_ARGUMENTS = 32
 const MAX_EXECUTION_ARGUMENT_BYTES = 512
 const MAX_EXECUTION_STDIN_BYTES = 1_000_000
-const WORKSPACE_PATTERN = /^[A-Za-z0-9_-]{16,128}$/
 const authHandler = toNodeHandler(auth)
 let databaseInitializationPromise = Promise.resolve(false)
 let databaseInitializationError = null
@@ -58,6 +78,57 @@ const executionRateState = new Map()
 const executionOwners = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
+const terminalConnectionsByOwner = new Map()
+
+function registerTerminalConnection(userId, closeConnection) {
+  const record = {
+    close: closeConnection
+  }
+  const connections = terminalConnectionsByOwner.get(userId) || new Set()
+
+  connections.add(record)
+  terminalConnectionsByOwner.set(userId, connections)
+
+  let active = true
+
+  return {
+    setClose(close) {
+      if (active) {
+        record.close = close
+      }
+    },
+    unregister() {
+      if (!active) {
+        return
+      }
+
+      active = false
+      connections.delete(record)
+
+      if (!connections.size) {
+        terminalConnectionsByOwner.delete(userId)
+      }
+    }
+  }
+}
+
+function closeTerminalConnectionsForUser(userId) {
+  const connections = terminalConnectionsByOwner.get(userId)
+
+  if (!connections) {
+    return
+  }
+
+  for (const connection of [...connections]) {
+    try {
+      connection.close()
+    } catch (error) {
+      console.error('Terminal connection revocation failed', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+}
 const TERMINAL_RECORD_TTL_MS = 30 * 60 * 1000
 const TERMINAL_CAPACITY_RECLAIM_IDLE_MS = Number(process.env.TERMINAL_CAPACITY_RECLAIM_IDLE_MS || 30_000)
 
@@ -260,44 +331,10 @@ function decodeExecutionFile(content) {
 }
 
 function normalizeExecutionFiles(files) {
-  if (!files || typeof files !== 'object' || Array.isArray(files)) {
-    throw new Error('project files must be an object')
-  }
-
-  const normalized = {}
-  let totalBytes = 0
-
-  for (const [path, value] of Object.entries(files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path.includes('\\') ||
-      path.includes('\0') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
-    ) {
-      throw new Error('invalid project file path')
-    }
-
-    if (typeof value !== 'string') {
-      throw new Error('project file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(value, 'utf8')
-
-    if (totalBytes > MAX_PROJECT_BYTES) {
-      throw new Error('project is too large')
-    }
-
-    normalized[path] = value
-  }
-
-  if (Object.keys(normalized).length > MAX_FILES) {
-    throw new Error('too many project files')
-  }
-
-  return normalized
+  return normalizeProjectFileMap(files, {
+    maxFiles: MAX_FILES,
+    maxBytes: MAX_PROJECT_BYTES
+  })
 }
 
 function buildPhpAdditionalFiles(files) {
@@ -1548,8 +1585,54 @@ function retainExecution(id) {
   }
 }
 
+async function getOwnerCommitRows(ownerId) {
+  const database = getDatabase()
+  const statement = await database.prepare(
+    `SELECT pc.id, pc.project_id, pc.created_at,
+       COALESCE(SUM(LENGTH(CAST(pcf.content AS BLOB))), 0) AS content_bytes
+     FROM project_commits pc
+     JOIN projects p ON p.id = pc.project_id
+     LEFT JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+     WHERE p.owner_id = ?
+     GROUP BY pc.id, pc.project_id, pc.created_at
+     ORDER BY pc.created_at ASC, pc.id ASC`
+  )
+
+  return statement.all([ownerId])
+}
+
+function appendCommitRetentionDeletes(statements, commitIds, ownerId) {
+  for (const commitId of commitIds) {
+    statements.push({
+      sql: `DELETE FROM project_commit_files
+        WHERE commit_id = ?
+          AND commit_id IN (
+            SELECT pc.id FROM project_commits pc
+            JOIN projects p ON p.id = pc.project_id
+            WHERE p.owner_id = ?
+          )`,
+      args: [commitId, ownerId]
+    })
+    statements.push({
+      sql: `DELETE FROM project_commits
+        WHERE id = ?
+          AND project_id IN (
+            SELECT id FROM projects WHERE owner_id = ?
+          )`,
+      args: [commitId, ownerId]
+    })
+  }
+}
+
 function setCorsHeaders(response) {
-  response.setHeader('Access-Control-Allow-Origin', allowedOrigin)
+  const requestOrigin = response.req?.headers?.origin
+  const corsOrigin = selectCorsOrigin(
+    requestOrigin,
+    allowedOrigins,
+    allowedOrigin
+  )
+
+  response.setHeader('Access-Control-Allow-Origin', corsOrigin)
   response.setHeader('Access-Control-Allow-Credentials', 'true')
   response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Poligo-Workspace')
   response.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
@@ -1565,33 +1648,60 @@ function send(response, status, body) {
 }
 
 async function readJson(request) {
-  let body = ''
-
-  for await (const chunk of request) {
-    body += chunk
-
-    if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BYTES) {
-      throw new Error('request too large')
-    }
-  }
-
-  return body ? JSON.parse(body) : {}
+  return readJsonBody(request, {
+    maxBytes: MAX_REQUEST_BYTES
+  })
 }
 
-function getWorkspaceId(request) {
+async function getWorkspaceId(request, sessionUserId) {
   const workspaceId = request.headers['x-poligo-workspace']
 
-  if (typeof workspaceId !== 'string' || !WORKSPACE_PATTERN.test(workspaceId)) {
+  if (!isAllowedWorkspaceId(workspaceId, sessionUserId)) {
     throw new Error('invalid workspace id')
+  }
+
+  if (workspaceId !== sessionUserId) {
+    const database = getDatabase()
+    const accountStatement = await database.prepare(
+      'SELECT id FROM "user" WHERE id = ? LIMIT 1'
+    )
+    const accounts = await accountStatement.all([workspaceId])
+
+    if (accounts.length) {
+      throw new Error('invalid workspace id')
+    }
   }
 
   return workspaceId
 }
 
 async function getSession(request) {
-  return auth.api.getSession({
+  const session = await auth.api.getSession({
     headers: fromNodeHeaders(request.headers)
   })
+
+  if (!session?.user?.id) {
+    return session
+  }
+
+  if (!databaseInitializationComplete) {
+    const initialized = await databaseInitializationPromise
+
+    if (!initialized) {
+      return null
+    }
+  }
+
+  const database = getDatabase()
+  const bannedStatement = await database.prepare(
+    'SELECT user_id FROM user_bans WHERE user_id = ? LIMIT 1'
+  )
+  const bannedRows = await bannedStatement.all([session.user.id])
+  const bannedUserIds = new Set(bannedRows.map(row => String(row.user_id)))
+
+  return shouldRejectBannedSession(session, bannedUserIds)
+    ? null
+    : session
 }
 
 function getConfiguredAdminSet(value, normalize) {
@@ -1670,6 +1780,40 @@ async function getOwnerId(request) {
   return session.user.id
 }
 
+async function transferWorkspaceOwnership(workspaceId, userId) {
+  const database = getDatabase()
+  const existingStatement = await database.prepare(
+    'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
+  )
+  const existing = await existingStatement.all([workspaceId])
+  const projectCount = Number(existing[0]?.count || 0)
+
+  if (workspaceId === userId) {
+    return projectCount
+  }
+
+  await withOwnerMutationLock(userId, async () => {
+    await database.batch(
+      buildWorkspaceClaimStatements(workspaceId, userId, Date.now()),
+      'immediate'
+    )
+
+    for (const owner of terminalOwners.values()) {
+      if (owner.userId === workspaceId) {
+        owner.userId = userId
+        owner.websocketTicket = ''
+        owner.websocketTicketHash = ''
+        owner.websocketTicketExpiresAt = 0
+        owner.websocketTicketUsed = true
+      }
+    }
+
+    closeTerminalConnectionsForUser(workspaceId)
+  })
+
+  return projectCount
+}
+
 async function claimWorkspace(request, response) {
   const session = await getSession(request)
 
@@ -1680,23 +1824,8 @@ async function claimWorkspace(request, response) {
     return
   }
 
-  const workspaceId = getWorkspaceId(request)
-  const database = getDatabase()
-  const existingStatement = await database.prepare(
-    'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
-  )
-  const existing = await existingStatement.all([workspaceId])
-
-  const count = Number(existing[0]?.count || 0)
-
-  if (count > 0 && workspaceId !== session.user.id) {
-    await database.batch([
-      {
-        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
-        args: [session.user.id, workspaceId]
-      }
-    ], 'immediate')
-  }
+  const workspaceId = await getWorkspaceId(request, session.user.id)
+  const count = await transferWorkspaceOwnership(workspaceId, session.user.id)
 
   send(response, 200, {
     ok: true,
@@ -1736,6 +1865,10 @@ function getStoredFileBytes(files) {
 }
 
 function normalizeProjectPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('invalid project payload')
+  }
+
   const name = typeof payload.name === 'string'
     ? payload.name.trim().slice(0, 120)
     : ''
@@ -1744,45 +1877,12 @@ function normalizeProjectPayload(payload) {
     throw new Error('project name is required')
   }
 
-  if (!payload.files || typeof payload.files !== 'object' || Array.isArray(payload.files)) {
-    throw new Error('project files must be an object')
-  }
-
-  const files = {}
-  let totalBytes = 0
-
-  for (const [path, value] of Object.entries(payload.files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path.includes('\\') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
-    ) {
-      throw new Error('invalid project file path')
-    }
-
-    if (typeof value !== 'string') {
-      throw new Error('project file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(value, 'utf8')
-
-    if (totalBytes > MAX_PROJECT_BYTES) {
-      throw new Error('project is too large')
-    }
-
-    files[path] = value
-  }
-
-  if (Object.keys(files).length > MAX_FILES) {
-    throw new Error('too many project files')
-  }
-
   return {
     name,
-    files
+    files: normalizeProjectFileMap(payload.files, {
+      maxFiles: MAX_FILES,
+      maxBytes: MAX_PROJECT_BYTES
+    })
   }
 }
 
@@ -1814,7 +1914,7 @@ async function getProjectById(projectId, ownerId) {
   )
   const fileRows = await fileStatement.all([projectId])
 
-  const files = {}
+  const files = Object.create(null)
 
   for (const file of fileRows) {
     files[file.path] = file.content
@@ -1856,30 +1956,53 @@ async function createProject(ownerId, payload) {
   const database = getDatabase()
   const storedFiles = encryptProjectSecrets(payload.files)
   const newStorageBytes = getStoredFileBytes(storedFiles)
-  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
-  const storageLimitBytes = await getStorageLimitBytes(ownerId)
-
-  if (currentStorageBytes + newStorageBytes > storageLimitBytes) {
-    throw new Error('storage limit exceeded')
-  }
-
   const id = randomUUID()
   const now = Date.now()
   const statements = [
     {
-      sql: 'INSERT INTO projects (id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      args: [id, ownerId, payload.name, now, now]
+      sql: `INSERT INTO projects (
+        id, owner_id, name, created_at, updated_at
+      )
+      SELECT ?, ?, ?, ?, ?
+      WHERE (
+        SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0)
+        FROM projects p
+        LEFT JOIN project_files pf ON pf.project_id = p.id
+        WHERE p.owner_id = ?
+      ) + ? <= COALESCE(
+        (SELECT limit_bytes FROM user_storage_limits WHERE user_id = ?),
+        ?
+      )`,
+      args: [
+        id,
+        ownerId,
+        payload.name,
+        now,
+        now,
+        ownerId,
+        newStorageBytes,
+        ownerId,
+        DEFAULT_STORAGE_LIMIT_BYTES
+      ]
     }
   ]
 
   for (const [path, content] of Object.entries(storedFiles)) {
     statements.push({
-      sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
-      args: [id, path, content]
+      sql: `INSERT INTO project_files (project_id, path, content)
+        SELECT ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM projects WHERE id = ? AND owner_id = ?
+        )`,
+      args: [id, path, content, id, ownerId]
     })
   }
 
-  await database.batch(statements, 'immediate')
+  const results = await database.batch(statements, 'immediate')
+
+  if (Number(results[0]?.rowsAffected) !== 1) {
+    throw new Error('storage limit exceeded')
+  }
 
   return {
     id,
@@ -1890,57 +2013,127 @@ async function createProject(ownerId, payload) {
   }
 }
 
-async function updateProject(projectId, ownerId, payload) {
-  const database = getDatabase()
-  const current = await getProjectById(projectId, ownerId)
+async function updateProjectUnlocked(projectId, ownerId, payload) {
+    const database = getDatabase()
+    const current = await getProjectById(projectId, ownerId)
 
-  if (!current) {
-    return null
-  }
-
-  const storedFiles = encryptProjectSecrets(payload.files)
-  const currentProjectStorageBytes = await getProjectStorageBytes(projectId, ownerId)
-  const currentOwnerStorageBytes = await getOwnerStorageBytes(ownerId)
-  const newStorageBytes = getStoredFileBytes(storedFiles)
-  const storageLimitBytes = await getStorageLimitBytes(ownerId)
-
-  if (
-    currentOwnerStorageBytes -
-      currentProjectStorageBytes +
-      newStorageBytes >
-    storageLimitBytes
-  ) {
-    throw new Error('storage limit exceeded')
-  }
-
-  const now = Date.now()
-  const statements = [
-    {
-      sql: 'UPDATE projects SET name = ?, updated_at = ? WHERE id = ? AND owner_id = ?',
-      args: [payload.name, now, projectId, ownerId]
-    },
-    {
-      sql: 'DELETE FROM project_files WHERE project_id = ?',
-      args: [projectId]
+    if (!current) {
+      return null
     }
-  ]
 
-  for (const [path, content] of Object.entries(storedFiles)) {
-    statements.push({
-      sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
-      args: [projectId, path, content]
+    const storedFiles = encryptProjectSecrets(payload.files)
+    const newStorageBytes = getStoredFileBytes(storedFiles)
+    const updatedAt = Math.max(Date.now(), Number(current.updatedAt) + 1)
+    const { statements } = buildProjectUpdateStatements({
+      projectId,
+      ownerId,
+      expectedUpdatedAt: Number(current.updatedAt),
+      updatedAt,
+      projectName: payload.name,
+      storedFiles,
+      newStorageBytes,
+      defaultStorageLimitBytes: DEFAULT_STORAGE_LIMIT_BYTES
     })
-  }
+    const results = await database.batch(statements, 'immediate')
 
-  await database.batch(statements, 'immediate')
+    if (Number(results[0]?.rowsAffected) !== 1) {
+      const latest = await getProjectById(projectId, ownerId)
 
-  return {
-    id: projectId,
-    name: payload.name,
-    files: payload.files,
-    createdAt: current.createdAt,
-    updatedAt: now
-  }
+      if (!latest) {
+        return null
+      }
+
+      if (Number(latest.updatedAt) !== Number(current.updatedAt)) {
+        throw new Error('project changed while saving; reload before retrying')
+      }
+
+      throw new Error('storage limit exceeded')
+    }
+
+    if (Number(results[results.length - 1]?.rowsAffected) !== 1) {
+      throw new Error('project revision claim was lost while saving')
+    }
+
+    return {
+      id: projectId,
+      name: payload.name,
+      files: payload.files,
+      createdAt: current.createdAt,
+      updatedAt
+    }
+}
+
+async function updateProject(projectId, ownerId, payload) {
+  return withOwnerMutationLock(ownerId, () =>
+    updateProjectUnlocked(projectId, ownerId, payload)
+  )
+}
+
+async function deleteProject(projectId, ownerId) {
+  return withOwnerMutationLock(ownerId, async () => {
+    const database = getDatabase()
+    const current = await getProjectById(projectId, ownerId)
+
+    if (!current) {
+      return false
+    }
+
+    const terminalStatement = await database.prepare(
+      'SELECT id FROM terminal_sessions WHERE project_id = ? AND owner_id = ?'
+    )
+    const terminalRows = await terminalStatement.all([projectId, ownerId])
+
+    for (const row of terminalRows) {
+      const terminalId = String(row.id)
+      const owner = await loadTerminalOwner(terminalId)
+
+      if (owner) {
+        if (owner.userId !== ownerId || owner.projectId !== projectId) {
+          throw new Error('project terminal ownership mismatch')
+        }
+
+        const cleaned = await expireTerminalOwner(terminalId, owner)
+
+        if (!cleaned) {
+          throw new Error('project terminal cleanup failed; project was not deleted')
+        }
+
+        continue
+      }
+
+      if (terminalRunnerUrl) {
+        try {
+          await runnerTerminalRequest(
+            '/v1/terminals/' + encodeURIComponent(terminalId),
+            {
+              method: 'DELETE'
+            }
+          )
+        } catch (error) {
+          const message = error instanceof Error
+            ? error.message.toLowerCase()
+            : String(error).toLowerCase()
+
+          if (
+            !message.includes('terminal session not found') &&
+            !message.includes('404')
+          ) {
+            throw new Error('project terminal cleanup failed; project was not deleted')
+          }
+        }
+      }
+
+      await deleteTerminalOwnerRecord(terminalId)
+    }
+
+    const statements = buildProjectDeleteStatements({
+      projectId,
+      ownerId
+    })
+    const results = await database.batch(statements, 'immediate')
+
+    return Number(results[results.length - 1]?.rowsAffected) === 1
+  })
 }
 
 function normalizeCommitMessage(value) {
@@ -1998,7 +2191,7 @@ async function getCommit(projectId, ownerId, commitId) {
     'SELECT path, content FROM project_commit_files WHERE commit_id = ? ORDER BY path'
   )
   const fileRows = await fileStatement.all([commitId])
-  const files = {}
+  const files = Object.create(null)
 
   for (const file of fileRows) {
     files[file.path] = file.content
@@ -2009,75 +2202,36 @@ async function getCommit(projectId, ownerId, commitId) {
     authorId: commit.author_id,
     message: commit.message,
     createdAt: Number(commit.created_at),
-    files: decryptProjectSecrets(files)
-  }
-}
-
-async function ensureInitialCommit(projectId, ownerId) {
-  const commits = await listCommits(projectId, ownerId)
-
-  if (commits === null) {
-    return null
-  }
-
-  if (commits.length) {
-    return commits
-  }
-
-  const project = await getProjectById(projectId, ownerId)
-
-  if (!project) {
-    return null
-  }
-
-  const database = getDatabase()
-  const commitId = randomUUID()
-  const now = Date.now()
-  const statements = [
-    {
-      sql: 'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
-      args: [commitId, projectId, ownerId, 'Initial commit', now]
-    }
-  ]
-
-  const storedFiles = encryptProjectSecrets(project.files)
-
-  for (const [filePath, fileContent] of Object.entries(storedFiles)) {
-    statements.push({
-      sql: 'INSERT INTO project_commit_files (commit_id, path, content) VALUES (?, ?, ?)',
-      args: [commitId, filePath, fileContent]
+    files: normalizeProjectFileMap(decryptProjectSecrets(files), {
+      maxFiles: MAX_FILES,
+      maxBytes: MAX_PROJECT_BYTES
     })
   }
-
-  await database.batch(statements, 'immediate')
-
-  return [{
-    id: commitId,
-    authorId: ownerId,
-    message: 'Initial commit',
-    createdAt: now
-  }]
 }
 
-async function commitProject(projectId, ownerId, payload) {
-  const project = await getProjectById(projectId, ownerId)
-
-  if (!project) {
-    return null
-  }
-
-  const message = normalizeCommitMessage(payload.message)
+async function saveCommitSnapshot(projectId, ownerId, project, message) {
   const database = getDatabase()
   const commitId = randomUUID()
   const now = Date.now()
-  const statements = [
-    {
-      sql: 'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
-      args: [commitId, projectId, ownerId, message, now]
-    }
-  ]
-
   const storedFiles = encryptProjectSecrets(project.files)
+  const newCommitBytes = getStoredFileBytes(storedFiles)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+  const retention = planCommitRetention(await getOwnerCommitRows(ownerId), {
+    projectId,
+    newCommitBytes,
+    historyLimitBytes: storageLimitBytes * COMMIT_HISTORY_STORAGE_MULTIPLIER
+  })
+
+  if (!retention.ok) {
+    throw new Error('commit history storage limit exceeded')
+  }
+
+  const statements = []
+  appendCommitRetentionDeletes(statements, retention.deleteIds, ownerId)
+  statements.push({
+    sql: 'INSERT INTO project_commits (id, project_id, author_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
+    args: [commitId, projectId, ownerId, message, now]
+  })
 
   for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
@@ -2090,10 +2244,53 @@ async function commitProject(projectId, ownerId, payload) {
 
   return {
     id: commitId,
+    authorId: ownerId,
     message,
     createdAt: now,
     files: project.files
   }
+}
+
+async function ensureInitialCommit(projectId, ownerId) {
+  return withOwnerMutationLock(ownerId, async () => {
+    const commits = await listCommits(projectId, ownerId)
+
+    if (commits === null) {
+      return null
+    }
+
+    if (commits.length) {
+      return commits
+    }
+
+    const project = await getProjectById(projectId, ownerId)
+
+    if (!project) {
+      return null
+    }
+
+    const commit = await saveCommitSnapshot(projectId, ownerId, project, 'Initial commit')
+
+    return [{
+      id: commit.id,
+      authorId: ownerId,
+      message: commit.message,
+      createdAt: commit.createdAt
+    }]
+  })
+}
+
+async function commitProject(projectId, ownerId, payload) {
+  return withOwnerMutationLock(ownerId, async () => {
+    const project = await getProjectById(projectId, ownerId)
+
+    if (!project) {
+      return null
+    }
+
+    const message = normalizeCommitMessage(payload?.message)
+    return saveCommitSnapshot(projectId, ownerId, project, message)
+  })
 }
 
 function buildFileDiff(baseFiles, currentFiles) {
@@ -2156,21 +2353,25 @@ async function restoreCommit(projectId, ownerId, commitId) {
 
 async function handleSourceControlRequest(request, response) {
   const url = new URL(request.url, 'http://localhost')
-  const parts = url.pathname.split('/').filter(Boolean)
-  const projectId = parts[2]
-  const commitId = parts[4]
-  const ownerId = await getOwnerId(request)
+  const route = parseSourceControlRoute(request.method, url.pathname)
 
-  if (!projectId || parts[1] !== 'projects') {
-    send(response, 400, { error: 'invalid source control route' })
+  if (!route) {
+    send(response, 404, {
+      error: 'not found'
+    })
     return
   }
 
-  if (request.method === 'GET' && parts[3] === 'commits' && !commitId) {
+  const { projectId, commitId, operation } = route
+  const ownerId = await getOwnerId(request)
+
+  if (operation === 'list') {
     let commits = await listCommits(projectId, ownerId)
 
     if (commits === null) {
-      send(response, 404, { error: 'project not found' })
+      send(response, 404, {
+        error: 'project not found'
+      })
       return
     }
 
@@ -2178,28 +2379,40 @@ async function handleSourceControlRequest(request, response) {
       commits = await ensureInitialCommit(projectId, ownerId)
     }
 
-    send(response, 200, { commits })
-    return
-  }
-
-  if (request.method === 'GET' && parts[3] === 'commits' && commitId && parts[5] === 'diff') {
-    const diff = await getCommitDiff(projectId, ownerId, commitId)
-
-    if (!diff) {
-      send(response, 404, { error: 'commit not found' })
+    if (commits === null) {
+      send(response, 404, {
+        error: 'project not found'
+      })
       return
     }
 
-    send(response, 200, diff)
+    send(response, 200, {
+      commits
+    })
     return
   }
 
-  if (request.method === 'GET' && parts[3] === 'commits' && commitId) {
-    const commit = await getCommit(projectId, ownerId, commitId)
-
+  if (operation === 'create') {
+    const commit = await commitProject(projectId, ownerId, await readJson(request))
 
     if (!commit) {
-      send(response, 404, { error: 'commit not found' })
+      send(response, 404, {
+        error: 'project not found'
+      })
+      return
+    }
+
+    send(response, 201, commit)
+    return
+  }
+
+  if (operation === 'get') {
+    const commit = await getCommit(projectId, ownerId, commitId)
+
+    if (!commit) {
+      send(response, 404, {
+        error: 'commit not found'
+      })
       return
     }
 
@@ -2207,26 +2420,27 @@ async function handleSourceControlRequest(request, response) {
     return
   }
 
-  if (request.method === 'POST' && parts[3] === 'commits' && !commitId) {
-    const commit = await commitProject(projectId, ownerId, await readJson(request))
+  if (operation === 'diff') {
+    const diff = await getCommitDiff(projectId, ownerId, commitId)
 
-
-    if (!commit) {
-      send(response, 404, { error: 'project not found' })
+    if (!diff) {
+      send(response, 404, {
+        error: 'commit not found'
+      })
       return
     }
 
-
-    send(response, 201, commit)
+    send(response, 200, diff)
     return
   }
 
-  if (request.method === 'POST' && parts[3] === 'commits' && commitId && parts[5] === 'restore') {
+  if (operation === 'restore') {
     const restored = await restoreCommit(projectId, ownerId, commitId)
 
-
     if (!restored) {
-      send(response, 404, { error: 'commit not found' })
+      send(response, 404, {
+        error: 'commit not found'
+      })
       return
     }
 
@@ -2234,30 +2448,10 @@ async function handleSourceControlRequest(request, response) {
     return
   }
 
-  send(response, 404, { error: 'not found' })
+  send(response, 404, {
+    error: 'not found'
+  })
 }
-async function deleteProject(projectId, ownerId) {
-  const database = getDatabase()
-  const current = await getProjectById(projectId, ownerId)
-
-  if (!current) {
-    return false
-  }
-
-  await database.batch([
-    {
-      sql: 'DELETE FROM project_files WHERE project_id = ?',
-      args: [projectId]
-    },
-    {
-      sql: 'DELETE FROM projects WHERE id = ? AND owner_id = ?',
-      args: [projectId, ownerId]
-    }
-  ], 'immediate')
-
-  return true
-}
-
 
 async function handleDashboardRequest(request, response) {
   const session = await getSession(request)
@@ -2271,20 +2465,13 @@ async function handleDashboardRequest(request, response) {
 
   const database = getDatabase()
   const ownerId = session.user.id
-  const workspaceId = getWorkspaceId(request)
+  const workspaceId = await getWorkspaceId(request, ownerId)
 
   if (workspaceId !== ownerId) {
-    await database.batch([
-      {
-        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
-        args: [ownerId, workspaceId]
-      }
-    ], 'immediate')
+    await transferWorkspaceOwnership(workspaceId, ownerId)
   }
 
-  const ownerIds = workspaceId === ownerId
-    ? [ownerId]
-    : [ownerId, workspaceId]
+  const ownerIds = [ownerId]
 
   const ownerPlaceholders = ownerIds.map(() => '?').join(', ')
 
@@ -2300,6 +2487,16 @@ async function handleDashboardRequest(request, response) {
   )
   const statsRows = await statsStatement.all(ownerIds)
   const stats = statsRows[0] || {}
+  const historyStatsStatement = await database.prepare(
+    `SELECT
+      COALESCE(SUM(LENGTH(CAST(pcf.content AS BLOB))), 0) AS history_storage_bytes
+    FROM project_commits pc
+    JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+    JOIN projects p ON p.id = pc.project_id
+    WHERE p.owner_id IN (${ownerPlaceholders})`
+  )
+  const historyStatsRows = await historyStatsStatement.all(ownerIds)
+  const historyStorageBytes = Number(historyStatsRows[0]?.history_storage_bytes || 0)
 
   const url = new URL(request.url, 'http://localhost')
   const requestedLimit = Number(url.searchParams.get('limit'))
@@ -2339,6 +2536,8 @@ async function handleDashboardRequest(request, response) {
       projectCount: Number(stats.project_count || 0),
       fileCount: Number(stats.file_count || 0),
       storageBytes: Number(stats.storage_bytes || 0),
+      historyStorageBytes,
+      historyStorageLimitBytes: storageLimitBytes * COMMIT_HISTORY_STORAGE_MULTIPLIER,
       lastUpdated: Number(stats.last_updated || 0)
     },
     projects: projects.map(project => ({
@@ -3227,7 +3426,7 @@ async function handleRunnerExecution(response, payload, id, ownerId) {
 
   if (!runnerResponse.ok) {
     executionOwners.delete(id)
-    send(response, 502, {
+    send(response, runnerResponse.status === 429 ? 429 : 502, {
       id,
       ...result
     })
@@ -3533,6 +3732,13 @@ async function handleAdminUsersRequest(request, response) {
           LEFT JOIN project_files pf ON pf.project_id = p.id
           WHERE p.owner_id = u.id
         ), 0) AS storage_bytes,
+        COALESCE((
+          SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+          FROM projects p
+          JOIN project_commits pc ON pc.project_id = p.id
+          JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+          WHERE p.owner_id = u.id
+        ), 0) AS history_storage_bytes,
         COALESCE(usl.limit_bytes, ?) AS storage_limit_bytes
       FROM "user" u
       LEFT JOIN user_storage_limits usl ON usl.user_id = u.id
@@ -3554,6 +3760,8 @@ async function handleAdminUsersRequest(request, response) {
         banReason: String(row.ban_reason || ''),
         storageBytes: Number(row.storage_bytes || 0),
         storageLimitBytes: Number(row.storage_limit_bytes || DEFAULT_STORAGE_LIMIT_BYTES),
+        historyStorageBytes: Number(row.history_storage_bytes || 0),
+        historyStorageLimitBytes: Number(row.storage_limit_bytes || DEFAULT_STORAGE_LIMIT_BYTES) * COMMIT_HISTORY_STORAGE_MULTIPLIER,
         isAdmin: isConfiguredAdmin({
           id: row.id,
           email: row.email,
@@ -3764,8 +3972,14 @@ async function handleAdminUsersRequest(request, response) {
         {
           sql: 'DELETE FROM "session" WHERE userId = ?',
           args: [userId]
+        },
+        {
+          sql: "UPDATE terminal_sessions SET websocket_ticket_hash = '', ticket_expires_at = 0, ticket_used = 1, updated_at = ? WHERE owner_id = ?",
+          args: [Date.now(), userId]
         }
       ], 'immediate')
+
+      closeTerminalConnectionsForUser(userId)
 
       const terminalStatement = await database.prepare(
         'SELECT id FROM terminal_sessions WHERE owner_id = ?'
@@ -3840,7 +4054,7 @@ async function handleAdminUsersRequest(request, response) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
-    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(email)) {
+    if (!isGeneratedE2EAccountEmail(target.email)) {
       throw new Error('test account deletion is restricted to generated E2E accounts')
     }
 
@@ -3931,6 +4145,14 @@ async function handleAdminUsersRequest(request, response) {
       },
       {
         sql: 'DELETE FROM terminal_sessions WHERE owner_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM user_bans WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM announcements WHERE target_user_id = ?',
         args: [userId]
       },
       {
@@ -4209,7 +4431,11 @@ async function consumeTerminalWebSocketTicket(id, ticket) {
         WHERE id = ?
           AND websocket_ticket_hash = ?
           AND ticket_used = 0
-          AND ticket_expires_at > ?`,
+          AND ticket_expires_at > ?
+          AND NOT EXISTS (
+            SELECT 1 FROM user_bans
+            WHERE user_id = terminal_sessions.owner_id
+          )`,
       args: [
         now,
         id,
@@ -4305,6 +4531,7 @@ async function loadTerminalOwner(id) {
   ) {
     owner.cleanupInProgress = cached.cleanupInProgress
     owner.cleanupPromise = cached.cleanupPromise
+    owner.revoked = cached.revoked === true
   }
 
   terminalOwners.set(id, owner)
@@ -4328,7 +4555,8 @@ async function registerTerminal(id, userId, projectId, files, websocketTicket) {
     websocketTicketUsed: false,
     createdAt: now,
     expiresAt: now + TERMINAL_RECORD_TTL_MS,
-    cleanupInProgress: false
+    cleanupInProgress: false,
+    revoked: false
   }
 
   terminalOwners.set(id, owner)
@@ -4537,88 +4765,101 @@ async function syncTerminal(id, clientFiles) {
 }
 
 async function syncTerminalNow(id, clientFiles) {
-  const owner = await loadTerminalOwner(id)
+  const initialOwner = await loadTerminalOwner(id)
 
-  if (!owner) {
+  if (!initialOwner) {
     return null
   }
 
-  const project = await getProjectById(
-    owner.projectId,
-    owner.userId
-  )
+  return withOwnerMutationLock(initialOwner.userId, async () => {
+    const owner = await loadTerminalOwner(id)
 
-  if (!project) {
-    terminalOwners.delete(id)
-    await deleteTerminalOwnerRecord(id).catch(() => {})
-    return null
-  }
+    if (
+      !owner ||
+      owner.userId !== initialOwner.userId ||
+      owner.projectId !== initialOwner.projectId ||
+      owner.expiresAt <= Date.now()
+    ) {
+      return null
+    }
 
-  const result = await runnerTerminalRequest(
-    '/v1/terminals/' +
-      encodeURIComponent(id) +
-      '/files'
-  )
-  const runnerFiles = normalizeExecutionFiles(
-    result.files || {}
-  )
-  const normalizedClientFiles = clientFiles === undefined
-    ? undefined
-    : normalizeExecutionFiles(clientFiles)
-  const sync = mergeTerminalFiles({
-    baseFiles: owner.baseFiles || {},
-    projectFiles: project.files,
-    runnerFiles,
-    clientFiles: normalizedClientFiles
-  })
-  const payload = normalizeProjectPayload({
-    name: project.name,
-    files: sync.files
-  })
-
-  if (!filesEqual(project.files, payload.files)) {
-    await updateProject(
+    const project = await getProjectById(
       owner.projectId,
-      owner.userId,
-      payload
+      owner.userId
     )
-  }
 
-  if (!filesEqual(runnerFiles, sync.runnerFiles)) {
-    await runnerTerminalRequest(
+    if (!project) {
+      terminalOwners.delete(id)
+      await deleteTerminalOwnerRecord(id).catch(() => {})
+      return null
+    }
+
+    const result = await runnerTerminalRequest(
       '/v1/terminals/' +
         encodeURIComponent(id) +
-        '/files',
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          files: sync.runnerFiles
-        })
-      }
+        '/files'
     )
-  }
+    const runnerFiles = normalizeExecutionFiles(
+      result.files || {}
+    )
+    const normalizedClientFiles = clientFiles === undefined
+      ? undefined
+      : normalizeExecutionFiles(clientFiles)
+    const sync = mergeTerminalFiles({
+      baseFiles: owner.baseFiles || {},
+      projectFiles: project.files,
+      runnerFiles,
+      clientFiles: normalizedClientFiles
+    })
+    const payload = normalizeProjectPayload({
+      name: project.name,
+      files: sync.files
+    })
 
-  owner.baseFiles = sync.baselineFiles
-  retainTerminal(id)
-  await updateTerminalOwnerRecord(id, owner)
-
-  const changedFiles = {}
-
-  for (const path of sync.changedPaths) {
-    if (Object.prototype.hasOwnProperty.call(payload.files, path)) {
-      changedFiles[path] = payload.files[path]
+    if (!filesEqual(project.files, payload.files)) {
+      await updateProjectUnlocked(
+        owner.projectId,
+        owner.userId,
+        payload
+      )
     }
-  }
 
-  return {
-    projectId: owner.projectId,
-    files: changedFiles,
-    changedPaths: sync.changedPaths,
-    conflicts: sync.conflicts
-  }
+    if (!filesEqual(runnerFiles, sync.runnerFiles)) {
+      await runnerTerminalRequest(
+        '/v1/terminals/' +
+          encodeURIComponent(id) +
+          '/files',
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            files: sync.runnerFiles
+          })
+        }
+      )
+    }
+
+    owner.baseFiles = sync.baselineFiles
+    retainTerminal(id)
+    await updateTerminalOwnerRecord(id, owner)
+
+    const changedFiles = {}
+
+    for (const path of sync.changedPaths) {
+      if (Object.prototype.hasOwnProperty.call(payload.files, path)) {
+        changedFiles[path] = payload.files[path]
+      }
+    }
+
+    return {
+      projectId: owner.projectId,
+      files: changedFiles,
+      changedPaths: sync.changedPaths,
+      conflicts: sync.conflicts
+    }
+  })
 }
 
 async function reclaimDisconnectedTerminalForCapacity() {
@@ -5190,7 +5431,8 @@ async function handleTerminalClose(request, response, id) {
 }
 
 const terminalWebSocketServer = new WebSocketServer({
-  noServer: true
+  noServer: true,
+  maxPayload: 1_048_576
 })
 
 async function handleTerminalUpgrade(request, socket, head, id) {
@@ -5200,13 +5442,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   )
   const ticket = requestUrl.searchParams.get('ticket') || ''
   const origin = request.headers.origin || ''
-  const owner = await loadTerminalOwner(id)
-  const allowedOrigins = allowedOrigin
-    .split(',')
-    .map(value => value.trim())
-    .filter(Boolean)
-  const originAllowed = allowedOrigins.includes('*') ||
-    allowedOrigins.includes(origin)
+  const originAllowed = allowedOrigins.includes(origin)
 
   if (!originAllowed) {
     console.warn('Terminal websocket rejected by origin policy', {
@@ -5217,19 +5453,63 @@ async function handleTerminalUpgrade(request, socket, head, id) {
     return
   }
 
+  const owner = await loadTerminalOwner(id)
+
   if (
     !owner ||
     !terminalRunnerUrl ||
     !ticket ||
-    owner.expiresAt <= Date.now()
+    owner.expiresAt <= Date.now() ||
+    owner.revoked
   ) {
     console.warn('Terminal websocket rejected by ticket', {
       id,
       ownerExists: Boolean(owner),
       ticketPresent: Boolean(ticket),
       ownerExpired: Boolean(owner && owner.expiresAt <= Date.now()),
-      runnerConfigured: Boolean(terminalRunnerUrl)
+      runnerConfigured: Boolean(terminalRunnerUrl),
+      ownerRevoked: Boolean(owner?.revoked)
     })
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  const connection = registerTerminalConnection(
+    owner.userId,
+    () => {
+      owner.revoked = true
+      socket.destroy()
+    }
+  )
+  socket.once('close', connection.unregister)
+
+  let banned = false
+
+  try {
+    const database = getDatabase()
+    const bannedStatement = await database.prepare(
+      'SELECT 1 FROM user_bans WHERE user_id = ? LIMIT 1'
+    )
+    const bannedRows = await bannedStatement.all([owner.userId])
+    banned = bannedRows.length > 0
+  } catch (error) {
+    connection.unregister()
+    console.error('Terminal websocket ban check failed', {
+      id,
+      message: error instanceof Error ? error.message : String(error)
+    })
+    socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n')
+    return
+  }
+
+  if (!canAcceptTerminalUpgrade({
+    owner,
+    originAllowed,
+    runnerConfigured: Boolean(terminalRunnerUrl),
+    ticketPresent: Boolean(ticket),
+    banned
+  })) {
+    connection.unregister()
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n')
     return
   }
@@ -5239,6 +5519,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   try {
     ticketConsumed = await consumeTerminalWebSocketTicket(id, ticket)
   } catch (error) {
+    connection.unregister()
     console.error('Terminal websocket ticket consumption failed', {
       id,
       message: error instanceof Error ? error.message : String(error)
@@ -5248,6 +5529,7 @@ async function handleTerminalUpgrade(request, socket, head, id) {
   }
 
   if (!ticketConsumed) {
+    connection.unregister()
     console.warn('Terminal websocket rejected by ticket', {
       id,
       ownerExists: true,
@@ -5268,6 +5550,17 @@ async function handleTerminalUpgrade(request, socket, head, id) {
     socket,
     head,
     client => {
+      connection.setClose(() => {
+        owner.revoked = true
+
+        if (client.readyState === WebSocket.OPEN) {
+          client.close(4003, 'account access revoked')
+        } else {
+          client.terminate()
+        }
+      })
+      client.once('close', connection.unregister)
+
       const runnerSocket = new WebSocket(
         terminalRunnerWebSocketUrl(id),
         {
@@ -5281,6 +5574,11 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       let runnerReady = false
 
       client.on('message', data => {
+        if (owner.revoked) {
+          client.close(4003, 'account access revoked')
+          return
+        }
+
         retainTerminal(id)
         const message = Buffer.isBuffer(data)
           ? data.toString('utf8')
@@ -5336,6 +5634,11 @@ async function handleTerminalUpgrade(request, socket, head, id) {
       })
 
       runnerSocket.on('message', data => {
+        if (owner.revoked) {
+          runnerSocket.close()
+          return
+        }
+
         retainTerminal(id)
         const message = Buffer.isBuffer(data)
           ? data.toString('utf8')
@@ -5382,12 +5685,14 @@ async function handleTerminalUpgrade(request, socket, head, id) {
           runnerSocket.terminate()
         }
 
-        void syncTerminal(id).catch(error => {
-          console.error('Terminal sync after websocket close failed', {
-            id,
-            message: error instanceof Error ? error.message : String(error)
+        if (!owner.revoked) {
+          void syncTerminal(id).catch(error => {
+            console.error('Terminal sync after websocket close failed', {
+              id,
+              message: error instanceof Error ? error.message : String(error)
+            })
           })
-        })
+        }
       })
     }
   )
@@ -5615,15 +5920,18 @@ const server = http.createServer(async (request, response) => {
     try {
       await claimWorkspace(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'workspace claim failed'
       const status =
-        error.message === 'invalid workspace id'
+        message === 'invalid workspace id'
           ? 400
-          : error.message === 'authentication required'
+          : message === 'authentication required'
             ? 401
-            : 500
+            : message.includes('storage limit exceeded') || message.includes('commit history')
+              ? 409
+              : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'workspace claim failed'
+        error: message
       })
     }
     return
@@ -5715,15 +6023,18 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleDashboardRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'dashboard request failed'
       const status =
-        error.message === 'invalid workspace id'
+        message === 'invalid workspace id'
           ? 400
-          : error.message === 'authentication required'
+          : message === 'authentication required'
             ? 401
-            : 500
+            : message.includes('storage limit exceeded') || message.includes('commit history')
+              ? 409
+              : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'dashboard request failed'
+        error: message
       })
     }
     return
@@ -5743,7 +6054,9 @@ const server = http.createServer(async (request, response) => {
           ? 400
           : message === 'authentication required'
             ? 401
-            : 500
+            : message.includes('commit history')
+              ? 409
+              : 500
 
       send(response, status, {
         error: message
@@ -5879,17 +6192,18 @@ const server = http.createServer(async (request, response) => {
       await handleProjectRequest(request, response)
     } catch (error) {
       const status =
-        error.message === 'invalid workspace id' ||
-        error.message.includes('required') ||
-        error.message.includes('invalid project') ||
-        error.message.includes('project files') ||
-        error.message.includes('project is too large') ||
-        error.message.includes('too many project files') ||
-        error.message.includes('storage limit exceeded')
-          ? 400
-          : error.message === 'authentication required'
-            ? 401
-            : 500
+        error.message === 'authentication required'
+          ? 401
+          : error.message.includes('storage limit exceeded')
+            ? 409
+            : error.message === 'invalid workspace id' ||
+                error.message.includes('required') ||
+                error.message.includes('invalid project') ||
+                error.message.includes('project files') ||
+                error.message.includes('project is too large') ||
+                error.message.includes('too many project files')
+              ? 400
+              : 500
 
       send(response, status, {
         error: error instanceof Error ? error.message : 'project request failed'
@@ -5908,8 +6222,10 @@ const server = http.createServer(async (request, response) => {
       const status =
         error.message === 'authentication required'
           ? 401
-          : error.message === 'storage limit exceeded'
-            ? 400
+          : error.message.includes('storage limit exceeded') ||
+              error.message.includes('project changed while saving') ||
+              error.message.includes('project revision claim was lost')
+            ? 409
             : 500
 
       send(response, status, {
@@ -5926,13 +6242,18 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'project deletion failed'
       const status =
-        error.message === 'authentication required'
+        message === 'authentication required'
           ? 401
-          : 500
+          : message.includes('project terminal cleanup failed')
+            ? 503
+            : message.includes('project terminal ownership mismatch')
+              ? 409
+              : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'project request failed'
+        error: message
       })
     }
     return
@@ -6031,7 +6352,6 @@ async function cleanupDisposableE2EAccountsOnStartup() {
     'SELECT id, email, emailVerified FROM "user"'
   )
   const userRows = await userRowsStatement.all()
-  const disposablePattern = /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i
   const exampleInvalidRows = userRows.filter(row =>
     String(row.email || '').trim().toLowerCase().endsWith('@example.invalid')
   )
@@ -6039,7 +6359,7 @@ async function cleanupDisposableE2EAccountsOnStartup() {
     const id = String(row.id || '')
     const email = String(row.email || '').trim().toLowerCase()
 
-    return disposablePattern.test(email) &&
+    return isGeneratedE2EAccountEmail(email) &&
       !isConfiguredAdmin({
         id,
         email,
@@ -6060,10 +6380,7 @@ async function cleanupDisposableE2EAccountsOnStartup() {
   console.log('Disposable E2E cleanup started', {
     totalUsers: userRows.length,
     exampleInvalidUsers: exampleInvalidRows.length,
-    eligibleAccounts: totals.eligibleAccounts,
-    exampleInvalidEmailSamples: exampleInvalidRows
-      .slice(0, 12)
-      .map(row => String(row.email || '').trim().toLowerCase())
+    eligibleAccounts: totals.eligibleAccounts
   })
 
   for (const user of candidates) {
@@ -6167,6 +6484,14 @@ async function cleanupDisposableE2EAccountsOnStartup() {
       },
       {
         sql: 'DELETE FROM terminal_sessions WHERE owner_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM user_bans WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM announcements WHERE target_user_id = ?',
         args: [userId]
       },
       {

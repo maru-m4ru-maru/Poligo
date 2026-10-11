@@ -5,6 +5,7 @@ import path from 'node:path'
 import Docker from 'dockerode'
 import { getLanguage, listLanguages } from './languages.js'
 import { decodeDockerLogs } from './dockerLogs.js'
+import { assertNoFileDirectoryConflicts, normalizeRunnerFilePath as normalizeFilePath } from './filePaths.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -24,6 +25,8 @@ const maxStdinBytes = Number(process.env.MAX_EXECUTION_STDIN_BYTES || 1_000_000)
 const maxEnvironmentVariables = Number(process.env.MAX_ENVIRONMENT_VARIABLES || 64)
 const maxEnvironmentBytes = Number(process.env.MAX_ENVIRONMENT_BYTES || 16_384)
 const concurrency = Number(process.env.EXECUTION_CONCURRENCY || 1)
+const maxQueuedJobs = Number(process.env.MAX_QUEUED_EXECUTIONS || 50)
+const maxRetainedJobs = Number(process.env.MAX_RETAINED_JOBS || 1000)
 
 const jobs = new Map()
 const queue = []
@@ -31,8 +34,9 @@ const jobTtlMs = Number(process.env.JOB_TTL_MS || 10 * 60 * 1000)
 
 let running = 0
 
-const jobCleanupTimer = setInterval(() => {
-  const cutoff = Date.now() - jobTtlMs
+export function cleanupFinishedJobs(now = Date.now()) {
+  const cutoff = now - jobTtlMs
+  let removed = 0
 
   for (const [id, job] of jobs) {
     if (
@@ -40,26 +44,19 @@ const jobCleanupTimer = setInterval(() => {
       Date.parse(job.finishedAt) <= cutoff
     ) {
       jobs.delete(id)
+      removed += 1
     }
   }
+
+  return removed
+}
+
+const jobCleanupTimer = setInterval(() => {
+  cleanupFinishedJobs()
 }, 60_000)
 
 jobCleanupTimer.unref?.()
 
-function normalizeFilePath(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    value.includes('\\') ||
-    value.split('/').some(part => part === '..' || part === '.')
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  return value
-}
 
 function truncate(value) {
   if (value.length <= maxOutputBytes) {
@@ -137,7 +134,7 @@ function normalizeEnvironment(env) {
   }
 
   let totalBytes = 0
-  const normalized = {}
+  const normalized = Object.create(null)
 
   for (const [key, value] of entries) {
     if (
@@ -173,14 +170,18 @@ async function prepareWorkspace(files) {
     throw new Error('too many files')
   }
 
+  const safeEntries = entries.map(([name, content]) => [
+    normalizeFilePath(name),
+    content
+  ])
+  assertNoFileDirectoryConflicts(safeEntries.map(([name]) => name))
+
   let totalBytes = 0
   await fs.mkdir(workRoot, { recursive: true, mode: 0o755 })
   const workspace = await fs.mkdtemp(path.join(workRoot, 'job-'))
 
   try {
-    for (const [name, content] of entries) {
-      const safePath = normalizeFilePath(name)
-
+    for (const [safePath, content] of safeEntries) {
       if (typeof content !== 'string') {
         throw new Error('file content must be text')
       }
@@ -394,6 +395,10 @@ async function processQueue() {
         }
       })
       .finally(() => {
+        job.files = null
+        job.args = null
+        job.env = null
+        job.stdin = null
         running -= 1
         processQueue()
       })
@@ -409,12 +414,34 @@ export function enqueueJob({
   env,
   stdin
 }) {
+  cleanupFinishedJobs()
+
   if (!id) {
     throw new Error('execution id is required')
   }
 
   if (jobs.has(id)) {
     throw new Error('execution id already exists')
+  }
+
+  if (queue.length >= maxQueuedJobs) {
+    throw new Error('execution queue is currently full')
+  }
+
+  if (jobs.size >= maxRetainedJobs) {
+    const finishedJobs = [...jobs.entries()]
+      .filter(([, existing]) => Boolean(existing.finishedAt))
+      .sort((left, right) =>
+        Date.parse(left[1].finishedAt) - Date.parse(right[1].finishedAt)
+      )
+
+    while (jobs.size >= maxRetainedJobs && finishedJobs.length) {
+      jobs.delete(finishedJobs.shift()[0])
+    }
+
+    if (jobs.size >= maxRetainedJobs) {
+      throw new Error('execution capacity is currently full')
+    }
   }
 
   const job = {

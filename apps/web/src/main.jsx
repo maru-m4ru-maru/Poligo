@@ -25,6 +25,8 @@ import AccountPage from './AccountPage'
 import AdminPage from './AdminPage'
 import TerminalPanel from './TerminalPanel'
 import { getExecutionLanguage } from './executionLanguage'
+import { hasProjectFilePathConflict, normalizeProjectFilePath } from './projectFilePaths'
+import { isTrustedPreviewMessage } from './previewMessagePolicy'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -98,6 +100,7 @@ const FILE_ICONS = {
   html: '/icons/html5.svg',
   css: '/icons/css.svg',
   js: '/icons/javascript.svg',
+  node: '/icons/nodejs.svg',
   python: '/icons/python.svg',
   java: '/icons/java.svg',
   go: '/icons/go.svg',
@@ -107,7 +110,7 @@ const FILE_ICONS = {
   kotlin: '/icons/kotlin.svg',
   c: '/icons/c.svg',
   cpp: '/icons/cplusplus.svg',
-  csharp: '/icons/csharp.svg',
+  csharp: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
   typescript: '/icons/typescript.svg'
 }
 
@@ -145,6 +148,24 @@ function getFileMeta(name) {
     language: 'plaintext',
     kind: 'text'
   }
+}
+
+function getProjectFileIconKind(name, files) {
+  const kind = getFileMeta(name).kind
+
+  if (kind !== 'js') {
+    return kind
+  }
+
+  try {
+    const manifest = JSON.parse(files?.['package.json'] || '{}')
+
+    if (manifest?.poligo?.runtime === 'node') {
+      return 'node'
+    }
+  } catch {}
+
+  return kind
 }
 
 function RenameIcon({ size = 13 }) {
@@ -1057,6 +1078,7 @@ function IDE({ projectId }) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [newFileOpen, setNewFileOpen] = useState(false)
+  const [filePathError, setFilePathError] = useState('')
   const [collapsedFolders, setCollapsedFolders] = useState(new Set())
   const [editorMarkers, setEditorMarkers] = useState([])
   const [newFileName, setNewFileName] = useState('')
@@ -1088,6 +1110,7 @@ function IDE({ projectId }) {
   const [dialog, setDialog] = useState(null)
   const [dialogBusy, setDialogBusy] = useState(false)
   const terminalRef = useRef(null)
+  const previewFrameRef = useRef(null)
   const terminalPanelRef = useRef(null)
   const terminal = useRef(null)
   const terminalPendingLines = useRef([])
@@ -1417,14 +1440,14 @@ function IDE({ projectId }) {
 
   useEffect(() => {
     function handlePreviewMessage(event) {
-      if (event.data?.source !== 'poligo-preview') {
+      if (!isTrustedPreviewMessage(event, previewFrameRef.current?.contentWindow)) {
         return
       }
 
       const problem = {
         message: event.data.message || 'JavaScriptの実行中にエラーが発生しました。',
         stack: event.data.stack || '',
-        type: event.data.type || 'error'
+        type: 'error'
       }
 
       setRuntimeProblems(current => [
@@ -1666,6 +1689,7 @@ function IDE({ projectId }) {
   }
 
   function startRenameFile(path) {
+    setFilePathError('')
     setRenamingFile(path)
     setRenameValue(path.split('/').pop() || path)
   }
@@ -1673,40 +1697,39 @@ function IDE({ projectId }) {
   function cancelRenameFile() {
     setRenamingFile('')
     setRenameValue('')
+    setFilePathError('')
   }
 
   function commitRenameFile() {
     if (!renamingFile) return
 
     const nextName = renameValue.trim()
-
-    if (
-      !nextName ||
-      nextName.includes('/') ||
-      nextName === '.' ||
-      nextName === '..'
-    ) {
-      cancelRenameFile()
-      return
-    }
-
     const directory = renamingFile.includes('/')
       ? renamingFile.slice(0, renamingFile.lastIndexOf('/'))
       : ''
-
-    const nextPath = directory
+    const candidatePath = directory
       ? directory + '/' + nextName
       : nextName
+    let nextPath
+
+    try {
+      nextPath = normalizeProjectFilePath(candidatePath)
+    } catch (error) {
+      setFilePathError(error instanceof Error ? error.message : 'ファイルパスが不正です。')
+      return
+    }
 
     if (nextPath === renamingFile) {
       cancelRenameFile()
       return
     }
 
-    if (Object.prototype.hasOwnProperty.call(files, nextPath)) {
-      cancelRenameFile()
+    if (hasProjectFilePathConflict(files, nextPath, renamingFile)) {
+      setFilePathError('ファイル名とフォルダー名が競合しています。')
       return
     }
+
+    setFilePathError('')
 
     setFiles(current => {
       const next = { ...current }
@@ -1910,7 +1933,7 @@ function IDE({ projectId }) {
                 className="explorer-file-main"
                 onClick={() => openFile(node.path)}
               >
-                <FileIcon kind={getFileMeta(node.name).kind} />
+                <FileIcon kind={getProjectFileIconKind(node.name, files)} />
                 <span>{node.name}</span>
               </button>
               <div className="explorer-file-actions">
@@ -1985,6 +2008,7 @@ function IDE({ projectId }) {
       ' style="width:100vw;height:100vh;border:0;display:block"',
       ' srcdoc="' + escapeHtmlAttribute(html) + '">',
       '</iframe>',
+      '<script>(function(){var frame=document.querySelector("iframe");window.addEventListener("message",function(event){if(!frame||event.source!==frame.contentWindow||event.data?.source!=="poligo-preview")return;parent.postMessage(event.data,"*")})})();</script>',
       '</body>',
       '</html>'
     ].join('')
@@ -2118,21 +2142,21 @@ function IDE({ projectId }) {
   function cancelCreateFile() {
     setNewFileOpen(false)
     setNewFileName('')
+    setFilePathError('')
   }
 
   function commitCreateFile() {
     const normalized = newFileName.trim()
+    let safeName
 
-    const safeName = normalized
-      .replace(/\\/g, '/')
-      .replace(/^\/+/, '')
-
-    if (
-      !safeName ||
-      safeName.split('/').some(part => !part || part === '.' || part === '..')
-    ) {
+    try {
+      safeName = normalizeProjectFilePath(normalized)
+    } catch (error) {
+      setFilePathError(error instanceof Error ? error.message : 'ファイルパスが不正です。')
       return
     }
+
+    setFilePathError('')
 
     if (Object.prototype.hasOwnProperty.call(files, safeName)) {
       setActiveFile(safeName)
@@ -2142,6 +2166,11 @@ function IDE({ projectId }) {
           : [...current, safeName]
       )
       cancelCreateFile()
+      return
+    }
+
+    if (hasProjectFilePathConflict(files, safeName)) {
+      setFilePathError('ファイル名とフォルダー名が競合しています。')
       return
     }
 
@@ -3152,7 +3181,7 @@ function IDE({ projectId }) {
                   setQuickOpenOpen(false)
                 }}
               >
-                <FileIcon kind={getFileMeta(name).kind} size={15} />
+                <FileIcon kind={getProjectFileIconKind(name, files)} size={15} />
                 <span>{name}</span>
               </button>
             ))}
@@ -3418,7 +3447,7 @@ function IDE({ projectId }) {
                     }
                   }}
                 >
-                  <FileIcon kind={getFileMeta(result.name).kind} size={14} />
+                  <FileIcon kind={getProjectFileIconKind(result.name, files)} size={14} />
                   <div className="search-result-copy">
                     <strong>{result.name}</strong>
                     <span>
@@ -3871,6 +3900,7 @@ function IDE({ projectId }) {
                   </button>
                 </div>
                 <iframe
+                  ref={previewFrameRef}
                   key={previewKey}
                   title="Poligo preview"
                   srcDoc={previewDoc}
