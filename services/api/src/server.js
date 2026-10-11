@@ -5714,11 +5714,12 @@ const server = http.createServer(async (request, response) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'source control request failed'
       const status =
-        message === 'invalid workspace id' ||
-        message === 'commit message is required'
-          ? 400
-          : message === 'authentication required'
-            ? 401
+        message === 'authentication required'
+          ? 401
+          : message === 'invalid workspace id' ||
+              message === 'commit message is required' ||
+              message === 'storage limit exceeded'
+            ? 400
             : 500
 
       send(response, status, {
