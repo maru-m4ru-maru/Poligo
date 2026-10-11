@@ -18,6 +18,7 @@ import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId, buildWorkspaceClaimStatements } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
 import { buildProjectDeleteStatements, buildProjectUpdateStatements } from './projectWritePolicy.js'
+import { withOwnerMutationLock } from './ownerMutationLock.js'
 import { canAcceptTerminalUpgrade } from './terminalAccessPolicy.js'
 import {
   COMMIT_HISTORY_STORAGE_MULTIPLIER,
@@ -75,7 +76,6 @@ let databaseInitializationError = null
 let databaseInitializationComplete = false
 const executionRateState = new Map()
 const executionOwners = new Map()
-const projectCommitQueues = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
 const terminalConnectionsByOwner = new Map()
@@ -1585,28 +1585,6 @@ function retainExecution(id) {
   }
 }
 
-function withOwnerCommitLock(ownerId, operation) {
-  const previous = projectCommitQueues.get(ownerId) || Promise.resolve()
-  let release
-
-  const gate = new Promise(resolve => {
-    release = resolve
-  })
-  const tail = previous.then(() => gate)
-
-  projectCommitQueues.set(ownerId, tail)
-
-  return previous
-    .then(operation)
-    .finally(() => {
-      release()
-
-      if (projectCommitQueues.get(ownerId) === tail) {
-        projectCommitQueues.delete(ownerId)
-      }
-    })
-}
-
 async function getOwnerCommitRows(ownerId) {
   const database = getDatabase()
   const statement = await database.prepare(
@@ -2027,8 +2005,7 @@ async function createProject(ownerId, payload) {
 }
 
 async function updateProject(projectId, ownerId, payload) {
-  return withOwnerCommitLock(ownerId, async () => {
-
+  return withOwnerMutationLock(ownerId, async () => {
     const database = getDatabase()
     const current = await getProjectById(projectId, ownerId)
 
@@ -2080,7 +2057,7 @@ async function updateProject(projectId, ownerId, payload) {
 }
 
 async function deleteProject(projectId, ownerId) {
-  return withOwnerCommitLock(ownerId, async () => {
+  return withOwnerMutationLock(ownerId, async () => {
     const database = getDatabase()
     const current = await getProjectById(projectId, ownerId)
 
@@ -2262,7 +2239,7 @@ async function saveCommitSnapshot(projectId, ownerId, project, message) {
 }
 
 async function ensureInitialCommit(projectId, ownerId) {
-  return withOwnerCommitLock(ownerId, async () => {
+  return withOwnerMutationLock(ownerId, async () => {
     const commits = await listCommits(projectId, ownerId)
 
     if (commits === null) {
@@ -2291,7 +2268,7 @@ async function ensureInitialCommit(projectId, ownerId) {
 }
 
 async function commitProject(projectId, ownerId, payload) {
-  return withOwnerCommitLock(ownerId, async () => {
+  return withOwnerMutationLock(ownerId, async () => {
     const project = await getProjectById(projectId, ownerId)
 
     if (!project) {
