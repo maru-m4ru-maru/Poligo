@@ -57,3 +57,10 @@ export function getOriginPolicy(configuredOrigin, environment = 'development') {
     corsOrigin: allowedOrigins[0]
   }
 }
+
+export function selectCorsOrigin(requestOrigin, allowedOrigins, fallbackOrigin) {
+  return typeof requestOrigin === 'string' &&
+    allowedOrigins.includes(requestOrigin)
+    ? requestOrigin
+    : fallbackOrigin
+}
