@@ -33,10 +33,14 @@ function decryptCiphertext(value) {
   const decipher = createDecipheriv('aes-256-gcm', getKey(), iv)
   decipher.setAuthTag(tag)
 
-  return Buffer.concat([
-    decipher.update(encrypted),
-    decipher.final()
-  ]).toString('utf8')
+  try {
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ]).toString('utf8')
+  } catch {
+    throw new Error('invalid encrypted secret authentication')
+  }
 }
 
 export function hasEncryptedSecretEnvelope(value) {
