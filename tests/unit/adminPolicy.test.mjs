@@ -79,3 +79,19 @@ test('missing IDs and unrelated emails do not grant admin access', () => {
     false
   )
 })
+
+import { isGeneratedE2EAccountEmail } from '../../services/api/src/adminPolicy.js'
+
+test('restricts test account deletion to generated E2E addresses', () => {
+  assert.equal(
+    isGeneratedE2EAccountEmail('poligo-test-user-aabbccddeeff00112233445566778899@example.invalid'),
+    true
+  )
+  assert.equal(
+    isGeneratedE2EAccountEmail('poligo-test-user-aabbccddeeff00112233445566778899@example.com'),
+    true
+  )
+  assert.equal(isGeneratedE2EAccountEmail('person@example.com'), false)
+  assert.equal(isGeneratedE2EAccountEmail('poligo-test-user@example.invalid'), false)
+  assert.equal(isGeneratedE2EAccountEmail(undefined), false)
+})
