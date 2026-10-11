@@ -11,6 +11,10 @@ export function requiresProjectDatabase(method, pathname) {
 
   const normalizedMethod = method.toUpperCase()
 
+  if (normalizedMethod === 'OPTIONS') {
+    return false
+  }
+
   if (PROJECT_DATABASE_EXACT_ROUTES.has(normalizedMethod + ' ' + pathname)) {
     return true
   }
