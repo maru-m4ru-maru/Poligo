@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isConfiguredAdmin } from '../../services/api/src/adminPolicy.js'
+import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from '../../services/api/src/adminPolicy.js'
 
 const adminUserIds = new Set(['fixed-user-id'])
 const adminEmails = new Set(['admin@example.com'])
@@ -79,8 +79,6 @@ test('missing IDs and unrelated emails do not grant admin access', () => {
     false
   )
 })
-
-import { isGeneratedE2EAccountEmail } from '../../services/api/src/adminPolicy.js'
 
 test('restricts test account deletion to generated E2E addresses', () => {
   assert.equal(
