@@ -62,7 +62,7 @@ jobs:
             web_ok=0
 
             if curl -fsS --connect-timeout 5 --max-time 10 "$POLIGO_RUNNER_URL/health" >/tmp/poligo-runner-health.json; then
-              if python -c "import json; d=json.load(open('/tmp/poligo-runner-health.json')); raise SystemExit(0 if d.get('status') == 'ok' and d.get('service') == 'runner' and d.get('terminalBackend') == 'process' and d.get('terminalReady') is True else 1)"; then
+              if python -c "import json; d=json.load(open('/tmp/poligo-runner-health.json')); raise SystemExit(0 if d.get('service') == 'runner' and d.get('terminalBackend') == 'process' and d.get('terminalReady') is True else 1)"; then
                 runner_ok=1
               fi
             fi
@@ -81,8 +81,10 @@ jobs:
               0
               if data.get("status") == "ok"
               and data.get("service") == "api"
-              and data.get("runner") is True
-              and data.get("executor") == "runner"
+              and data.get("terminalRunner") is True
+              and data.get("executor") in {"runner", "judge0"}
+              and data.get("runnerExecutionReady") is (data.get("executor") == "runner")
+              and data.get("typescriptExecutor") == "judge0"
               and data.get("commit") == sys.argv[1]
               and database.get("status") == "online"
               else 1

@@ -59,7 +59,7 @@ jobs:
               0
               if data.get("status") == "ok" and
               data.get("service") == "api" and
-              data.get("executor") == "judge0" and
+              data.get("typescriptExecutor") == "judge0" and
               database.get("status") == "online" and
               data.get("commit") == expected
               else 1
