@@ -2248,33 +2248,57 @@ async function handleDashboardRequest(request, response) {
   const database = getDatabase()
   const ownerId = session.user.id
   const workspaceId = getWorkspaceId(request)
+  const registeredOwnerStatement = await database.prepare(
+    'SELECT id FROM "user" WHERE id = ? LIMIT 1'
+  )
+  const registeredOwners = await registeredOwnerStatement.all([workspaceId])
+
+  if (!isWorkspaceClaimAllowed(
+    workspaceId,
+    ownerId,
+    registeredOwners.length > 0
+  )) {
+    send(response, 403, {
+      error: 'workspace belongs to another account and cannot be claimed'
+    })
+    return
+  }
 
   if (workspaceId !== ownerId) {
     await database.batch([
       {
-        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
-        args: [ownerId, workspaceId]
+        sql: `UPDATE projects
+          SET owner_id = ?
+          WHERE owner_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM "user" WHERE id = ?
+            )`,
+        args: [ownerId, workspaceId, workspaceId]
       }
     ], 'immediate')
   }
 
-  const ownerIds = workspaceId === ownerId
-    ? [ownerId]
-    : [ownerId, workspaceId]
-
+  const ownerIds = [ownerId]
   const ownerPlaceholders = ownerIds.map(() => '?').join(', ')
 
   const statsStatement = await database.prepare(
     `SELECT
       COUNT(DISTINCT p.id) AS project_count,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes,
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) +
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM projects historical_project
+        JOIN project_commits pc ON pc.project_id = historical_project.id
+        JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE historical_project.owner_id IN (${ownerPlaceholders})
+      ), 0) AS storage_bytes,
       MAX(p.updated_at) AS last_updated
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id IN (${ownerPlaceholders})`
   )
-  const statsRows = await statsStatement.all(ownerIds)
+  const statsRows = await statsStatement.all([...ownerIds, ...ownerIds])
   const stats = statsRows[0] || {}
 
   const url = new URL(request.url, 'http://localhost')
@@ -2290,7 +2314,13 @@ async function handleDashboardRequest(request, response) {
       p.created_at,
       p.updated_at,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) +
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM project_commits pc
+        JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE pc.project_id = p.id
+      ), 0) AS storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id IN (${ownerPlaceholders})
