@@ -3728,6 +3728,13 @@ async function handleAdminUsersRequest(request, response) {
           LEFT JOIN project_files pf ON pf.project_id = p.id
           WHERE p.owner_id = u.id
         ), 0) AS storage_bytes,
+        COALESCE((
+          SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+          FROM projects p
+          JOIN project_commits pc ON pc.project_id = p.id
+          JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+          WHERE p.owner_id = u.id
+        ), 0) AS history_storage_bytes,
         COALESCE(usl.limit_bytes, ?) AS storage_limit_bytes
       FROM "user" u
       LEFT JOIN user_storage_limits usl ON usl.user_id = u.id
@@ -3749,6 +3756,8 @@ async function handleAdminUsersRequest(request, response) {
         banReason: String(row.ban_reason || ''),
         storageBytes: Number(row.storage_bytes || 0),
         storageLimitBytes: Number(row.storage_limit_bytes || DEFAULT_STORAGE_LIMIT_BYTES),
+        historyStorageBytes: Number(row.history_storage_bytes || 0),
+        historyStorageLimitBytes: Number(row.storage_limit_bytes || DEFAULT_STORAGE_LIMIT_BYTES) * COMMIT_HISTORY_STORAGE_MULTIPLIER,
         isAdmin: isConfiguredAdmin({
           id: row.id,
           email: row.email,
