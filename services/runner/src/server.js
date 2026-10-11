@@ -66,13 +66,16 @@ const server = http.createServer(async (request, response) => {
     (request.method === 'GET' || request.method === 'HEAD') &&
     requestPath === '/health'
   ) {
+    const terminalReady = process.env.TERMINAL_BACKEND === 'process'
+      ? process.getuid?.() === 0
+      : existsSync(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
+    const runnerTokenConfigured = Boolean(runnerToken)
     const health = {
-      status: 'ok',
+      status: terminalReady && runnerTokenConfigured ? 'ok' : 'degraded',
       service: 'runner',
       terminalBackend: process.env.TERMINAL_BACKEND === 'process' ? 'process' : 'docker',
-      terminalReady: process.env.TERMINAL_BACKEND === 'process'
-        ? process.getuid?.() === 0
-        : existsSync(process.env.DOCKER_SOCKET || '/var/run/docker.sock')
+      terminalReady,
+      runnerTokenConfigured
     }
 
     if (request.method === 'HEAD') {
@@ -246,8 +249,15 @@ const server = http.createServer(async (request, response) => {
         status: job.status
       })
     } catch (error) {
-      send(response, 400, {
-        error: error instanceof Error ? error.message : 'invalid request'
+      const message = error instanceof Error ? error.message : 'invalid request'
+      const status = message === 'execution queue is full' ? 429 : 400
+
+      if (status === 429) {
+        response.setHeader('Retry-After', '2')
+      }
+
+      send(response, status, {
+        error: message
       })
     }
 
