@@ -15,7 +15,7 @@ import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
 import { getOriginPolicy, selectCorsOrigin } from './authPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
-import { isAllowedWorkspaceId } from './workspacePolicy.js'
+import { isAllowedWorkspaceId, buildWorkspaceClaimStatements } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
 import { buildProjectDeleteStatements, buildProjectUpdateStatements } from './projectWritePolicy.js'
 import { canAcceptTerminalUpgrade } from './terminalAccessPolicy.js'
@@ -1822,12 +1822,22 @@ async function claimWorkspace(request, response) {
   const count = Number(existing[0]?.count || 0)
 
   if (count > 0 && workspaceId !== session.user.id) {
-    await database.batch([
-      {
-        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
-        args: [session.user.id, workspaceId]
+    await database.batch(
+      buildWorkspaceClaimStatements(workspaceId, session.user.id, Date.now()),
+      'immediate'
+    )
+
+    for (const owner of terminalOwners.values()) {
+      if (owner.userId === workspaceId) {
+        owner.userId = session.user.id
+        owner.websocketTicket = ''
+        owner.websocketTicketHash = ''
+        owner.websocketTicketExpiresAt = 0
+        owner.websocketTicketUsed = true
       }
-    ], 'immediate')
+    }
+
+    closeTerminalConnectionsForUser(workspaceId)
   }
 
   send(response, 200, {
@@ -5890,15 +5900,18 @@ const server = http.createServer(async (request, response) => {
     try {
       await claimWorkspace(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'workspace claim failed'
       const status =
-        error.message === 'invalid workspace id'
+        message === 'invalid workspace id'
           ? 400
-          : error.message === 'authentication required'
+          : message === 'authentication required'
             ? 401
-            : 500
+            : message.includes('storage limit exceeded') || message.includes('commit history')
+              ? 409
+              : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'workspace claim failed'
+        error: message
       })
     }
     return
