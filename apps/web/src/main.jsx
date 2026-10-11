@@ -16,7 +16,7 @@ import {
   restoreCommit
 } from './projectStore'
 import { authClient } from './auth-client'
-import { getExecutionLanguage } from './executionLanguage'
+import { getExecutionTarget } from './executionLanguage'
 import { hasProjectFilePathConflict, normalizeProjectFilePath } from './projectFilePaths'
 import { isTrustedPreviewMessage } from './previewMessagePolicy'
 
@@ -1124,7 +1124,9 @@ function IDE({ projectId }) {
 
   const { data: session } = authClient.useSession()
   const currentLanguage = getFileMeta(activeFile).language
-  const executionLanguage = getExecutionLanguage(files, activeFile, currentLanguage)
+  const executionTarget = getExecutionTarget(files, activeFile, currentLanguage)
+  const executionLanguage = executionTarget.language
+  const executionEntrypoint = executionTarget.entrypoint
   const currentValue = files[activeFile] ?? ''
 
   const fileTree = useMemo(() => buildFileTree(files), [files])
@@ -2770,7 +2772,7 @@ function IDE({ projectId }) {
 
     setDebugOutput({
       status: 'queued',
-      file: activeFile,
+      file: executionEntrypoint,
       language: executionLanguage,
       stdout: '',
       stderr: '',
@@ -2796,7 +2798,7 @@ function IDE({ projectId }) {
 
       setDebugOutput({
         status: 'failed',
-        file: activeFile,
+        file: executionEntrypoint,
         language: executionLanguage,
         stdout: '',
         stderr: '',
@@ -2814,7 +2816,7 @@ function IDE({ projectId }) {
         body: JSON.stringify({
           projectId: currentProjectId,
           language: executionLanguage,
-          entrypoint: activeFile,
+          entrypoint: executionEntrypoint,
           stdin: executionStdin,
           args: parsedArgs,
           files
@@ -2864,7 +2866,7 @@ function IDE({ projectId }) {
 
           setDebugOutput({
             status: status.status,
-            file: activeFile,
+            file: executionEntrypoint,
             language: executionLanguage,
             stdout: nextResult.stdout || '',
             stderr: nextResult.stderr || '',
@@ -2904,7 +2906,7 @@ function IDE({ projectId }) {
 
       setDebugOutput({
         status: 'timeout',
-        file: activeFile,
+        file: executionEntrypoint,
         language: executionLanguage,
         stdout: '',
         stderr: timeoutResult.stderr,
@@ -2923,7 +2925,7 @@ function IDE({ projectId }) {
 
       setDebugOutput({
         status: 'failed',
-        file: activeFile,
+        file: executionEntrypoint,
         language: executionLanguage,
         stdout: '',
         stderr: '',
