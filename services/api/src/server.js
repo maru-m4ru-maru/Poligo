@@ -11,7 +11,7 @@ import {
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
-import { isConfiguredAdmin } from './adminPolicy.js'
+import { isConfiguredAdmin, isDisposableE2EAccountEmail } from './adminPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -3840,7 +3840,7 @@ async function handleAdminUsersRequest(request, response) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
-    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(email)) {
+    if (!isDisposableE2EAccountEmail(target.email)) {
       throw new Error('test account deletion is restricted to generated E2E accounts')
     }
 
@@ -6031,7 +6031,6 @@ async function cleanupDisposableE2EAccountsOnStartup() {
     'SELECT id, email, emailVerified FROM "user"'
   )
   const userRows = await userRowsStatement.all()
-  const disposablePattern = /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i
   const exampleInvalidRows = userRows.filter(row =>
     String(row.email || '').trim().toLowerCase().endsWith('@example.invalid')
   )
@@ -6039,7 +6038,7 @@ async function cleanupDisposableE2EAccountsOnStartup() {
     const id = String(row.id || '')
     const email = String(row.email || '').trim().toLowerCase()
 
-    return disposablePattern.test(email) &&
+    return isDisposableE2EAccountEmail(email) &&
       !isConfiguredAdmin({
         id,
         email,
