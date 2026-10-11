@@ -1625,8 +1625,14 @@ async function getOwnerCommitRows(ownerId) {
 function appendCommitRetentionDeletes(statements, commitIds, ownerId) {
   for (const commitId of commitIds) {
     statements.push({
-      sql: 'DELETE FROM project_commit_files WHERE commit_id = ?',
-      args: [commitId]
+      sql: `DELETE FROM project_commit_files
+        WHERE commit_id = ?
+          AND commit_id IN (
+            SELECT pc.id FROM project_commits pc
+            JOIN projects p ON p.id = pc.project_id
+            WHERE p.owner_id = ?
+          )`,
+      args: [commitId, ownerId]
     })
     statements.push({
       sql: `DELETE FROM project_commits
