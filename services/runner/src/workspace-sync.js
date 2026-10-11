@@ -23,7 +23,10 @@ process.stdin.on('end', () => {
       'node_modules',
       '.terminal-cache',
       '.tmp',
-      '.cache'
+      '.cache',
+      '__proto__',
+      'prototype',
+      'constructor'
     ])
 
     if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
@@ -40,6 +43,7 @@ process.stdin.on('end', () => {
         !value ||
         value.length > 240 ||
         value.includes('\0') ||
+        /[\u0001-\u001f\u007f]/.test(value) ||
         value.startsWith('/') ||
         value.includes('\\')
       ) {
