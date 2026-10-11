@@ -144,7 +144,7 @@ async function createWorkspaceArchive(files) {
     pack.entry({
       name: directory,
       type: 'directory',
-      mode: 0o777
+      mode: 0o755
     })
   }
 
@@ -152,7 +152,7 @@ async function createWorkspaceArchive(files) {
     pack.entry({
       name,
       type: 'file',
-      mode: 0o666,
+      mode: 0o644,
       size: Buffer.byteLength(content, 'utf8')
     }, Buffer.from(content, 'utf8'))
   }
@@ -479,7 +479,7 @@ async function createTerminal({
         'cd /workspace && exec bash --noprofile --norc -i'
       ],
       WorkingDir: '/workspace',
-      User: '0:0',
+      User: '1000:1000',
       Env: [
         'HOME=/workspace',
         'TERM=xterm-256color',
@@ -506,8 +506,8 @@ async function createTerminal({
         CapDrop: ['ALL'],
         SecurityOpt: ['no-new-privileges'],
         Tmpfs: {
-          '/workspace': 'rw,nosuid,nodev,size=128m',
-          '/tmp': 'rw,nosuid,nodev,size=64m'
+          '/workspace': 'rw,nosuid,nodev,size=128m,uid=1000,gid=1000,mode=0770',
+          '/tmp': 'rw,nosuid,nodev,size=64m,uid=1000,gid=1000,mode=0770'
         },
         LogConfig: {
           Type: 'json-file',
