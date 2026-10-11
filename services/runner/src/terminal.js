@@ -85,10 +85,17 @@ function appendOutput(session, data) {
 
   const output = appendUtf8Tail('', data, maxOutputBytes)
 
-  socket.send(JSON.stringify({
-    type: 'output',
-    data: output
-  }))
+  try {
+    socket.send(JSON.stringify({
+      type: 'output',
+      data: output
+    }))
+  } catch {
+    if (session.socket === socket) {
+      session.socket = null
+      session.disconnectedAt = new Date().toISOString()
+    }
+  }
 }
 
 async function ensureImage() {
