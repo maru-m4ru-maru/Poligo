@@ -14,7 +14,8 @@ import {
   encryptProjectSecrets
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
-import { shouldUseJudge0 } from './executionRouting.js'
+import { normalizeJudge0Language, shouldUseJudge0 } from './executionRouting.js'
+import { isRunnerExecutionReady } from './runnerReadiness.js'
 import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
 import { getOriginPolicy, selectCorsOrigin } from './authPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
@@ -2908,7 +2909,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   }
 
   const languages = await getJudge0Languages()
-  let languageId = findJudge0LanguageId(languages, payload.language)
+  let languageId = findJudge0LanguageId(languages, normalizeJudge0Language(payload.language))
 
   if (!languageId) {
     send(response, 400, {
@@ -3513,7 +3514,11 @@ async function handleExecution(request, response) {
   const id = randomUUID()
   registerExecution(id, session.user.id)
 
-  if (shouldUseJudge0(payload.language, Boolean(runnerUrl))) {
+  const runnerExecutionReady = Boolean(runnerUrl) && payload.language !== 'typescript'
+    ? await isRunnerExecutionReady(runnerUrl)
+    : false
+
+  if (shouldUseJudge0(payload.language, Boolean(runnerUrl), runnerExecutionReady)) {
     try {
       await handleJudge0Execution(response, payload, id, session.user.id)
     } catch (error) {
@@ -6063,13 +6068,17 @@ const server = http.createServer(async (request, response) => {
       databaseStatus.status === 'online' &&
       !databaseInitializationError
 
+    const runnerExecutionReady = await isRunnerExecutionReady(runnerUrl)
+
     send(response, 200, {
       status: databaseHealthy ? 'ok' : 'degraded',
       service: 'api',
       commit: process.env.RENDER_GIT_COMMIT || '',
       runner: Boolean(runnerUrl),
+      runnerExecutionReady,
       terminalRunner: Boolean(terminalRunnerUrl),
-      executor: runnerUrl ? 'runner' : 'judge0',
+      executor: runnerExecutionReady ? 'runner' : 'judge0',
+      typescriptExecutor: 'judge0',
       database: {
         ...databaseStatus,
         initialization: !databaseInitializationComplete
