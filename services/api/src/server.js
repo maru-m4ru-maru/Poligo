@@ -1699,11 +1699,21 @@ async function claimWorkspace(request, response) {
 async function getOwnerStorageBytes(ownerId) {
   const database = getDatabase()
   const storageStatement = await database.prepare(
-    'SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes ' +
-      'FROM projects p LEFT JOIN project_files pf ON pf.project_id = p.id ' +
-      'WHERE p.owner_id = ?'
+    `SELECT
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
+        FROM projects p
+        INNER JOIN project_files pf ON pf.project_id = p.id
+        WHERE p.owner_id = ?
+      ), 0) + COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM projects p
+        INNER JOIN project_commits pc ON pc.project_id = p.id
+        INNER JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE p.owner_id = ?
+      ), 0) AS storage_bytes`
   )
-  const rows = await storageStatement.all([ownerId])
+  const rows = await storageStatement.all([ownerId, ownerId])
 
   return Number(rows[0]?.storage_bytes || 0)
 }
@@ -1982,6 +1992,13 @@ async function ensureInitialCommit(projectId, ownerId) {
   ]
 
   const storedFiles = encryptProjectSecrets(project.files)
+  const snapshotBytes = getStoredFileBytes(storedFiles)
+  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+
+  if (currentStorageBytes + snapshotBytes > storageLimitBytes) {
+    throw new Error('storage limit exceeded')
+  }
 
   for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
@@ -2019,6 +2036,13 @@ async function commitProject(projectId, ownerId, payload) {
   ]
 
   const storedFiles = encryptProjectSecrets(project.files)
+  const snapshotBytes = getStoredFileBytes(storedFiles)
+  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+
+  if (currentStorageBytes + snapshotBytes > storageLimitBytes) {
+    throw new Error('storage limit exceeded')
+  }
 
   for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
@@ -2220,13 +2244,20 @@ async function handleDashboardRequest(request, response) {
     `SELECT
       COUNT(DISTINCT p.id) AS project_count,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes,
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) +
+        COALESCE((
+          SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+          FROM projects cp
+          INNER JOIN project_commits pc ON pc.project_id = cp.id
+          INNER JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+          WHERE cp.owner_id IN (${ownerPlaceholders})
+        ), 0) AS storage_bytes,
       MAX(p.updated_at) AS last_updated
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id IN (${ownerPlaceholders})`
   )
-  const statsRows = await statsStatement.all(ownerIds)
+  const statsRows = await statsStatement.all([...ownerIds, ...ownerIds])
   const stats = statsRows[0] || {}
 
   const url = new URL(request.url, 'http://localhost')
@@ -2242,7 +2273,13 @@ async function handleDashboardRequest(request, response) {
       p.created_at,
       p.updated_at,
       COUNT(pf.path) AS file_count,
-      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes
+      COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS current_storage_bytes,
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM project_commits pc
+        INNER JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE pc.project_id = p.id
+      ), 0) AS commit_storage_bytes
     FROM projects p
     LEFT JOIN project_files pf ON pf.project_id = p.id
     WHERE p.owner_id IN (${ownerPlaceholders})
@@ -2275,7 +2312,7 @@ async function handleDashboardRequest(request, response) {
       createdAt: Number(project.created_at),
       updatedAt: Number(project.updated_at),
       fileCount: Number(project.file_count || 0),
-      storageBytes: Number(project.storage_bytes || 0)
+      storageBytes: Number(project.current_storage_bytes || 0) + Number(project.commit_storage_bytes || 0)
     }))
   })
 }
@@ -3458,7 +3495,13 @@ async function handleAdminUsersRequest(request, response) {
         COALESCE((
           SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
           FROM projects p
-          LEFT JOIN project_files pf ON pf.project_id = p.id
+          INNER JOIN project_files pf ON pf.project_id = p.id
+          WHERE p.owner_id = u.id
+        ), 0) + COALESCE((
+          SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+          FROM projects p
+          INNER JOIN project_commits pc ON pc.project_id = p.id
+          INNER JOIN project_commit_files pcf ON pcf.commit_id = pc.id
           WHERE p.owner_id = u.id
         ), 0) AS storage_bytes,
         COALESCE(usl.limit_bytes, ?) AS storage_limit_bytes
