@@ -255,7 +255,7 @@ const TEMPLATE_ICONS = {
   PHP: '/icons/php.svg',
   Ruby: '/icons/ruby.svg',
   Kotlin: '/icons/kotlin.svg',
-  'C#': '/icons/csharp.svg',
+  'C#': 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
   TypeScript: '/icons/typescript.svg'
 }
 
