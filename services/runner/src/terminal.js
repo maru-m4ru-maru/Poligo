@@ -8,7 +8,7 @@ const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
 })
 
-const terminalImage = process.env.TERMINAL_IMAGE || 'node:22-bookworm'
+const terminalImage = process.env.TERMINAL_IMAGE || 'node:24.21.0-bookworm-slim'
 const maxFiles = Number(process.env.TERMINAL_MAX_FILES || 200)
 const maxBytes = Number(process.env.TERMINAL_MAX_PROJECT_BYTES || 5_000_000)
 const memoryBytes = Number(process.env.TERMINAL_MEMORY_BYTES || 536_870_912)
@@ -723,7 +723,8 @@ export async function attachTerminalSocket(id, socket) {
 
     if (
       payload?.type === 'input' &&
-      typeof payload.data === 'string'
+      typeof payload.data === 'string' &&
+      Buffer.byteLength(payload.data, 'utf8') <= 65_536
     ) {
       session.stream.write(payload.data)
       return
