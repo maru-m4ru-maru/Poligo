@@ -15,6 +15,12 @@ import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
+import {
+  COMMIT_HISTORY_STORAGE_MULTIPLIER,
+  MAX_COMMITS_PER_ACCOUNT,
+  MAX_COMMITS_PER_PROJECT,
+  planCommitRetention
+} from './commitRetention.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -58,6 +64,7 @@ let databaseInitializationError = null
 let databaseInitializationComplete = false
 const executionRateState = new Map()
 const executionOwners = new Map()
+const projectCommitQueues = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
 const TERMINAL_RECORD_TTL_MS = 30 * 60 * 1000
@@ -1516,6 +1523,61 @@ function retainExecution(id) {
   }
 }
 
+function withOwnerCommitLock(ownerId, operation) {
+  const previous = projectCommitQueues.get(ownerId) || Promise.resolve()
+  let release
+
+  const gate = new Promise(resolve => {
+    release = resolve
+  })
+  const tail = previous.then(() => gate)
+
+  projectCommitQueues.set(ownerId, tail)
+
+  return previous
+    .then(operation)
+    .finally(() => {
+      release()
+
+      if (projectCommitQueues.get(ownerId) === tail) {
+        projectCommitQueues.delete(ownerId)
+      }
+    })
+}
+
+async function getOwnerCommitRows(ownerId) {
+  const database = getDatabase()
+  const statement = await database.prepare(
+    `SELECT pc.id, pc.project_id, pc.created_at,
+       COALESCE(SUM(LENGTH(CAST(pcf.content AS BLOB))), 0) AS content_bytes
+     FROM project_commits pc
+     JOIN projects p ON p.id = pc.project_id
+     LEFT JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+     WHERE p.owner_id = ?
+     GROUP BY pc.id, pc.project_id, pc.created_at
+     ORDER BY pc.created_at ASC, pc.id ASC`
+  )
+
+  return statement.all([ownerId])
+}
+
+function appendCommitRetentionDeletes(statements, commitIds, ownerId) {
+  for (const commitId of commitIds) {
+    statements.push({
+      sql: 'DELETE FROM project_commit_files WHERE commit_id = ?',
+      args: [commitId]
+    })
+    statements.push({
+      sql: `DELETE FROM project_commits
+        WHERE id = ?
+          AND project_id IN (
+            SELECT id FROM projects WHERE owner_id = ?
+          )`,
+      args: [commitId, ownerId]
+    })
+  }
+}
+
 function setCorsHeaders(response) {
   response.setHeader('Access-Control-Allow-Origin', allowedOrigin)
   response.setHeader('Access-Control-Allow-Credentials', 'true')
@@ -1996,7 +2058,11 @@ async function listCommits(projectId, ownerId) {
   }
 
   const commitStatement = await database.prepare(
-    'SELECT id, author_id, message, created_at FROM project_commits WHERE project_id = ? ORDER BY created_at DESC'
+    `SELECT id, author_id, message, created_at
+     FROM project_commits
+     WHERE project_id = ?
+     ORDER BY created_at DESC, id DESC
+     LIMIT ${MAX_COMMITS_PER_PROJECT}`
   )
   const commits = await commitStatement.all([projectId])
 
