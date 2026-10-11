@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { getOriginPolicy, getTrustedOrigins } from '../../services/api/src/authPolicy.js'
+import { getOriginPolicy, getTrustedOrigins, selectCorsOrigin } from '../../services/api/src/authPolicy.js'
 
 test('production trusts only explicitly configured HTTP origins', () => {
   assert.deepEqual(
@@ -59,4 +59,28 @@ test('supports an explicit allowlist while keeping CORS header value singular', 
       corsOrigin: 'https://poligo.example'
     }
   )
+})
+
+test('selects each explicitly allowed request origin for CORS responses', () => {
+  const allowed = [
+    'https://poligo.example',
+    'https://preview.poligo.example'
+  ]
+
+  assert.equal(
+    selectCorsOrigin('https://poligo.example', allowed, allowed[0]),
+    allowed[0]
+  )
+  assert.equal(
+    selectCorsOrigin('https://preview.poligo.example', allowed, allowed[0]),
+    allowed[1]
+  )
+})
+
+test('uses a safe fallback origin for missing or untrusted CORS origins', () => {
+  const allowed = ['https://poligo.example']
+
+  assert.equal(selectCorsOrigin('', allowed, allowed[0]), allowed[0])
+  assert.equal(selectCorsOrigin('https://attacker.example', allowed, allowed[0]), allowed[0])
+  assert.equal(selectCorsOrigin('null', allowed, allowed[0]), allowed[0])
 })
