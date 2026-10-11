@@ -1697,11 +1697,22 @@ async function claimWorkspace(request, response) {
 async function getOwnerStorageBytes(ownerId) {
   const database = getDatabase()
   const storageStatement = await database.prepare(
-    'SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes ' +
-      'FROM projects p LEFT JOIN project_files pf ON pf.project_id = p.id ' +
-      'WHERE p.owner_id = ?'
+    `SELECT
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
+        FROM projects p
+        JOIN project_files pf ON pf.project_id = p.id
+        WHERE p.owner_id = ?
+      ), 0) +
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM projects p
+        JOIN project_commits pc ON pc.project_id = p.id
+        JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE p.owner_id = ?
+      ), 0) AS storage_bytes`
   )
-  const rows = await storageStatement.all([ownerId])
+  const rows = await storageStatement.all([ownerId, ownerId])
 
   return Number(rows[0]?.storage_bytes || 0)
 }
@@ -2008,6 +2019,15 @@ async function commitProject(projectId, ownerId, payload) {
 
   const message = normalizeCommitMessage(payload.message)
   const database = getDatabase()
+  const storedFiles = encryptProjectSecrets(project.files)
+  const newStorageBytes = getStoredFileBytes(storedFiles)
+  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
+  const storageLimitBytes = await getStorageLimitBytes(ownerId)
+
+  if (currentStorageBytes + newStorageBytes > storageLimitBytes) {
+    throw new Error('storage limit exceeded')
+  }
+
   const commitId = randomUUID()
   const now = Date.now()
   const statements = [
@@ -2016,8 +2036,6 @@ async function commitProject(projectId, ownerId, payload) {
       args: [commitId, projectId, ownerId, message, now]
     }
   ]
-
-  const storedFiles = encryptProjectSecrets(project.files)
 
   for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
@@ -2185,6 +2203,17 @@ async function deleteProject(projectId, ownerId) {
   }
 
   await database.batch([
+    {
+      sql: `DELETE FROM project_commit_files
+            WHERE commit_id IN (
+              SELECT id FROM project_commits WHERE project_id = ?
+            )`,
+      args: [projectId]
+    },
+    {
+      sql: 'DELETE FROM project_commits WHERE project_id = ?',
+      args: [projectId]
+    },
     {
       sql: 'DELETE FROM project_files WHERE project_id = ?',
       args: [projectId]
@@ -3470,7 +3499,14 @@ async function handleAdminUsersRequest(request, response) {
         COALESCE((
           SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
           FROM projects p
-          LEFT JOIN project_files pf ON pf.project_id = p.id
+          JOIN project_files pf ON pf.project_id = p.id
+          WHERE p.owner_id = u.id
+        ), 0) +
+        COALESCE((
+          SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+          FROM projects p
+          JOIN project_commits pc ON pc.project_id = p.id
+          JOIN project_commit_files pcf ON pcf.commit_id = pc.id
           WHERE p.owner_id = u.id
         ), 0) AS storage_bytes,
         COALESCE(usl.limit_bytes, ?) AS storage_limit_bytes
