@@ -1,8 +1,8 @@
 # Brand asset sources
 
-Language and platform logos in `apps/web/public/icons/` should use the upstream brand mark, not a hand-drawn approximation. The Node.js icon is sourced from the Simple Icons upstream SVG:
+Technology logos must use the original brand mark, not a hand-drawn approximation. The Node.js project icon is the official Node.js hexagon asset published on the project's own branding page:
 
-- Node.js SVG: https://github.com/simple-icons/simple-icons/blob/develop/icons/nodedotjs.svg
-- Simple Icons license (CC0 1.0): https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
+- Node.js brand policy and logo gallery: https://nodejs.org/ja/about/branding
+- Upstream SVG asset: https://github.com/nodejs/nodejs.org/blob/main/apps/site/public/static/logos/nodejsHex.svg
 
-Keep Poligo's own logo and favicon separate from third-party brand marks. When adding or replacing a technology logo, use the upstream brand asset and preserve its `title`/accessible name.
+Other language icons already use established brand-mark assets. Keep Poligo's own logo and favicon separate from third-party brand marks. When adding or replacing a technology logo, use the corresponding upstream brand asset and preserve an accessible title.
