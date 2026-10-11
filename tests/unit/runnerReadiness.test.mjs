@@ -58,23 +58,24 @@ test('fails closed on bad responses and unavailable runners', async () => {
 test('caches runner status and shares concurrent health probes', async () => {
   let now = 1_000
   let calls = 0
-  let resolveFetch
   const isReady = createRunnerReadinessProbe({
     now: () => now,
     cacheTtlMs: 5_000,
     fetchImpl: async () => {
       calls += 1
-      await new Promise(resolve => { resolveFetch = resolve })
+      await new Promise(resolve => setImmediate(resolve))
       return response({ service: 'runner', executionReady: true })
     }
   })
 
-  const first = isReady('https://runner.example.test')
-  const second = isReady('https://runner.example.test')
-  await Promise.resolve()
+  assert.deepEqual(
+    await Promise.all([
+      isReady('https://runner.example.test'),
+      isReady('https://runner.example.test')
+    ]),
+    [true, true]
+  )
   assert.equal(calls, 1)
-  resolveFetch()
-  assert.deepEqual(await Promise.all([first, second]), [true, true])
   assert.equal(await isReady('https://runner.example.test'), true)
   assert.equal(calls, 1)
 
