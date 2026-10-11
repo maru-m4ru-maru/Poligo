@@ -92,6 +92,25 @@ export const STORAGE_LIMIT_TRIGGERS = [
         WHERE user_id = NEW.owner_id
       ), ${DEFAULT_STORAGE_LIMIT_BYTES}) * ${COMMIT_HISTORY_STORAGE_MULTIPLIER};
   END`,
+  `CREATE TRIGGER IF NOT EXISTS enforce_project_owner_transfer_commit_count_limit
+  BEFORE UPDATE OF owner_id ON projects
+  WHEN NEW.owner_id != OLD.owner_id
+  BEGIN
+    SELECT RAISE(ABORT, 'commit history limit exceeded')
+    WHERE
+      COALESCE((
+        SELECT COUNT(*)
+        FROM project_commits pc
+        JOIN projects p ON p.id = pc.project_id
+        WHERE p.owner_id = NEW.owner_id
+          AND p.id != NEW.id
+      ), 0) +
+      COALESCE((
+        SELECT COUNT(*)
+        FROM project_commits
+        WHERE project_id = NEW.id
+      ), 0) > ${MAX_COMMITS_PER_ACCOUNT};
+  END`,
   `CREATE TRIGGER IF NOT EXISTS enforce_project_commit_count_limits
   BEFORE INSERT ON project_commits
   BEGIN
