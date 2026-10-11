@@ -116,9 +116,13 @@ test('GET /health is available without a bearer token', async () => {
   const body = await response.json()
 
   assert.equal(response.status, 200)
-  assert.equal(body.status, 'ok')
+  assert.equal(
+    body.status,
+    body.terminalReady && body.runnerTokenConfigured ? 'ok' : 'degraded'
+  )
   assert.equal(body.service, 'runner')
   assert.equal(body.terminalBackend, 'process')
+  assert.equal(body.runnerTokenConfigured, true)
   assert.equal(typeof body.terminalReady, 'boolean')
 })
 
