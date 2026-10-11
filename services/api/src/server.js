@@ -1774,7 +1774,7 @@ async function getProjectById(projectId, ownerId) {
   )
   const fileRows = await fileStatement.all([projectId])
 
-  const files = {}
+  const files = Object.create(null)
 
   for (const file of fileRows) {
     files[file.path] = file.content
@@ -1964,7 +1964,7 @@ async function getCommit(projectId, ownerId, commitId) {
     'SELECT path, content FROM project_commit_files WHERE commit_id = ? ORDER BY path'
   )
   const fileRows = await fileStatement.all([commitId])
-  const files = {}
+  const files = Object.create(null)
 
   for (const file of fileRows) {
     files[file.path] = file.content
@@ -2006,7 +2006,11 @@ async function ensureInitialCommit(projectId, ownerId) {
     }
   ]
 
-  const storedFiles = encryptProjectSecrets(project.files)
+  const safeProject = normalizeProjectPayload({
+    name: project.name,
+    files: project.files
+  })
+  const storedFiles = encryptProjectSecrets(safeProject.files)
 
   for (const [filePath, fileContent] of Object.entries(storedFiles)) {
     statements.push({
@@ -2034,7 +2038,11 @@ async function commitProject(projectId, ownerId, payload) {
 
   const message = normalizeCommitMessage(payload.message)
   const database = getDatabase()
-  const storedFiles = encryptProjectSecrets(project.files)
+  const safeProject = normalizeProjectPayload({
+    name: project.name,
+    files: project.files
+  })
+  const storedFiles = encryptProjectSecrets(safeProject.files)
   const newStorageBytes = getStoredFileBytes(storedFiles)
   const currentStorageBytes = await getOwnerStorageBytes(ownerId)
   const storageLimitBytes = await getStorageLimitBytes(ownerId)
@@ -2065,7 +2073,7 @@ async function commitProject(projectId, ownerId, payload) {
     id: commitId,
     message,
     createdAt: now,
-    files: project.files
+    files: safeProject.files
   }
 }
 
@@ -2121,10 +2129,12 @@ async function restoreCommit(projectId, ownerId, commitId) {
     return null
   }
 
-  return updateProject(projectId, ownerId, {
+  const safeCommit = normalizeProjectPayload({
     name: project.name,
     files: commit.files
   })
+
+  return updateProject(projectId, ownerId, safeCommit)
 }
 
 async function handleSourceControlRequest(request, response) {
@@ -5826,7 +5836,12 @@ const server = http.createServer(async (request, response) => {
           ? 401
           : message === 'invalid workspace id' ||
               message === 'commit message is required' ||
-              message === 'storage limit exceeded'
+              message === 'storage limit exceeded' ||
+              message.startsWith('invalid project file path') ||
+              message.startsWith('project files') ||
+              message.startsWith('project is too large') ||
+              message.startsWith('too many project files') ||
+              message.startsWith('invalid project name')
             ? 400
             : 500
 
