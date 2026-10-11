@@ -28,11 +28,21 @@ async function request(path, options = {}) {
   const timeoutMs = Number.isSafeInteger(options.timeoutMs) && options.timeoutMs > 0
     ? options.timeoutMs
     : 60_000
-  const { timeoutMs: ignoredTimeoutMs, signal: ignoredSignal, ...requestOptions } = options
+  const externalSignal = options.signal
+  const requestOptions = { ...options }
+  delete requestOptions.timeoutMs
+  delete requestOptions.signal
   const controller = new AbortController()
+  const abortFromCaller = () => controller.abort(externalSignal.reason)
   const timeout = setTimeout(() => {
     controller.abort(new DOMException('API request timed out', 'TimeoutError'))
   }, timeoutMs)
+
+  if (externalSignal?.aborted) {
+    abortFromCaller()
+  } else {
+    externalSignal?.addEventListener('abort', abortFromCaller, { once: true })
+  }
 
   try {
     const response = await fetch(API_URL + path, {
@@ -63,6 +73,7 @@ async function request(path, options = {}) {
     return response.status === 204 ? null : await response.json()
   } finally {
     clearTimeout(timeout)
+    externalSignal?.removeEventListener('abort', abortFromCaller)
   }
 }
 
