@@ -170,7 +170,7 @@ async function prepareWorkspace(files) {
 
   try {
     for (const [name, content] of entries) {
-      const safePath = normalizeFilePath(name)
+      const safePath = normalizeRelativeFilePath(name)
 
       if (typeof content !== 'string') {
         throw new Error('file content must be text')
@@ -229,7 +229,7 @@ async function executeJob(job) {
   const args = normalizeArguments(job.args)
   const stdin = normalizeStdin(job.stdin)
   const environment = normalizeEnvironment(job.env)
-  const entrypoint = normalizeFilePath(job.entrypoint || language.entrypoint)
+  const entrypoint = normalizeRelativeFilePath(job.entrypoint || language.entrypoint)
 
   if (!Object.prototype.hasOwnProperty.call(files, entrypoint)) {
     throw new Error('entrypoint file not found')
