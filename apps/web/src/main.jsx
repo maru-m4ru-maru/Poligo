@@ -17,6 +17,7 @@ import {
 } from './projectStore'
 import { authClient } from './auth-client'
 import { getExecutionTarget } from './executionLanguage'
+import { lookupFileMetadata } from './fileMetadata'
 import { hasProjectFilePathConflict, normalizeProjectFilePath } from './projectFilePaths'
 import { isTrustedPreviewMessage } from './previewMessagePolicy'
 
@@ -147,7 +148,7 @@ function getFileMeta(name) {
     ? rawExtension.slice(1).toLowerCase()
     : ''
 
-  return FILE_META[extension] || {
+  return lookupFileMetadata(extension, FILE_META) || {
     language: 'plaintext',
     kind: 'text'
   }
