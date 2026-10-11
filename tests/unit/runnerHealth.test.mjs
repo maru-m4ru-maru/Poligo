@@ -140,3 +140,74 @@ test('health checks remain public without disabling Runner API authentication', 
     error: 'unauthorized'
   })
 })
+
+test('authenticated language discovery exposes Node.js and only registered runtimes', async () => {
+  const response = await fetch(baseUrl + '/v1/languages', {
+    headers: {
+      Authorization: 'Bearer ' + runnerToken
+    }
+  })
+  const body = await response.json()
+
+  assert.equal(response.status, 200)
+  assert.ok(body.languages.includes('node'))
+  assert.ok(body.languages.includes('python'))
+  assert.ok(body.languages.includes('c'))
+  assert.ok(body.languages.includes('cpp'))
+  assert.ok(!body.languages.includes('typescript'))
+})
+
+test('unsupported runner languages return the exact fallback signal without starting a job', async () => {
+  const response = await fetch(baseUrl + '/v1/run', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + runnerToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      id: 'unsupported-language-test',
+      language: 'typescript',
+      entrypoint: 'main.ts',
+      files: {
+        'main.ts': 'console.log("fallback")'
+      }
+    })
+  })
+
+  assert.equal(response.status, 400)
+  assert.deepEqual(await response.json(), {
+    error: 'unsupported language'
+  })
+})
+
+test('runner rejects malformed execution payloads and keeps authentication required', async () => {
+  const missingTokenResponse = await fetch(baseUrl + '/v1/run', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      language: 'node',
+      entrypoint: 'main.js',
+      files: {
+        'main.js': 'console.log("no")'
+      }
+    })
+  })
+
+  assert.equal(missingTokenResponse.status, 401)
+
+  const malformedResponse = await fetch(baseUrl + '/v1/run', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + runnerToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify([])
+  })
+
+  assert.equal(malformedResponse.status, 400)
+  assert.deepEqual(await malformedResponse.json(), {
+    error: 'execution request must be an object'
+  })
+})
