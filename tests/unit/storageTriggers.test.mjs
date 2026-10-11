@@ -47,7 +47,7 @@ for statement in payload["triggers"]:
 db.execute("INSERT INTO projects (id, owner_id) VALUES ('alice-project', 'alice')")
 db.execute("INSERT INTO projects (id, owner_id) VALUES ('bob-project', 'bob')")
 db.execute("INSERT INTO user_storage_limits (user_id, limit_bytes) VALUES ('alice', 4)")
-db.execute("INSERT INTO user_storage_limits (user_id, limit_bytes) VALUES ('bob', 4)")
+db.execute("INSERT INTO user_storage_limits (user_id, limit_bytes) VALUES ('bob', 2000000)")
 
 db.execute("INSERT INTO project_files (project_id, path, content) VALUES ('alice-project', 'live.txt', 'abcd')")
 
@@ -97,6 +97,29 @@ must_reject(
     "UPDATE projects SET owner_id = 'alice' WHERE id = 'transfer-project'",
     (),
     "storage limit exceeded"
+)
+assert db.execute("SELECT owner_id FROM projects WHERE id = 'transfer-project'").fetchone()[0] == "legacy"
+
+# A legacy workspace transfer must not bypass the account-wide commit count limit.
+db.execute("INSERT INTO project_commits (id, project_id) VALUES ('legacy-transfer-commit', 'transfer-project')")
+for project_index in range(19):
+    project_id = "bob-project-" + str(project_index)
+    db.execute("INSERT INTO projects (id, owner_id) VALUES (?, 'bob')", (project_id,))
+    for commit_index in range(50):
+        db.execute(
+            "INSERT INTO project_commits (id, project_id) VALUES (?, ?)",
+            (project_id + "-commit-" + str(commit_index), project_id)
+        )
+for commit_index in range(49):
+    db.execute(
+        "INSERT INTO project_commits (id, project_id) VALUES (?, 'bob-project')",
+        ("bob-project-extra-" + str(commit_index),)
+    )
+assert db.execute("SELECT COUNT(*) FROM project_commits pc JOIN projects p ON p.id = pc.project_id WHERE p.owner_id = 'bob'").fetchone()[0] == 1000
+must_reject(
+    "UPDATE projects SET owner_id = 'bob' WHERE id = 'transfer-project'",
+    (),
+    "commit history limit exceeded"
 )
 assert db.execute("SELECT owner_id FROM projects WHERE id = 'transfer-project'").fetchone()[0] == "legacy"
 print("SQLite storage and commit-history triggers: PASS")
