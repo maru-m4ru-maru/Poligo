@@ -36,7 +36,7 @@ def create_account(page, email, password):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = f"poligo-typescript-api-{suffix}@example.com"
+    email = f"poligo-typescript-api-{suffix}@gmail.com"
     password = "PoligoTypeScriptAPIDiagnostic!" + uuid.uuid4().hex[:18]
 
     with sync_playwright() as playwright:

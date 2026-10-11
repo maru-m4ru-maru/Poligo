@@ -44,7 +44,7 @@ def api_request(page, method, path, payload=None):
 
 def main():
     suffix = uuid.uuid4().hex
-    email = f"poligo-storage-e2e-{suffix}@example.com"
+    email = f"poligo-storage-e2e-{suffix}@gmail.com"
     password = "PoligoStorageE2E!" + uuid.uuid4().hex[:18]
     project_ids = []
 
