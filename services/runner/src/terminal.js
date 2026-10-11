@@ -723,7 +723,8 @@ export async function attachTerminalSocket(id, socket) {
 
     if (
       payload?.type === 'input' &&
-      typeof payload.data === 'string'
+      typeof payload.data === 'string' &&
+      Buffer.byteLength(payload.data, 'utf8') <= 65_536
     ) {
       session.stream.write(payload.data)
       return
