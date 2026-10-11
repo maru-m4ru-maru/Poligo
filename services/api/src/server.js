@@ -5890,6 +5890,28 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  const requestPath = new URL(
+    request.url || '/',
+    'http://localhost'
+  ).pathname
+  const isHealthRequest =
+    (request.method === 'GET' || request.method === 'HEAD') &&
+    requestPath === '/api/health'
+
+  if (!isHealthRequest) {
+    const startupReady = await databaseInitializationPromise
+
+    if (!startupReady) {
+      response.setHeader('Retry-After', '1')
+      send(response, 503, {
+        error: databaseInitializationError
+          ? 'database initialization failed; check /api/health and API logs'
+          : 'database initialization is still in progress'
+      })
+      return
+    }
+  }
+
   if (request.url.startsWith('/api/auth/')) {
     setCorsHeaders(response)
     const authReady = await databaseInitializationPromise
