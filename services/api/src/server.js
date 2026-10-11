@@ -12,6 +12,10 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin } from './adminPolicy.js'
+import {
+  assertNoFileDirectoryConflicts,
+  isValidProjectFilePath
+} from './projectValidation.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -268,15 +272,7 @@ function normalizeExecutionFiles(files) {
   let totalBytes = 0
 
   for (const [path, value] of Object.entries(files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path.includes('\\') ||
-      path.includes('\0') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
-    ) {
+    if (!isValidProjectFilePath(path)) {
       throw new Error('invalid project file path')
     }
 
@@ -296,6 +292,11 @@ function normalizeExecutionFiles(files) {
   if (Object.keys(normalized).length > MAX_FILES) {
     throw new Error('too many project files')
   }
+
+  assertNoFileDirectoryConflicts(
+    Object.keys(normalized),
+    'project file path conflicts with a directory'
+  )
 
   return normalized
 }
@@ -1736,6 +1737,10 @@ function getStoredFileBytes(files) {
 }
 
 function normalizeProjectPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('project payload must be an object')
+  }
+
   const name = typeof payload.name === 'string'
     ? payload.name.trim().slice(0, 120)
     : ''
@@ -1752,14 +1757,7 @@ function normalizeProjectPayload(payload) {
   let totalBytes = 0
 
   for (const [path, value] of Object.entries(payload.files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path.includes('\\') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
-    ) {
+    if (!isValidProjectFilePath(path)) {
       throw new Error('invalid project file path')
     }
 
@@ -1779,6 +1777,11 @@ function normalizeProjectPayload(payload) {
   if (Object.keys(files).length > MAX_FILES) {
     throw new Error('too many project files')
   }
+
+  assertNoFileDirectoryConflicts(
+    Object.keys(files),
+    'project file path conflicts with a directory'
+  )
 
   return {
     name,
@@ -3840,7 +3843,7 @@ async function handleAdminUsersRequest(request, response) {
       throw new Error('test account deletion cannot target an administrator')
     }
 
-    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(email)) {
+    if (!/^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(String(target.email || '').trim().toLowerCase())) {
       throw new Error('test account deletion is restricted to generated E2E accounts')
     }
 
