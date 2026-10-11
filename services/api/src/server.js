@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import WebSocket, { WebSocketServer } from 'ws'
 import ts from 'typescript'
@@ -1602,17 +1603,9 @@ function send(response, status, body) {
 }
 
 async function readJson(request) {
-  let body = ''
-
-  for await (const chunk of request) {
-    body += chunk
-
-    if (Buffer.byteLength(body, 'utf8') > MAX_REQUEST_BYTES) {
-      throw new Error('request too large')
-    }
-  }
-
-  return body ? JSON.parse(body) : {}
+  return readJsonBody(request, {
+    maxBytes: MAX_REQUEST_BYTES
+  })
 }
 
 async function getWorkspaceId(request, sessionUserId) {
