@@ -2095,73 +2095,121 @@ function IDE({ projectId }) {
 
   async function handleFileUpload(event) {
     const uploaded = Array.from(event.target.files || [])
-
     event.target.value = ''
 
-    for (const file of uploaded) {
-      const path = file.name.replace(/\\/g, '/').replace(/^\/+/, '')
+    if (!uploaded.length) {
+      return
+    }
 
-      if (
-        !path ||
-        path.split('/').some(part => !part || part === '.' || part === '..')
-      ) {
+    const textExtensions = new Set([
+      'html',
+      'htm',
+      'css',
+      'js',
+      'mjs',
+      'cjs',
+      'jsx',
+      'ts',
+      'tsx',
+      'json',
+      'md',
+      'txt',
+      'svg',
+      'xml'
+    ])
+    const nextFiles = { ...files }
+    const encoder = new TextEncoder()
+    let currentBytes = Object.values(nextFiles).reduce(
+      (total, value) => total + encoder.encode(value).byteLength,
+      0
+    )
+    let activePath = ''
+    let firstError = ''
+
+    for (const file of uploaded) {
+      const path = file.name.replace(/\\/g, '/').replace(/^\\/+/, '')
+
+      if (!isSafeProjectFilePath(path)) {
+        firstError ||= 'アップロードするファイルのパスが不正です。'
         continue
       }
 
       const extension = fileExtension(path)
-      const textExtensions = new Set([
-        'html',
-        'htm',
-        'css',
-        'js',
-        'mjs',
-        'jsx',
-        'ts',
-        'tsx',
-        'json',
-        'md',
-        'txt',
-        'svg',
-        'xml'
-      ])
+      const isText = textExtensions.has(extension) || file.type.startsWith('text/')
+      const contentPrefix = 'data:' + (file.type || 'application/octet-stream') + ';base64,'
+      const expectedBytes = isText
+        ? file.size
+        : Math.ceil(file.size / 3) * 4 + encoder.encode(contentPrefix).byteLength
+      const remainingBytes = 5_000_000 - currentBytes
+
+      if (expectedBytes > remainingBytes) {
+        firstError ||= 'プロジェクトの保存容量を超えるため、ファイルを追加できませんでした。'
+        continue
+      }
 
       let value
 
-      if (textExtensions.has(extension) || file.type.startsWith('text/')) {
-        value = await file.text()
-      } else {
-        const buffer = await file.arrayBuffer()
-        const bytes = new Uint8Array(buffer)
-        let binary = ''
+      try {
+        if (isText) {
+          value = await file.text()
+        } else {
+          const buffer = await file.arrayBuffer()
+          const bytes = new Uint8Array(buffer)
+          let binary = ''
 
-        for (let offset = 0; offset < bytes.length; offset += 8192) {
-          binary += String.fromCharCode(
-            ...bytes.subarray(offset, offset + 8192)
-          )
+          for (let offset = 0; offset < bytes.length; offset += 8192) {
+            binary += String.fromCharCode(
+              ...bytes.subarray(offset, offset + 8192)
+            )
+          }
+
+          value = contentPrefix + btoa(binary)
         }
-
-        value =
-          'data:' +
-          (file.type || 'application/octet-stream') +
-          ';base64,' +
-          btoa(binary)
+      } catch {
+        firstError ||= 'ファイルを読み込めませんでした: ' + file.name
+        continue
       }
 
-      setFiles(current => ({
-        ...current,
+      const nextBytes = currentBytes -
+        (nextFiles[path] ? encoder.encode(nextFiles[path]).byteLength : 0) +
+        encoder.encode(value).byteLength
+      const candidateFiles = {
+        ...nextFiles,
         [path]: value
-      }))
-      setActiveFile(path)
-      setOpenFiles(current =>
-        current.includes(path)
-          ? current
-          : [...current, path]
-      )
+      }
+
+      if (
+        nextBytes > 5_000_000 ||
+        !areValidProjectPaths(Object.keys(candidateFiles))
+      ) {
+        firstError ||= 'ファイル名が既存のファイルまたはフォルダーと衝突しているか、保存容量を超えています。'
+        continue
+      }
+
+      nextFiles[path] = value
+      currentBytes = nextBytes
+      activePath = path
     }
 
-    if (uploaded.length) {
+    if (activePath) {
+      filesRef.current = nextFiles
+      setFiles(nextFiles)
+      setActiveFile(activePath)
+      setOpenFiles(current => {
+        const merged = [...current]
+
+        for (const path of Object.keys(nextFiles)) {
+          if (!merged.includes(path)) {
+            merged.push(path)
+          }
+        }
+
+        return merged
+      })
       setSaveStatus('saving')
     }
+
+    setWorkspaceError(firstError)
   }
 
   function cancelCreateFile() {
