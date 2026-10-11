@@ -1,6 +1,9 @@
 import http from 'node:http'
 import { randomUUID } from 'node:crypto'
-import WebSocket from 'ws'
+import { createRequire } from 'node:module'
+
+const requireRunnerDependency = createRequire(new URL('../../services/runner/package.json', import.meta.url))
+const WebSocket = requireRunnerDependency('ws')
 
 const token = 'terminal-e2e-token'
 const baseUrl = 'http://127.0.0.1:10001'
