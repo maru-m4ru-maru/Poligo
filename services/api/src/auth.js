@@ -10,12 +10,18 @@ import { LibsqlDialect } from '@libsql/kysely-libsql'
 import { Kysely } from 'kysely'
 import { getDatabase } from './turso.js'
 import { ensureUserUsernameColumn } from './authSchema.js'
+import { getTrustedOrigins } from './authPolicy.js'
 
 const databaseUrl = process.env.TURSO_DATABASE_URL || ''
 const databaseToken = process.env.TURSO_AUTH_TOKEN || ''
 const betterAuthSecret = process.env.BETTER_AUTH_SECRET || ''
 const betterAuthUrl = process.env.BETTER_AUTH_URL || ''
-const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173'
+const runtimeEnvironment = process.env.NODE_ENV === 'production' || process.env.RENDER_GIT_COMMIT
+  ? 'production'
+  : 'development'
+const allowedOrigin = process.env.CORS_ORIGIN || (
+  runtimeEnvironment === 'production' ? '' : 'http://localhost:5173'
+)
 
 if (!databaseUrl || !databaseToken) {
   throw new Error('Turso is not configured')
@@ -32,11 +38,7 @@ const database = new Kysely({
   })
 })
 
-const trustedOrigins = [
-  allowedOrigin,
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
-].filter(Boolean)
+const trustedOrigins = getTrustedOrigins(allowedOrigin, runtimeEnvironment)
 
 async function createFallbackUsername(email) {
   const authDatabase = getDatabase()
@@ -247,19 +249,35 @@ export async function initializeAuthDatabase() {
 
   await ensureUserUsernameColumn(database)
 
+  const adminUsername = 'maru_m4ru_maru'
+  const adminUserStatement = await database.prepare(
+    'SELECT id FROM "user" WHERE lower(email) = lower(?) LIMIT 1'
+  )
+  const adminUsers = await adminUserStatement.all(['code-maru@outlook.jp'])
+
+  if (adminUsers.length) {
+    const usernameConflictStatement = await database.prepare(
+      'SELECT id FROM "user" WHERE lower(username) = lower(?) AND id != ? LIMIT 1'
+    )
+    const usernameConflicts = await usernameConflictStatement.all([
+      adminUsername,
+      adminUsers[0].id
+    ])
+
+    if (!usernameConflicts.length) {
+      await database.batch([
+        {
+          sql: `UPDATE "user"
+            SET username = ?
+            WHERE id = ?
+              AND (username IS NULL OR username = '')`,
+          args: [adminUsername, adminUsers[0].id]
+        }
+      ], 'immediate')
+    }
+  }
+
   await database.batch([
-    {
-      sql: `UPDATE "user"
-        SET username = 'maru_m4ru_maru'
-        WHERE lower(email) = lower(?)
-          AND (username IS NULL OR username = '')`,
-      args: ['code-maru@outlook.jp']
-    },
-    {
-      sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_username_nocase
-        ON "user"(username COLLATE NOCASE)
-        WHERE username IS NOT NULL AND username != ''`
-    },
     {
       sql: 'CREATE INDEX IF NOT EXISTS idx_user_bans_banned_at ON user_bans(banned_at)'
     },
@@ -268,8 +286,76 @@ export async function initializeAuthDatabase() {
     },
     {
       sql: 'CREATE INDEX IF NOT EXISTS idx_announcements_target_user ON announcements(target_user_id)'
+    },
+    {
+      sql: `CREATE TRIGGER IF NOT EXISTS trg_user_username_nocase_insert
+        BEFORE INSERT ON "user"
+        WHEN NEW.username IS NOT NULL AND NEW.username != ''
+          AND EXISTS (
+            SELECT 1 FROM "user"
+            WHERE lower(username) = lower(NEW.username)
+          )
+        BEGIN
+          SELECT RAISE(ABORT, 'username already exists');
+        END`
+    },
+    {
+      sql: `CREATE TRIGGER IF NOT EXISTS trg_user_username_nocase_update
+        BEFORE UPDATE OF username ON "user"
+        WHEN NEW.username IS NOT NULL AND NEW.username != ''
+          AND EXISTS (
+            SELECT 1 FROM "user"
+            WHERE id != NEW.id AND lower(username) = lower(NEW.username)
+          )
+        BEGIN
+          SELECT RAISE(ABORT, 'username already exists');
+        END`
+    },
+    {
+      sql: `CREATE TRIGGER IF NOT EXISTS trg_user_email_nocase_insert
+        BEFORE INSERT ON "user"
+        WHEN EXISTS (
+          SELECT 1 FROM "user"
+          WHERE lower(email) = lower(NEW.email)
+        )
+        BEGIN
+          SELECT RAISE(ABORT, 'user email already exists');
+        END`
+    },
+    {
+      sql: `CREATE TRIGGER IF NOT EXISTS trg_user_email_nocase_update
+        BEFORE UPDATE OF email ON "user"
+        WHEN EXISTS (
+          SELECT 1 FROM "user"
+          WHERE id != NEW.id AND lower(email) = lower(NEW.email)
+        )
+        BEGIN
+          SELECT RAISE(ABORT, 'user email already exists');
+        END`
     }
   ], 'immediate')
+
+  const duplicateUsernames = await database.prepare(
+    `SELECT lower(username) AS normalized_username
+     FROM "user"
+     WHERE username IS NOT NULL AND username != ''
+     GROUP BY lower(username)
+     HAVING COUNT(*) > 1
+     LIMIT 1`
+  )
+  const duplicateUsernameRows = await duplicateUsernames.all()
+
+  if (duplicateUsernameRows.length) {
+    console.warn('A case-insensitive username index was not created because duplicate usernames already exist.')
+  } else {
+    await database.batch([
+      {
+        sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_username_nocase
+          ON "user"(username COLLATE NOCASE)
+          WHERE username IS NOT NULL AND username != ''`
+      }
+    ], 'immediate')
+  }
 
   const duplicateEmails = await database.prepare(
     `SELECT lower(email) AS normalized_email
@@ -286,8 +372,7 @@ export async function initializeAuthDatabase() {
     await database.batch([
       {
         sql: `CREATE UNIQUE INDEX IF NOT EXISTS idx_user_email_nocase
-          ON "user"(email COLLATE NOCASE)`,
-        args: []
+          ON "user"(email COLLATE NOCASE)`
       }
     ], 'immediate')
   }
