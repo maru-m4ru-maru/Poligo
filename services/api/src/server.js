@@ -2044,6 +2044,15 @@ async function commitProject(projectId, ownerId, payload) {
 
   const message = normalizeCommitMessage(payload.message)
   const database = getDatabase()
+  const commitCountStatement = await database.prepare(
+    'SELECT COUNT(*) AS count FROM project_commits WHERE project_id = ?'
+  )
+  const commitCountRows = await commitCountStatement.all([projectId])
+
+  if (Number(commitCountRows[0]?.count || 0) >= 100) {
+    throw new Error('project commit limit reached')
+  }
+
   const commitId = randomUUID()
   const now = Date.now()
   const statements = [
@@ -2228,6 +2237,14 @@ async function deleteProject(projectId, ownerId) {
   }
 
   await database.batch([
+    {
+      sql: 'DELETE FROM project_commit_files WHERE commit_id IN (SELECT id FROM project_commits WHERE project_id = ?)',
+      args: [projectId]
+    },
+    {
+      sql: 'DELETE FROM project_commits WHERE project_id = ?',
+      args: [projectId]
+    },
     {
       sql: 'DELETE FROM project_files WHERE project_id = ?',
       args: [projectId]
@@ -5742,7 +5759,10 @@ const server = http.createServer(async (request, response) => {
           ? 400
           : message === 'authentication required'
             ? 401
-            : 500
+            : message === 'project commit limit reached' ||
+                message === 'storage limit exceeded'
+              ? 409
+              : 500
 
       send(response, getRequestInputStatus(error) || status, {
         error: message
