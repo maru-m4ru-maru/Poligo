@@ -25,6 +25,7 @@ import {
   MAX_COMMITS_PER_PROJECT,
   planCommitRetention
 } from './commitRetention.js'
+import { parseSourceControlRoute } from './sourceControlPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -2349,21 +2350,25 @@ async function restoreCommit(projectId, ownerId, commitId) {
 
 async function handleSourceControlRequest(request, response) {
   const url = new URL(request.url, 'http://localhost')
-  const parts = url.pathname.split('/').filter(Boolean)
-  const projectId = parts[2]
-  const commitId = parts[4]
-  const ownerId = await getOwnerId(request)
+  const route = parseSourceControlRoute(request.method, url.pathname)
 
-  if (!projectId || parts[1] !== 'projects') {
-    send(response, 400, { error: 'invalid source control route' })
+  if (!route) {
+    send(response, 404, {
+      error: 'not found'
+    })
     return
   }
 
-  if (request.method === 'GET' && parts[3] === 'commits' && !commitId) {
+  const { projectId, commitId, operation } = route
+  const ownerId = await getOwnerId(request)
+
+  if (operation === 'list') {
     let commits = await listCommits(projectId, ownerId)
 
     if (commits === null) {
-      send(response, 404, { error: 'project not found' })
+      send(response, 404, {
+        error: 'project not found'
+      })
       return
     }
 
@@ -2371,28 +2376,40 @@ async function handleSourceControlRequest(request, response) {
       commits = await ensureInitialCommit(projectId, ownerId)
     }
 
-    send(response, 200, { commits })
-    return
-  }
-
-  if (request.method === 'GET' && parts[3] === 'commits' && commitId && parts[5] === 'diff') {
-    const diff = await getCommitDiff(projectId, ownerId, commitId)
-
-    if (!diff) {
-      send(response, 404, { error: 'commit not found' })
+    if (commits === null) {
+      send(response, 404, {
+        error: 'project not found'
+      })
       return
     }
 
-    send(response, 200, diff)
+    send(response, 200, {
+      commits
+    })
     return
   }
 
-  if (request.method === 'GET' && parts[3] === 'commits' && commitId) {
-    const commit = await getCommit(projectId, ownerId, commitId)
-
+  if (operation === 'create') {
+    const commit = await commitProject(projectId, ownerId, await readJson(request))
 
     if (!commit) {
-      send(response, 404, { error: 'commit not found' })
+      send(response, 404, {
+        error: 'project not found'
+      })
+      return
+    }
+
+    send(response, 201, commit)
+    return
+  }
+
+  if (operation === 'get') {
+    const commit = await getCommit(projectId, ownerId, commitId)
+
+    if (!commit) {
+      send(response, 404, {
+        error: 'commit not found'
+      })
       return
     }
 
@@ -2400,26 +2417,27 @@ async function handleSourceControlRequest(request, response) {
     return
   }
 
-  if (request.method === 'POST' && parts[3] === 'commits' && !commitId) {
-    const commit = await commitProject(projectId, ownerId, await readJson(request))
+  if (operation === 'diff') {
+    const diff = await getCommitDiff(projectId, ownerId, commitId)
 
-
-    if (!commit) {
-      send(response, 404, { error: 'project not found' })
+    if (!diff) {
+      send(response, 404, {
+        error: 'commit not found'
+      })
       return
     }
 
-
-    send(response, 201, commit)
+    send(response, 200, diff)
     return
   }
 
-  if (request.method === 'POST' && parts[3] === 'commits' && commitId && parts[5] === 'restore') {
+  if (operation === 'restore') {
     const restored = await restoreCommit(projectId, ownerId, commitId)
 
-
     if (!restored) {
-      send(response, 404, { error: 'commit not found' })
+      send(response, 404, {
+        error: 'commit not found'
+      })
       return
     }
 
@@ -2427,7 +2445,9 @@ async function handleSourceControlRequest(request, response) {
     return
   }
 
-  send(response, 404, { error: 'not found' })
+  send(response, 404, {
+    error: 'not found'
+  })
 }
 
 async function handleDashboardRequest(request, response) {
@@ -5998,7 +6018,7 @@ const server = http.createServer(async (request, response) => {
           ? 400
           : message === 'authentication required'
             ? 401
-            : message === 'commit history storage limit exceeded'
+            : message.includes('commit history')
               ? 409
               : 500
 
