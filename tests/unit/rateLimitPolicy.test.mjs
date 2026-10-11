@@ -31,7 +31,7 @@ test('quotas are isolated per user and expired events are pruned', () => {
   assert.equal(consumeUserQuota(state, 'alice', 11_000, 10_000, 1), 0)
   pruneUserQuotaState(state, 11_000, 10_000)
   assert.deepEqual(state.get('alice'), [11_000])
-  assert.deepEqual(state.get('bob'), [])
+  assert.equal(state.has('bob'), false)
 })
 
 test('rejects malformed quota configuration instead of failing open', () => {
