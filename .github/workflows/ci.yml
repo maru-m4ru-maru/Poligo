@@ -47,11 +47,37 @@ jobs:
       - run: node --check services/api/src/auth.js
       - run: node --check services/api/src/authSchema.js
       - run: node --check services/api/src/adminPolicy.js
+      - run: node --check services/api/src/projectValidation.js
+      - run: node --check services/api/src/ownerMutationLock.js
+      - run: node --check services/api/src/storageAccounting.js
+      - run: node --check services/api/src/secretStore.js
+      - run: node --check services/api/src/turso.js
       - run: node --check services/api/src/terminalSync.js
       - run: npm install --prefix services/runner
       - run: node --test tests/unit/*.test.mjs
       - run: node --check services/runner/src/languages.js
+      - run: node --check services/runner/src/filePaths.js
+      - run: node --check services/runner/src/dockerLogs.js
       - run: node --check services/runner/src/executor.js
+      - run: node --check services/runner/src/terminal.js
+      - run: node --check services/runner/src/terminal-process.js
+      - run: node --check services/runner/src/workspace-sync.js
       - run: node --check services/runner/src/server.js
-      - run: python3 -m py_compile tests/e2e/test_terminal_production.py
-      - run: python3 -m py_compile tests/e2e/test_admin_controls_production.py
+      - run: python3 -m compileall -q tests/e2e
+      - name: Run Docker terminal end-to-end test
+        run: |
+          set -euo pipefail
+          PORT=10001 RUNNER_TOKEN=terminal-e2e-token node services/runner/src/server.js > /tmp/poligo-terminal-runner-e2e.log 2>&1 &
+          runner_pid=$!
+          trap 'kill "$runner_pid" 2>/dev/null || true; wait "$runner_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:10001/health >/dev/null; then
+              break
+            fi
+            sleep 0.25
+          done
+          if ! curl -fsS http://127.0.0.1:10001/health >/dev/null; then
+            cat /tmp/poligo-terminal-runner-e2e.log
+            exit 1
+          fi
+          node tests/e2e/test_terminal_runner.mjs
