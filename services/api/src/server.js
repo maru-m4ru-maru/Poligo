@@ -12,6 +12,8 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin } from './adminPolicy.js'
+import { createKeyedLock } from './ownerMutationLock.js'
+import { calculateStorageBytes } from './storageAccounting.js'
 import {
   assertNoFileDirectoryConflicts,
   isValidProjectFilePath
@@ -59,6 +61,7 @@ let databaseInitializationPromise = Promise.resolve(false)
 let databaseInitializationError = null
 let databaseInitializationComplete = false
 const executionRateState = new Map()
+const withOwnerMutationLock = createKeyedLock()
 const executionOwners = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
@@ -1708,14 +1711,30 @@ async function claimWorkspace(request, response) {
 async function getOwnerStorageBytes(ownerId) {
   const database = getDatabase()
   const storageStatement = await database.prepare(
-    'SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0) AS storage_bytes ' +
-      'FROM projects p LEFT JOIN project_files pf ON pf.project_id = p.id ' +
-      'WHERE p.owner_id = ?'
+    `SELECT
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
+        FROM projects p
+        JOIN project_files pf ON pf.project_id = p.id
+        WHERE p.owner_id = ?
+      ), 0) AS project_bytes,
+      COALESCE((
+        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
+        FROM projects p
+        JOIN project_commits pc ON pc.project_id = p.id
+        JOIN project_commit_files pcf ON pcf.commit_id = pc.id
+        WHERE p.owner_id = ?
+      ), 0) AS history_bytes`
   )
-  const rows = await storageStatement.all([ownerId])
+  const rows = await storageStatement.all([ownerId, ownerId])
+  const row = rows[0] || {}
 
-  return Number(rows[0]?.storage_bytes || 0)
+  return calculateStorageBytes(
+    row.project_bytes || 0,
+    row.history_bytes || 0
+  )
 }
+
 
 async function getProjectStorageBytes(projectId, ownerId) {
   const database = getDatabase()
@@ -1856,6 +1875,7 @@ async function listProjects(ownerId) {
 }
 
 async function createProject(ownerId, payload) {
+  return withOwnerMutationLock(ownerId, async () => {
   const database = getDatabase()
   const storedFiles = encryptProjectSecrets(payload.files)
   const newStorageBytes = getStoredFileBytes(storedFiles)
@@ -1891,9 +1911,11 @@ async function createProject(ownerId, payload) {
     createdAt: now,
     updatedAt: now
   }
+  })
 }
 
 async function updateProject(projectId, ownerId, payload) {
+  return withOwnerMutationLock(ownerId, async () => {
   const database = getDatabase()
   const current = await getProjectById(projectId, ownerId)
 
@@ -1944,6 +1966,7 @@ async function updateProject(projectId, ownerId, payload) {
     createdAt: current.createdAt,
     updatedAt: now
   }
+  })
 }
 
 function normalizeCommitMessage(value) {
@@ -2017,6 +2040,7 @@ async function getCommit(projectId, ownerId, commitId) {
 }
 
 async function ensureInitialCommit(projectId, ownerId) {
+  return withOwnerMutationLock(ownerId, async () => {
   const commits = await listCommits(projectId, ownerId)
 
   if (commits === null) {
@@ -2060,9 +2084,11 @@ async function ensureInitialCommit(projectId, ownerId) {
     message: 'Initial commit',
     createdAt: now
   }]
+  })
 }
 
 async function commitProject(projectId, ownerId, payload) {
+  return withOwnerMutationLock(ownerId, async () => {
   const project = await getProjectById(projectId, ownerId)
 
   if (!project) {
@@ -2097,6 +2123,7 @@ async function commitProject(projectId, ownerId, payload) {
     createdAt: now,
     files: project.files
   }
+  })
 }
 
 function buildFileDiff(baseFiles, currentFiles) {
@@ -2240,6 +2267,7 @@ async function handleSourceControlRequest(request, response) {
   send(response, 404, { error: 'not found' })
 }
 async function deleteProject(projectId, ownerId) {
+  return withOwnerMutationLock(ownerId, async () => {
   const database = getDatabase()
   const current = await getProjectById(projectId, ownerId)
 
@@ -2259,6 +2287,7 @@ async function deleteProject(projectId, ownerId) {
   ], 'immediate')
 
   return true
+  })
 }
 
 
