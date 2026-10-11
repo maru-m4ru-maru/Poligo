@@ -188,7 +188,7 @@ test('Node.js executes inside the isolated Docker sandbox', {
           'interface Greeting { text: string }',
           'const greeting: Greeting = { text: "native-typescript-ok" }',
           'console.log(greeting.text)'
-        ].join('\\n'),
+        ].join('\n'),
         'package.json': JSON.stringify({
           type: 'module',
           poligo: { runtime: 'node' }
