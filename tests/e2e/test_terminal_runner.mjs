@@ -2,8 +2,8 @@ import http from 'node:http'
 import { randomUUID } from 'node:crypto'
 import WebSocket from 'ws'
 
-const token = 'terminal-e2e-token'
-const baseUrl = 'http://127.0.0.1:10001'
+const token = process.env.RUNNER_TOKEN || 'terminal-e2e-token'
+const baseUrl = process.env.POLIGO_TEST_RUNNER_URL || 'http://127.0.0.1:' + (process.env.POLIGO_TEST_RUNNER_PORT || '10001')
 const id = randomUUID()
 
 function request(path, options = {}, body) {
@@ -182,8 +182,125 @@ await waitForOutput(
   output =>
     output.includes('poligo') ||
     output.includes('workspace') ||
-    output.includes('$')
+    output.includes('
+
+const pwdOutput = await waitForOutput(
+  socket,
+  output => output.includes('/workspace')
 )
+
+if (!pwdOutput.includes('/workspace')) {
+  throw new Error('workspace path was not reported')
+}
+
+socket.send(
+  JSON.stringify({
+    type: 'input',
+    data: "printf 'PTY_OK\\n'\n"
+  })
+)
+
+const ptyOutput = await waitForOutput(
+  socket,
+  output => output.includes('PTY_OK')
+)
+
+if (!ptyOutput.includes('PTY_OK')) {
+  throw new Error('PTY command output was missing')
+}
+
+socket.send(
+  JSON.stringify({
+    type: 'input',
+    data: "printf 'created-by-terminal' > created.txt\n"
+  })
+)
+
+socket.send(
+  JSON.stringify({
+    type: 'input',
+    data: "printf 'SYNC_MARKER:%s\\n' \"$(cat created.txt)\"\n"
+  })
+)
+
+await waitForOutput(
+  socket,
+  output => output.includes('SYNC_MARKER:created-by-terminal')
+)
+
+socket.send(
+  JSON.stringify({
+    type: 'input',
+    data: 'sleep 10'
+  })
+)
+
+await new Promise(resolve => setTimeout(resolve, 500))
+socket.send(
+  JSON.stringify({
+    type: 'input',
+    data: '\u0003'
+  })
+)
+
+await waitForOutput(
+  socket,
+  output => output.includes('^C') || output.includes('Interrupt')
+)
+
+const files = await request(
+  '/v1/terminals/' +
+    encodeURIComponent(id) +
+    '/files'
+)
+
+if (
+  files.status !== 200 ||
+  files.body?.files?.['created.txt'] !== 'created-by-terminal'
+) {
+  throw new Error(
+    'terminal files were not synchronized: ' +
+    files.text
+  )
+}
+
+socket.close()
+
+const closed = await request(
+  '/v1/terminals/' + encodeURIComponent(id),
+  {
+    method: 'DELETE'
+  }
+)
+
+if (closed.status !== 200) {
+  throw new Error(
+    'terminal close failed: ' +
+    closed.status +
+    ' ' +
+    closed.text
+  )
+}
+
+console.log('TERMINAL RUNNER E2E: PASS')
+)
+)
+
+socket.send(
+  JSON.stringify({
+    type: 'input',
+    data: 'id -u\n'
+  })
+)
+
+const identityOutput = await waitForOutput(
+  socket,
+  output => output.includes('65534')
+)
+
+if (!/(?:^|\\n)65534(?:\\r?\\n|$)/.test(identityOutput)) {
+  throw new Error('terminal shell did not run as the unprivileged UID 65534: ' + identityOutput)
+}
 
 socket.send(
   JSON.stringify({
