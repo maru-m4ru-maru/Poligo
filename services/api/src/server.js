@@ -16,6 +16,7 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { normalizeJudge0Language, shouldUseJudge0 } from './executionRouting.js'
 import { isRunnerExecutionReady } from './runnerReadiness.js'
+import { getTypeScriptCompilerOptions } from './typescriptCompilerOptions.js'
 import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
 import { getOriginPolicy, selectCorsOrigin } from './authPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
@@ -3192,6 +3193,7 @@ async function handleJudge0Execution(response, payload, id, ownerId) {
   } else if (payload.language === 'typescript') {
     options.cpu_time_limit = 5
     options.wall_time_limit = 15
+    options.compiler_options = getTypeScriptCompilerOptions(entrypoint)
 
     const entrypointLower = entrypoint.toLowerCase()
 
