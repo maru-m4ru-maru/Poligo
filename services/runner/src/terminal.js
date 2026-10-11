@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import Docker from 'dockerode'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { appendUtf8Tail } from './outputBuffer.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -66,12 +67,11 @@ function normalizeId(value) {
 }
 
 function appendOutput(session, data) {
-  session.outputBuffer += data
-
-  if (session.outputBuffer.length > maxOutputBytes) {
-    session.outputBuffer =
-      session.outputBuffer.slice(-maxOutputBytes)
-  }
+  session.outputBuffer = appendUtf8Tail(
+    session.outputBuffer,
+    data,
+    maxOutputBytes
+  )
 
   if (session.socket?.readyState === 1) {
     session.socket.send(
@@ -723,7 +723,8 @@ export async function attachTerminalSocket(id, socket) {
 
     if (
       payload?.type === 'input' &&
-      typeof payload.data === 'string'
+      typeof payload.data === 'string' &&
+      Buffer.byteLength(payload.data, 'utf8') <= 65_536
     ) {
       session.stream.write(payload.data)
       return
