@@ -29,6 +29,7 @@ import {
   planCommitRetention
 } from './commitRetention.js'
 import { parseSourceControlRoute } from './sourceControlPolicy.js'
+import { consumeUserQuota, pruneUserQuotaState } from './rateLimitPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -59,6 +60,9 @@ const MAX_REQUEST_BYTES = 8_000_000
 const MAX_EXECUTION_ARCHIVE_BYTES = 3_000_000
 const EXECUTION_WINDOW_MS = 5 * 60 * 1000
 const EXECUTION_REQUESTS_PER_WINDOW = 12
+const AI_REQUEST_WINDOW_MS = 5 * 60 * 1000
+const AI_REQUESTS_PER_WINDOW = 10
+const OPENROUTER_TIMEOUT_MS = 25_000
 const EXECUTION_RECORD_TTL_MS = 10 * 60 * 1000
 const EXECUTION_CPU_TIME_LIMIT = 2
 const EXECUTION_WALL_TIME_LIMIT = 5
@@ -79,6 +83,7 @@ let databaseInitializationError = null
 let databaseInitializationComplete = false
 let databaseInitializationFailed = false
 const executionRateState = new Map()
+const aiRateState = new Map()
 const executionOwners = new Map()
 const terminalOwners = new Map()
 const terminalSyncQueues = new Map()
@@ -139,17 +144,8 @@ const TERMINAL_CAPACITY_RECLAIM_IDLE_MS = Number(process.env.TERMINAL_CAPACITY_R
 const executionCleanupTimer = setInterval(() => {
   const now = Date.now()
 
-  for (const [userId, timestamps] of executionRateState) {
-    const recent = timestamps.filter(timestamp =>
-      now - timestamp < EXECUTION_WINDOW_MS
-    )
-
-    if (recent.length) {
-      executionRateState.set(userId, recent)
-    } else {
-      executionRateState.delete(userId)
-    }
-  }
+  pruneUserQuotaState(executionRateState, now, EXECUTION_WINDOW_MS)
+  pruneUserQuotaState(aiRateState, now, AI_REQUEST_WINDOW_MS)
 
   for (const [id, record] of executionOwners) {
     if (record.expiresAt <= now) {
@@ -1536,18 +1532,23 @@ function preparePythonSource(source, entrypoint, environment, packageName) {
 }
 
 function consumeExecutionQuota(userId) {
-  const now = Date.now()
-  const current = executionRateState.get(userId) || []
-  const recent = current.filter(timestamp => now - timestamp < EXECUTION_WINDOW_MS)
+  return consumeUserQuota(
+    executionRateState,
+    userId,
+    Date.now(),
+    EXECUTION_WINDOW_MS,
+    EXECUTION_REQUESTS_PER_WINDOW
+  )
+}
 
-  if (recent.length >= EXECUTION_REQUESTS_PER_WINDOW) {
-    const oldest = recent[0] || now
-    return Math.max(1, Math.ceil((EXECUTION_WINDOW_MS - (now - oldest)) / 1000))
-  }
-
-  recent.push(now)
-  executionRateState.set(userId, recent)
-  return 0
+function consumeAiQuota(userId) {
+  return consumeUserQuota(
+    aiRateState,
+    userId,
+    Date.now(),
+    AI_REQUEST_WINDOW_MS,
+    AI_REQUESTS_PER_WINDOW
+  )
 }
 
 function registerExecution(id, userId, backend = 'judge0') {
@@ -5746,6 +5747,17 @@ async function handleAiAssist(request, response) {
     return
   }
 
+  const retryAfter = consumeAiQuota(session.user.id)
+
+  if (retryAfter) {
+    response.setHeader('Retry-After', String(retryAfter))
+    send(response, 429, {
+      error: 'AI request rate limit exceeded',
+      retryAfter
+    })
+    return
+  }
+
   const payload = await readJson(request)
   const prompt = typeof payload.prompt === 'string'
     ? payload.prompt.trim().slice(0, 12_000)
@@ -5809,6 +5821,7 @@ async function handleAiAssist(request, response) {
         'HTTP-Referer': openRouterSiteUrl,
         'X-Title': 'Poligo'
       },
+      signal: AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
       body: JSON.stringify({
         model: selectedModel.model,
         messages: [
