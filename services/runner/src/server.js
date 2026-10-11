@@ -27,20 +27,37 @@ function send(response, status, body) {
 }
 
 async function readJson(request) {
-  let body = ''
+  const chunks = []
   let size = 0
 
   for await (const chunk of request) {
-    size += Buffer.byteLength(chunk)
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += buffer.byteLength
 
     if (size > maxRequestBytes) {
       throw new Error('request too large')
     }
 
-    body += chunk
+    chunks.push(buffer)
   }
 
-  return body ? JSON.parse(body) : {}
+  if (!size) {
+    return {}
+  }
+
+  let payload
+
+  try {
+    payload = JSON.parse(Buffer.concat(chunks, size).toString('utf8'))
+  } catch {
+    throw new Error('invalid JSON body')
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('request body must be a JSON object')
+  }
+
+  return payload
 }
 
 function authorized(request) {
