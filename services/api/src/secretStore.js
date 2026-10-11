@@ -39,8 +39,28 @@ function decryptCiphertext(value) {
   ]).toString('utf8')
 }
 
-export function isEncryptedSecret(value) {
+export function hasEncryptedSecretEnvelope(value) {
   if (typeof value !== 'string' || !value.startsWith(PREFIX)) {
+    return false
+  }
+
+  const parts = value.split(':')
+
+  if (
+    parts.length !== 5 ||
+    parts[0] !== 'poligo' ||
+    parts[1] !== 'v1' ||
+    ![parts[2], parts[3], parts[4]].every(part => /^[A-Za-z0-9_-]*$/.test(part))
+  ) {
+    return false
+  }
+
+  return Buffer.from(parts[2], 'base64url').length === 12 &&
+    Buffer.from(parts[3], 'base64url').length === 16
+}
+
+export function isEncryptedSecret(value) {
+  if (!hasEncryptedSecretEnvelope(value)) {
     return false
   }
 
@@ -57,8 +77,12 @@ export function encryptSecret(value) {
     throw new Error('secret content must be text')
   }
 
-  if (isEncryptedSecret(value)) {
-    return value
+  if (hasEncryptedSecretEnvelope(value)) {
+    if (isEncryptedSecret(value)) {
+      return value
+    }
+
+    throw new Error('encrypted secret could not be authenticated; verify POLIGO_ENCRYPTION_KEY')
   }
 
   const iv = randomBytes(12)
@@ -84,7 +108,7 @@ export function decryptSecret(value) {
     throw new Error('secret content must be text')
   }
 
-  if (!isEncryptedSecret(value)) {
+  if (!hasEncryptedSecretEnvelope(value)) {
     return value
   }
 
