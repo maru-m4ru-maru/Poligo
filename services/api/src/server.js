@@ -5997,15 +5997,18 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleDashboardRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'dashboard request failed'
       const status =
-        error.message === 'invalid workspace id'
+        message === 'invalid workspace id'
           ? 400
-          : error.message === 'authentication required'
+          : message === 'authentication required'
             ? 401
-            : 500
+            : message.includes('storage limit exceeded') || message.includes('commit history')
+              ? 409
+              : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'dashboard request failed'
+        error: message
       })
     }
     return
