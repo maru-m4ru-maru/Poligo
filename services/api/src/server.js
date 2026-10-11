@@ -12,6 +12,8 @@ import {
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
 import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin } from './adminPolicy.js'
+import { isWorkspaceClaimAllowed } from './workspacePolicy.js'
+import { normalizeProjectFileMap, normalizeProjectPayload } from './projectPolicy.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -260,44 +262,10 @@ function decodeExecutionFile(content) {
 }
 
 function normalizeExecutionFiles(files) {
-  if (!files || typeof files !== 'object' || Array.isArray(files)) {
-    throw new Error('project files must be an object')
-  }
-
-  const normalized = {}
-  let totalBytes = 0
-
-  for (const [path, value] of Object.entries(files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path.includes('\\') ||
-      path.includes('\0') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
-    ) {
-      throw new Error('invalid project file path')
-    }
-
-    if (typeof value !== 'string') {
-      throw new Error('project file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(value, 'utf8')
-
-    if (totalBytes > MAX_PROJECT_BYTES) {
-      throw new Error('project is too large')
-    }
-
-    normalized[path] = value
-  }
-
-  if (Object.keys(normalized).length > MAX_FILES) {
-    throw new Error('too many project files')
-  }
-
-  return normalized
+  return normalizeProjectFileMap(files, {
+    maxFiles: MAX_FILES,
+    maxBytes: MAX_PROJECT_BYTES
+  })
 }
 
 function buildPhpAdditionalFiles(files) {
@@ -1682,25 +1650,47 @@ async function claimWorkspace(request, response) {
 
   const workspaceId = getWorkspaceId(request)
   const database = getDatabase()
+  const registeredOwnerStatement = await database.prepare(
+    'SELECT id FROM "user" WHERE id = ? LIMIT 1'
+  )
+  const registeredOwners = await registeredOwnerStatement.all([workspaceId])
+
+  if (!isWorkspaceClaimAllowed(
+    workspaceId,
+    session.user.id,
+    registeredOwners.length > 0
+  )) {
+    send(response, 403, {
+      error: 'workspace belongs to another account and cannot be claimed'
+    })
+    return
+  }
+
   const existingStatement = await database.prepare(
     'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
   )
   const existing = await existingStatement.all([workspaceId])
-
   const count = Number(existing[0]?.count || 0)
+  let claimed = workspaceId === session.user.id ? count : 0
 
   if (count > 0 && workspaceId !== session.user.id) {
-    await database.batch([
+    const [result] = await database.batch([
       {
-        sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
-        args: [session.user.id, workspaceId]
+        sql: `UPDATE projects
+          SET owner_id = ?
+          WHERE owner_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM "user" WHERE id = ?
+            )`,
+        args: [session.user.id, workspaceId, workspaceId]
       }
     ], 'immediate')
+    claimed = Number(result?.rowsAffected || 0)
   }
 
   send(response, 200, {
     ok: true,
-    claimed: count
+    claimed
   })
 }
 
@@ -1735,56 +1725,6 @@ function getStoredFileBytes(files) {
   )
 }
 
-function normalizeProjectPayload(payload) {
-  const name = typeof payload.name === 'string'
-    ? payload.name.trim().slice(0, 120)
-    : ''
-
-  if (!name) {
-    throw new Error('project name is required')
-  }
-
-  if (!payload.files || typeof payload.files !== 'object' || Array.isArray(payload.files)) {
-    throw new Error('project files must be an object')
-  }
-
-  const files = {}
-  let totalBytes = 0
-
-  for (const [path, value] of Object.entries(payload.files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path.includes('\\') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => part === '..' || part === '.')
-    ) {
-      throw new Error('invalid project file path')
-    }
-
-    if (typeof value !== 'string') {
-      throw new Error('project file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(value, 'utf8')
-
-    if (totalBytes > MAX_PROJECT_BYTES) {
-      throw new Error('project is too large')
-    }
-
-    files[path] = value
-  }
-
-  if (Object.keys(files).length > MAX_FILES) {
-    throw new Error('too many project files')
-  }
-
-  return {
-    name,
-    files
-  }
-}
 
 function serializeProject(row, files) {
   return {
