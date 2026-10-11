@@ -17,7 +17,8 @@ export function isValidProjectFilePath(value) {
   return parts.every(part =>
     part &&
     part !== '.' &&
-    part !== '..'
+    part !== '..' &&
+    !['__proto__', 'prototype', 'constructor'].includes(part)
   )
 }
 
