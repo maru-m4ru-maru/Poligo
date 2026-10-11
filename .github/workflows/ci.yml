@@ -21,6 +21,21 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm audit --audit-level=moderate
       - run: pnpm build:web
+      - name: Enforce initial JavaScript bundle budget
+        run: |
+          node --input-type=module -e '
+            import { readFileSync, statSync } from "node:fs";
+            import path from "node:path";
+            const root = "apps/web/dist";
+            const html = readFileSync(path.join(root, "index.html"), "utf8");
+            const entry = html.match(/<script[^>]+src="([^"]+\.js)"/);
+            if (!entry) throw new Error("Could not locate the initial JavaScript entry in dist/index.html");
+            const assetPath = path.join(root, entry[1].replace(/^\//, ""));
+            const bytes = statSync(assetPath).size;
+            const limit = 400 * 1024;
+            console.log("Initial JavaScript bundle:", bytes, "bytes; budget:", limit, "bytes");
+            if (bytes > limit) throw new Error("Initial JavaScript bundle exceeds the 400 KiB budget");
+          '
 
   services:
     runs-on: ubuntu-latest

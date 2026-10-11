@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import Editor from '@monaco-editor/react'
 import './styles.css'
 import {
   createProject,
@@ -17,16 +16,18 @@ import {
   restoreCommit
 } from './projectStore'
 import { authClient } from './auth-client'
-import AuthPage from './AuthPage'
-import Dashboard from './Dashboard'
-import HomePage from './HomePage'
-import TermsPage from './TermsPage'
-import AccountPage from './AccountPage'
-import AdminPage from './AdminPage'
-import TerminalPanel from './TerminalPanel'
 import { getExecutionLanguage } from './executionLanguage'
 import { hasProjectFilePathConflict, normalizeProjectFilePath } from './projectFilePaths'
 import { isTrustedPreviewMessage } from './previewMessagePolicy'
+
+const Editor = lazy(() => import('@monaco-editor/react'))
+const TerminalPanel = lazy(() => import('./TerminalPanel'))
+const AuthPage = lazy(() => import('./AuthPage'))
+const Dashboard = lazy(() => import('./Dashboard'))
+const HomePage = lazy(() => import('./HomePage'))
+const TermsPage = lazy(() => import('./TermsPage'))
+const AccountPage = lazy(() => import('./AccountPage'))
+const AdminPage = lazy(() => import('./AdminPage'))
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -3610,7 +3611,14 @@ function IDE({ projectId }) {
             )}
 
             <div className="editor-pane">
-              <Editor
+              <Suspense
+                fallback={(
+                  <div className="editor-loading" role="status">
+                    エディターを読み込み中...
+                  </div>
+                )}
+              >
+                <Editor
                 height="100%"
                 language={currentLanguage}
                 value={currentValue}
@@ -3647,7 +3655,8 @@ function IDE({ projectId }) {
                   wordWrap: 'off',
                   renderWhitespace: 'selection'
                 }}
-              />
+                />
+              </Suspense>
             </div>
 
             <div className={'bottom-panel ' + (bottomOpen ? 'open' : '')}>
@@ -3687,14 +3696,22 @@ function IDE({ projectId }) {
                     (bottomTab === 'terminal' ? '' : 'panel-hidden')
                   }
                 >
-                  <TerminalPanel
+                  <Suspense
+                    fallback={(
+                      <div className="terminal-loading" role="status">
+                        ターミナルを読み込み中...
+                      </div>
+                    )}
+                  >
+                    <TerminalPanel
                     ref={terminalPanelRef}
                     apiUrl={API_URL}
                     projectId={currentProjectId}
                     active={bottomOpen && bottomTab === 'terminal'}
                     files={files}
                     onFilesChanged={handleTerminalFilesChanged}
-                  />
+                    />
+                  </Suspense>
                 </div>
 
                 <div
@@ -4042,4 +4059,15 @@ function AppRouter() {
   return <HomePage session={session} />
 }
 
-createRoot(document.getElementById('root')).render(<AppRouter />)
+createRoot(document.getElementById('root')).render(
+  <Suspense
+    fallback={(
+      <div className="app-loading">
+        <div className="app-loading-title">Poligo</div>
+        <div className="app-loading-text">ページを読み込み中...</div>
+      </div>
+    )}
+  >
+    <AppRouter />
+  </Suspense>
+)
