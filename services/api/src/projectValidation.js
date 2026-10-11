@@ -3,7 +3,7 @@ export function isValidProjectFilePath(value) {
     typeof value !== 'string' ||
     !value ||
     value.length > 240 ||
-    value === '__proto__' ||
+    ['__proto__', 'prototype', 'constructor'].includes(value) ||
     value.includes('\0') ||
     value.includes('\\') ||
     value.startsWith('/') ||
