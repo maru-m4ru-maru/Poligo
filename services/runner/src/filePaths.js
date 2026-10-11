@@ -13,7 +13,7 @@ export function normalizeRunnerFilePath(value) {
   if (
     typeof value !== 'string' ||
     !value ||
-    value.length > 240 ||
+    Buffer.byteLength(value, 'utf8') > 240 ||
     value.includes('\0') ||
     value.startsWith('/') ||
     /^[A-Za-z]:/.test(value) ||
