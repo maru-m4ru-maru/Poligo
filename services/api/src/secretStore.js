@@ -11,8 +11,45 @@ function getKey() {
   return Buffer.from(keyText, 'hex')
 }
 
+function decryptCiphertext(value) {
+  const parts = value.split(':')
+
+  if (parts.length !== 5 || parts[0] !== 'poligo' || parts[1] !== 'v1') {
+    throw new Error('invalid encrypted secret format')
+  }
+
+  if (![parts[2], parts[3], parts[4]].every(part => /^[A-Za-z0-9_-]*$/.test(part))) {
+    throw new Error('invalid encrypted secret encoding')
+  }
+
+  const iv = Buffer.from(parts[2], 'base64url')
+  const tag = Buffer.from(parts[3], 'base64url')
+  const encrypted = Buffer.from(parts[4], 'base64url')
+
+  if (iv.length !== 12 || tag.length !== 16) {
+    throw new Error('invalid encrypted secret metadata')
+  }
+
+  const decipher = createDecipheriv('aes-256-gcm', getKey(), iv)
+  decipher.setAuthTag(tag)
+
+  return Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final()
+  ]).toString('utf8')
+}
+
 export function isEncryptedSecret(value) {
-  return typeof value === 'string' && value.startsWith(PREFIX)
+  if (typeof value !== 'string' || !value.startsWith(PREFIX)) {
+    return false
+  }
+
+  try {
+    decryptCiphertext(value)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function encryptSecret(value) {
@@ -51,27 +88,7 @@ export function decryptSecret(value) {
     return value
   }
 
-  const parts = value.split(':')
-
-  if (parts.length !== 5 || parts[0] !== 'poligo' || parts[1] !== 'v1') {
-    throw new Error('invalid encrypted secret format')
-  }
-
-  const iv = Buffer.from(parts[2], 'base64url')
-  const tag = Buffer.from(parts[3], 'base64url')
-  const encrypted = Buffer.from(parts[4], 'base64url')
-
-  if (iv.length !== 12 || tag.length !== 16) {
-    throw new Error('invalid encrypted secret metadata')
-  }
-
-  const decipher = createDecipheriv('aes-256-gcm', getKey(), iv)
-  decipher.setAuthTag(tag)
-
-  return Buffer.concat([
-    decipher.update(encrypted),
-    decipher.final()
-  ]).toString('utf8')
+  return decryptCiphertext(value)
 }
 
 export function encryptProjectSecrets(files) {
