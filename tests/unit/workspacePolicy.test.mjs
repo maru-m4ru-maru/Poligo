@@ -35,3 +35,19 @@ test('allows an authenticated account to keep using its own id when it is in the
 
   assert.equal(isAllowedWorkspaceId(accountId, accountId, [accountId]), true)
 })
+
+test('workspace claims transfer projects and terminal records while revoking old WebSocket tickets', async () => {
+  const { buildWorkspaceClaimStatements } = await import('../../services/api/src/workspacePolicy.js')
+  const statements = buildWorkspaceClaimStatements('workspace-m5abc123-abcdefgh', 'user-one', 12345)
+
+  assert.equal(statements.length, 2)
+  assert.equal(statements[0].sql, 'UPDATE projects SET owner_id = ? WHERE owner_id = ?')
+  assert.deepEqual(statements[0].args, ['user-one', 'workspace-m5abc123-abcdefgh'])
+  assert.match(statements[1].sql, /UPDATE terminal_sessions/)
+  assert.match(statements[1].sql, /websocket_ticket_hash = ''/)
+  assert.match(statements[1].sql, /ticket_expires_at = 0/)
+  assert.match(statements[1].sql, /ticket_used = 1/)
+  assert.deepEqual(statements[1].args, ['user-one', 12345, 'workspace-m5abc123-abcdefgh'])
+  assert.throws(() => buildWorkspaceClaimStatements('user-one', 'user-one', 12345), /invalid workspace claim/)
+  assert.throws(() => buildWorkspaceClaimStatements('', 'user-one', 12345), /invalid workspace claim/)
+})
