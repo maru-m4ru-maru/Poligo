@@ -44,3 +44,10 @@ test('rejects file-directory conflicts regardless of insertion order', () => {
     assertNoFileDirectoryConflicts(['src/main.js', 'src/helper.js'])
   )
 })
+
+test('rejects multibyte paths whose encoded bytes exceed the filesystem limit', () => {
+  const path = '界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界界.js'
+  assert.ok(path.length < 240)
+  assert.ok(Buffer.byteLength(path, 'utf8') > 240)
+  assert.throws(() => normalizeRunnerFilePath(path), /invalid file path/)
+})
