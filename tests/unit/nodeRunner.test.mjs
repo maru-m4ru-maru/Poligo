@@ -94,7 +94,7 @@ test('finished executions release source files, arguments, environment values an
   assert.equal(finished.env, null)
   assert.equal(finished.stdin, null)
 
-  const removed = cleanupFinishedJobs(Date.parse(finished.finishedAt) + 60_001)
+  const removed = cleanupFinishedJobs(Date.parse(finished.finishedAt) + 600_001)
   assert.ok(removed >= 1)
   assert.equal(getJob(job.id), null)
 })
