@@ -1,6 +1,7 @@
 import { connect } from '@tursodatabase/serverless'
 import {
   encryptSecret,
+  hasEncryptedSecretEnvelope,
   isEncryptedSecret
 } from './secretStore.js'
 
@@ -133,6 +134,10 @@ export async function initializeDatabase() {
         (name.startsWith('.env.') && name !== '.env.example')
 
       if (secret && !isEncryptedSecret(file.content)) {
+        if (hasEncryptedSecretEnvelope(file.content)) {
+          throw new Error('Stored project secret could not be authenticated; verify POLIGO_ENCRYPTION_KEY')
+        }
+
         secretUpdates.push({
           sql: 'UPDATE project_files SET content = ? WHERE project_id = ? AND path = ?',
           args: [encryptSecret(file.content), file.project_id, file.path]
@@ -147,6 +152,10 @@ export async function initializeDatabase() {
         (name.startsWith('.env.') && name !== '.env.example')
 
       if (secret && !isEncryptedSecret(file.content)) {
+        if (hasEncryptedSecretEnvelope(file.content)) {
+          throw new Error('Stored history secret could not be authenticated; verify POLIGO_ENCRYPTION_KEY')
+        }
+
         commitSecretUpdates.push({
           sql: 'UPDATE project_commit_files SET content = ? WHERE commit_id = ? AND path = ?',
           args: [encryptSecret(file.content), file.commit_id, file.path]
