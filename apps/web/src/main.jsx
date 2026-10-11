@@ -17,6 +17,7 @@ import {
 } from './projectStore'
 import { authClient } from './auth-client'
 import { getExecutionTarget } from './executionLanguage'
+import { applyAiEditsToFiles } from './aiEditPolicy'
 import { lookupFileMetadata } from './fileMetadata'
 import { hasProjectFilePathConflict, normalizeProjectFilePath } from './projectFilePaths'
 import { isTrustedPreviewMessage } from './previewMessagePolicy'
@@ -2419,72 +2420,17 @@ function IDE({ projectId }) {
       }
     }
 
-    const next = { ...filesRef.current }
-    const changedFiles = []
+    const result = applyAiEditsToFiles(filesRef.current, edits)
 
-    try {
-      for (const edit of edits) {
-        const rawPath = typeof edit?.path === 'string' ? edit.path.trim() : ''
-        const oldText = typeof edit?.oldText === 'string' ? edit.oldText : null
-        const newText = typeof edit?.newText === 'string' ? edit.newText : null
-
-        if (!rawPath || oldText === null || newText === null) {
-          throw new Error('AIが無効な変更情報を返しました。')
-        }
-
-        let path
-
-        try {
-          path = normalizeProjectFilePath(rawPath)
-        } catch {
-          throw new Error('AIが使用できないファイルパスを指定しました。')
-        }
-
-        if (isSecretEnvFile(path)) {
-          throw new Error('環境変数ファイルはPoligo AIから直接変更できません。')
-        }
-
-        const exists = Object.prototype.hasOwnProperty.call(next, path)
-
-        if (!exists && oldText !== '') {
-          throw new Error(path + ' が見つからないため変更を適用できません。')
-        }
-
-        if (!exists && oldText === '') {
-          if (hasProjectFilePathConflict(next, path)) {
-            throw new Error(path + ' は既存のファイルまたはフォルダーと競合します。')
-          }
-
-          next[path] = newText
-          changedFiles.push(path)
-          continue
-        }
-
-        const current = next[path]
-        const firstIndex = current.indexOf(oldText)
-        const lastIndex = current.lastIndexOf(oldText)
-
-        if (firstIndex < 0) {
-          throw new Error(path + ' の対象コードが現在の内容と一致しません。')
-        }
-
-        if (firstIndex !== lastIndex) {
-          throw new Error(path + ' の対象コードが複数箇所にあるため、安全のため適用を停止しました。')
-        }
-
-        next[path] =
-          current.slice(0, firstIndex) +
-          newText +
-          current.slice(firstIndex + oldText.length)
-        changedFiles.push(path)
-      }
-    } catch (error) {
+    if (!result.ok) {
       return {
         ok: false,
-        error: error instanceof Error ? error.message : 'AIの変更を適用できませんでした。'
+        error: result.error
       }
     }
 
+    const next = result.files
+    const changedFiles = result.changedFiles
     filesRef.current = next
     setFiles(next)
 
@@ -2506,7 +2452,7 @@ function IDE({ projectId }) {
 
     return {
       ok: true,
-      changedFiles: [...new Set(changedFiles)]
+      changedFiles
     }
   }
 
