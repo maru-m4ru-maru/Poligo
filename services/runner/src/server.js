@@ -246,8 +246,17 @@ const server = http.createServer(async (request, response) => {
         status: job.status
       })
     } catch (error) {
-      send(response, 400, {
-        error: error instanceof Error ? error.message : 'invalid request'
+      const message = error instanceof Error ? error.message : 'invalid request'
+      const status =
+        message.includes('execution queue is currently full') ||
+        message.includes('execution capacity is currently full')
+          ? 429
+          : message === 'request too large'
+            ? 413
+            : 400
+
+      send(response, status, {
+        error: message
       })
     }
 
