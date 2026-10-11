@@ -23,7 +23,8 @@ const maxArgumentBytes = Number(process.env.MAX_EXECUTION_ARGUMENT_BYTES || 512)
 const maxStdinBytes = Number(process.env.MAX_EXECUTION_STDIN_BYTES || 1_000_000)
 const maxEnvironmentVariables = Number(process.env.MAX_ENVIRONMENT_VARIABLES || 64)
 const maxEnvironmentBytes = Number(process.env.MAX_ENVIRONMENT_BYTES || 16_384)
-const concurrency = Number(process.env.EXECUTION_CONCURRENCY || 1)
+const concurrency = Math.max(1, Number(process.env.EXECUTION_CONCURRENCY || 1))
+const maxQueuedJobs = Math.max(1, Number(process.env.MAX_QUEUED_JOBS || 50))
 
 const jobs = new Map()
 const queue = []
@@ -362,6 +363,7 @@ async function executeJob(job) {
     }
   } finally {
     await fs.rm(workspace, { recursive: true, force: true })
+    releaseJobInputs(job)
 
     if (container) {
       try {
@@ -392,12 +394,20 @@ async function processQueue() {
           exitCode: null,
           timedOut: false
         }
+        releaseJobInputs(job)
       })
       .finally(() => {
         running -= 1
         processQueue()
       })
   }
+}
+
+function releaseJobInputs(job) {
+  job.files = {}
+  job.args = []
+  job.env = {}
+  job.stdin = ''
 }
 
 export function enqueueJob({
@@ -415,6 +425,10 @@ export function enqueueJob({
 
   if (jobs.has(id)) {
     throw new Error('execution id already exists')
+  }
+
+  if (queue.length >= maxQueuedJobs) {
+    throw new Error('execution queue is full')
   }
 
   const job = {
