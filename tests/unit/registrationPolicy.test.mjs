@@ -1,10 +1,54 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { normalizeEmailAddress } from '../../services/api/src/registrationPolicy.js'
+import {
+  normalizeEmailAddress,
+  normalizeUsername
+} from '../../services/api/src/registrationPolicy.js'
 
 const uuid = 'a'.repeat(32)
 
-test('allows generated Poligo E2E addresses on the reserved example.com domain', () => {
+test('accepts usernames with letters, numbers, and underscores', () => {
+  assert.equal(normalizeUsername('maru_m4ru_maru'), 'maru_m4ru_maru')
+  assert.equal(normalizeUsername('ABC_123'), 'ABC_123')
+})
+
+test('rejects invalid, short, overlong, or whitespace usernames', () => {
+  for (const username of [
+    '',
+    'ab',
+    'user name',
+    'username-',
+    '名前',
+    'a'.repeat(33),
+    'ok\nnot-ok'
+  ]) {
+    assert.throws(() => normalizeUsername(username), /ユーザー名/)
+  }
+})
+
+test('normalizes valid email addresses to lowercase', () => {
+  assert.equal(normalizeEmailAddress('  Person@Gmail.com '), 'person@gmail.com')
+})
+
+test('rejects malformed and reserved testing email addresses', () => {
+  for (const email of [
+    '',
+    'person',
+    '@gmail.com',
+    'person@@gmail.com',
+    'person..dots@gmail.com',
+    'person@gmail',
+    'person@example.invalid',
+    'person@example.test',
+    'person@example..com',
+    'person@-example.com',
+    'person@example.c'
+  ]) {
+    assert.throws(() => normalizeEmailAddress(email), undefined, email)
+  }
+})
+
+test('allows only generated Poligo E2E addresses on the reserved example.com domain', () => {
   const email = `poligo-typescript-${uuid}@example.com`
 
   assert.equal(normalizeEmailAddress(email), email)
@@ -12,25 +56,20 @@ test('allows generated Poligo E2E addresses on the reserved example.com domain',
     normalizeEmailAddress(`  POLIGO-TYPESCRIPT-${uuid}@EXAMPLE.COM  `),
     email
   )
-})
-
-test('rejects non-generated example.com addresses and known disposable providers', () => {
   assert.throws(
     () => normalizeEmailAddress('person@example.com'),
     /使い捨てメールアドレス/
   )
-  assert.throws(
-    () => normalizeEmailAddress('person@mailinator.com'),
-    /使い捨てメールアドレス/
-  )
 })
 
-test('rejects reserved testing top-level domains', () => {
+test('rejects common disposable email domains', () => {
   for (const email of [
-    'person@example.invalid',
-    'person@example.test',
-    'person@example.localhost'
+    'someone@mailinator.com',
+    'someone@tempmail.com'
   ]) {
-    assert.throws(() => normalizeEmailAddress(email), /形式が正しくありません/)
+    assert.throws(
+      () => normalizeEmailAddress(email),
+      /使い捨てメールアドレス/
+    )
   }
 })
