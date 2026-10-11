@@ -103,6 +103,17 @@ export const PROJECT_STORAGE_QUOTA_TRIGGERS = [
      ON CONFLICT(user_id) DO UPDATE SET
        current_bytes = current_bytes + excluded.current_bytes;
    END`,
+  `CREATE TRIGGER IF NOT EXISTS trg_project_commits_limit_insert
+   BEFORE INSERT ON project_commits
+   FOR EACH ROW
+   WHEN (
+     SELECT COUNT(*)
+     FROM project_commits
+     WHERE project_id = NEW.project_id
+   ) >= 100
+   BEGIN
+     SELECT RAISE(ABORT, 'project commit limit reached');
+   END`,
   `CREATE TRIGGER IF NOT EXISTS trg_project_commit_files_enforce_owner_quota_insert
    BEFORE INSERT ON project_commit_files
    FOR EACH ROW
