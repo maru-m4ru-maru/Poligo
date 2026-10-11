@@ -298,7 +298,7 @@ const identityOutput = await waitForOutput(
   output => output.includes('65534')
 )
 
-if (!/(?:^|\\n)65534(?:\\r?\\n|$)/.test(identityOutput)) {
+if (!/(?:^|\r?\n)65534(?:\r?\n|$)/.test(identityOutput)) {
   throw new Error('terminal shell did not run as the unprivileged UID 65534: ' + identityOutput)
 }
 
