@@ -33,6 +33,10 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+      - run: pnpm install --no-frozen-lockfile
       - run: node --check services/api/src/server.js
       - run: node --check services/api/src/auth.js
       - run: node --check services/api/src/authSchema.js
