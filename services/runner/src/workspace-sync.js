@@ -23,7 +23,10 @@ process.stdin.on('end', () => {
       'node_modules',
       '.terminal-cache',
       '.tmp',
-      '.cache'
+      '.cache',
+      '__proto__',
+      'prototype',
+      'constructor'
     ])
 
     if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
@@ -41,7 +44,9 @@ process.stdin.on('end', () => {
         value.length > 240 ||
         value.includes('\0') ||
         value.startsWith('/') ||
-        value.includes('\\')
+        /^[A-Za-z]:/.test(value) ||
+        value.includes('\\') ||
+        /[\u0000-\u001f\u007f]/.test(value)
       ) {
         throw new Error('invalid file path')
       }
