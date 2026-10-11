@@ -5,6 +5,7 @@ import { getLanguage, listLanguages } from '../../services/runner/src/languages.
 import { decodeDockerLogs } from '../../services/runner/src/dockerLogs.js'
 
 process.env.EXECUTION_TIMEOUT_MS = '3000'
+process.env.MAX_QUEUED_EXECUTIONS = '2'
 
 const dockerAvailable = (() => {
   try {
@@ -71,6 +72,46 @@ test('Node.js runtime is registered with a pinned Node 24 image', () => {
   )
   assert.ok(listLanguages().includes('node'))
   assert.ok(listExecutionLanguages().includes('node'))
+})
+
+test('bounds pending execution jobs and recovers after rejected queue admission', async () => {
+  const first = enqueueJob({
+    language: 'unsupported-for-queue-test',
+    entrypoint: 'main.js',
+    files: { 'main.js': 'console.log("no")' }
+  })
+  const second = enqueueJob({
+    language: 'unsupported-for-queue-test',
+    entrypoint: 'main.js',
+    files: { 'main.js': 'console.log("no")' }
+  })
+  const third = enqueueJob({
+    language: 'unsupported-for-queue-test',
+    entrypoint: 'main.js',
+    files: { 'main.js': 'console.log("no")' }
+  })
+
+  assert.throws(() => enqueueJob({
+    language: 'unsupported-for-queue-test',
+    entrypoint: 'main.js',
+    files: { 'main.js': 'console.log("no")' }
+  }), /execution queue is full/)
+
+  for (const id of [first.id, second.id, third.id]) {
+    const result = await waitForJob(id)
+    assert.equal(result.status, 'failed')
+    assert.match(result.result.stderr, /unsupported language/)
+  }
+
+  const recovered = enqueueJob({
+    language: 'unsupported-for-queue-test',
+    entrypoint: 'main.js',
+    files: { 'main.js': 'console.log("no")' }
+  })
+  const recoveredResult = await waitForJob(recovered.id)
+
+  assert.equal(recoveredResult.status, 'failed')
+  assert.match(recoveredResult.result.stderr, /unsupported language/)
 })
 
 test('Docker log decoder separates stdout and stderr and handles raw output', () => {
