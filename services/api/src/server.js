@@ -21,7 +21,7 @@ import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId, buildWorkspaceClaimStatements } from './workspacePolicy.js'
 import { normalizeProjectFileMap } from './projectFiles.js'
 import { buildProjectDeleteStatements, buildProjectUpdateStatements } from './projectWritePolicy.js'
-import { withOwnerMutationLock } from './ownerMutationLock.js'
+import { withOwnerMutationLock, withOwnerMutationLocks } from './ownerMutationLock.js'
 import { canAcceptTerminalUpgrade } from './terminalAccessPolicy.js'
 import {
   COMMIT_HISTORY_STORAGE_MULTIPLIER,
@@ -1787,17 +1787,22 @@ async function getOwnerId(request) {
 
 async function transferWorkspaceOwnership(workspaceId, userId) {
   const database = getDatabase()
-  const existingStatement = await database.prepare(
-    'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
-  )
-  const existing = await existingStatement.all([workspaceId])
-  const projectCount = Number(existing[0]?.count || 0)
 
   if (workspaceId === userId) {
-    return projectCount
+    const statement = await database.prepare(
+      'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
+    )
+    const rows = await statement.all([workspaceId])
+    return Number(rows[0]?.count || 0)
   }
 
-  await withOwnerMutationLock(userId, async () => {
+  return withOwnerMutationLocks([workspaceId, userId], async () => {
+    const existingStatement = await database.prepare(
+      'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
+    )
+    const existing = await existingStatement.all([workspaceId])
+    const projectCount = Number(existing[0]?.count || 0)
+
     await database.batch(
       buildWorkspaceClaimStatements(workspaceId, userId, Date.now()),
       'immediate'
@@ -1814,9 +1819,8 @@ async function transferWorkspaceOwnership(workspaceId, userId) {
     }
 
     closeTerminalConnectionsForUser(workspaceId)
+    return projectCount
   })
-
-  return projectCount
 }
 
 async function claimWorkspace(request, response) {
