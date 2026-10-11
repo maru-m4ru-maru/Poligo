@@ -113,8 +113,6 @@ export async function initializeDatabase() {
       )`,
       'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_owner_project ON terminal_sessions(owner_id, project_id)',
       'CREATE INDEX IF NOT EXISTS idx_terminal_sessions_expires_at ON terminal_sessions(expires_at)',
-      'CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id)',
-      'CREATE INDEX IF NOT EXISTS idx_project_commits_project_id ON project_commits(project_id)',
       ...PROJECT_STORAGE_QUOTA_TRIGGERS,
       ...STORAGE_USAGE_BOOTSTRAP
     ], 'immediate')
