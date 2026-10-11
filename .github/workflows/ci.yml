@@ -28,9 +28,9 @@ jobs:
             import path from "node:path";
             const root = "apps/web/dist";
             const html = readFileSync(path.join(root, "index.html"), "utf8");
-            const entry = html.match(/<script[^>]+src=["\\x27]([^"\\x27]+\\.js)["\\x27]/);
+            const entry = html.match(/<script[^>]+src="([^"]+\.js)"/);
             if (!entry) throw new Error("Could not locate the initial JavaScript entry in dist/index.html");
-            const assetPath = path.join(root, entry[1].replace(/^\\//, ""));
+            const assetPath = path.join(root, entry[1].replace(/^\//, ""));
             const bytes = statSync(assetPath).size;
             const limit = 400 * 1024;
             console.log("Initial JavaScript bundle:", bytes, "bytes; budget:", limit, "bytes");
