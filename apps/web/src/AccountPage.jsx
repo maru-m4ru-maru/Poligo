@@ -205,7 +205,8 @@ export default function AccountPage({ session }) {
         user.id === userId
           ? {
               ...user,
-              storageLimitBytes: value * 1024 * 1024
+              storageLimitBytes: value * 1024 * 1024,
+              historyStorageLimitBytes: value * 1024 * 1024 * 2
             }
           : user
       ))
