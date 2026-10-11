@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { withOwnerMutationLock } from '../../services/api/src/ownerMutationLock.js'
+import {
+  withOwnerMutationLock,
+  withOwnerMutationLocks
+} from '../../services/api/src/ownerMutationLock.js'
 
 test('serializes project mutations for the same account', async () => {
   const order = []
@@ -71,7 +74,40 @@ test('releases the account queue after a failed mutation', async () => {
   assert.equal(result, 'recovered')
 })
 
-test('rejects missing owners and non-function operations', () => {
-  assert.throws(() => withOwnerMutationLock('', () => {}), /owner id is required/)
-  assert.throws(() => withOwnerMutationLock('alice', null), /must be a function/)
+test('multi-owner locks sort owner identifiers to avoid acquisition-order deadlocks', async () => {
+  let active = 0
+  let maxActive = 0
+  const run = async () => {
+    active += 1
+    maxActive = Math.max(maxActive, active)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    active -= 1
+  }
+
+  await Promise.all([
+    withOwnerMutationLocks(['workspace-z', 'user-a'], run),
+    withOwnerMutationLocks(['user-a', 'workspace-z'], run)
+  ])
+
+  assert.equal(maxActive, 1)
+})
+
+test('multi-owner locks deduplicate ids and release every lock after failure', async () => {
+  await assert.rejects(
+    withOwnerMutationLocks(['alice', 'alice'], async () => {
+      throw new Error('multi-owner failure')
+    }),
+    /multi-owner failure/
+  )
+
+  assert.equal(
+    await withOwnerMutationLocks(['alice', 'alice'], async () => 'recovered'),
+    'recovered'
+  )
+})
+
+test('rejects invalid multi-owner lock requests', () => {
+  assert.throws(() => withOwnerMutationLocks([], () => {}), /valid owner ids/)
+  assert.throws(() => withOwnerMutationLocks(['alice', ''], () => {}), /valid owner ids/)
+  assert.throws(() => withOwnerMutationLocks(['alice'], null), /valid owner ids/)
 })
