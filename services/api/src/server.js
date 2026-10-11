@@ -15,6 +15,7 @@ import { isConfiguredAdmin, isDisposableE2EAccountEmail } from './adminPolicy.js
 import { DEFAULT_STORAGE_LIMIT_BYTES } from './storageQuota.js'
 import { getRequestInputStatus, readJsonBody } from './requestInput.js'
 import { getWorkspaceClaimDecision } from './workspaceClaimPolicy.js'
+import { canCreateProjectCommit } from './projectHistoryPolicy.js'
 import { normalizeProjectPayload } from './projectValidation.js'
 
 const port = Number(process.env.PORT || 10000)
@@ -2049,7 +2050,7 @@ async function commitProject(projectId, ownerId, payload) {
   )
   const commitCountRows = await commitCountStatement.all([projectId])
 
-  if (Number(commitCountRows[0]?.count || 0) >= 100) {
+  if (!canCreateProjectCommit(Number(commitCountRows[0]?.count || 0))) {
     throw new Error('project commit limit reached')
   }
 
