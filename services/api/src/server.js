@@ -5532,7 +5532,8 @@ async function handleAiAssist(request, response) {
         ],
         temperature: 0.2,
         max_tokens: 8_000
-      })
+      }),
+      signal: AbortSignal.timeout(30_000)
     }
   )
 
