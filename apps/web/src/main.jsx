@@ -48,6 +48,8 @@ const FILE_META = {
   mjs: { language: 'javascript', kind: 'js' },
   cjs: { language: 'javascript', kind: 'js' },
   ts: { language: 'typescript', kind: 'typescript' },
+  mts: { language: 'typescript', kind: 'typescript' },
+  cts: { language: 'typescript', kind: 'typescript' },
   tsx: { language: 'typescript', kind: 'typescript' },
   py: { language: 'python', kind: 'python' },
   java: { language: 'java', kind: 'java' },
