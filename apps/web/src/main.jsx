@@ -25,6 +25,7 @@ import AccountPage from './AccountPage'
 import AdminPage from './AdminPage'
 import TerminalPanel from './TerminalPanel'
 import { getExecutionLanguage } from './executionLanguage'
+import { isTrustedPreviewMessage } from './previewMessagePolicy'
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -1095,6 +1096,7 @@ function IDE({ projectId }) {
   const terminalModeRef = useRef('')
   const activeFileRef = useRef(activeFile)
   const editorRef = useRef(null)
+  const previewFrameRef = useRef(null)
   const fileUploadRef = useRef(null)
   const filesRef = useRef(files)
 
@@ -1417,7 +1419,7 @@ function IDE({ projectId }) {
 
   useEffect(() => {
     function handlePreviewMessage(event) {
-      if (event.data?.source !== 'poligo-preview') {
+      if (!isTrustedPreviewMessage(event, previewFrameRef.current?.contentWindow)) {
         return
       }
 
@@ -3872,6 +3874,7 @@ function IDE({ projectId }) {
                 </div>
                 <iframe
                   key={previewKey}
+                  ref={previewFrameRef}
                   title="Poligo preview"
                   srcDoc={previewDoc}
                   sandbox="allow-scripts allow-forms allow-modals allow-downloads"
