@@ -32,9 +32,9 @@ test('rejects traversal, malformed separators, control characters and prototype 
     '/src/main.js',
     '__proto__',
     'constructor',
-    'main.js\\0hidden',
-    'main.js\\nnext',
-    'main.js\\u007f'
+    'main.js' + String.fromCharCode(0) + 'hidden',
+    'main.js' + String.fromCharCode(10) + 'next',
+    'main.js' + String.fromCharCode(127)
   ]) {
     assert.equal(isValidProjectFilePath(value), false, JSON.stringify(value))
   }
