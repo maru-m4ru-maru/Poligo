@@ -28,7 +28,9 @@ const runnerToken = process.env.RUNNER_TOKEN || ''
 const terminalRunnerUrl = process.env.TERMINAL_RUNNER_URL || runnerUrl
 const terminalRunnerToken = process.env.TERMINAL_RUNNER_TOKEN || runnerToken
 const judge0Url = (process.env.JUDGE0_URL || 'https://ce.judge0.com').replace(/\/$/, '')
-const allowedOrigin = process.env.CORS_ORIGIN || '*'
+import { resolveAllowedOrigin } from './originPolicy.js'
+
+const allowedOrigin = resolveAllowedOrigin(process.env)
 const openRouterApiKey = process.env.OPENROUTER_API_KEY || ''
 const openRouterSiteUrl = process.env.OPENROUTER_SITE_URL || 'https://poligo-web-2n2l.onrender.com'
 const openRouterModels = {
