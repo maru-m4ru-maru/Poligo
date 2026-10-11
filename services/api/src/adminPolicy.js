@@ -17,3 +17,8 @@ export function isConfiguredAdmin(user, adminUserIds, adminEmails) {
 
   return adminEmails.has(String(user.email || '').trim().toLowerCase())
 }
+
+export function isGeneratedE2EAccountEmail(email) {
+  return typeof email === 'string' &&
+    /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.(?:invalid|com)$/i.test(email)
+}
