@@ -8,7 +8,7 @@ const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
 })
 
-const terminalImage = process.env.TERMINAL_IMAGE || 'node:22-bookworm'
+const terminalImage = process.env.TERMINAL_IMAGE || 'node:24.21.0-bookworm-slim'
 const maxFiles = Number(process.env.TERMINAL_MAX_FILES || 200)
 const maxBytes = Number(process.env.TERMINAL_MAX_PROJECT_BYTES || 5_000_000)
 const memoryBytes = Number(process.env.TERMINAL_MEMORY_BYTES || 536_870_912)
@@ -32,6 +32,17 @@ const cleanupTimer = setInterval(() => {
 
 cleanupTimer.unref?.()
 
+const reservedTerminalPathParts = new Set([
+  '.git',
+  'node_modules',
+  '.terminal-cache',
+  '.tmp',
+  '.cache',
+  '__proto__',
+  'prototype',
+  'constructor'
+])
+
 function normalizeFilePath(value) {
   if (
     typeof value !== 'string' ||
@@ -39,21 +50,29 @@ function normalizeFilePath(value) {
     value.length > 240 ||
     value.includes('\0') ||
     value.startsWith('/') ||
+    /^[A-Za-z]:/.test(value) ||
     value.includes('\\') ||
-    value.split('/').some(part =>
+    /[\u0000-\u001f\u007f]/.test(value)
+  ) {
+    throw new Error('invalid file path')
+  }
+
+  const parts = value.split('/')
+
+  if (
+    parts.some(part =>
       !part ||
-      part === '..' ||
       part === '.' ||
-      part === '.terminal-cache' ||
-      part === '.tmp' ||
-      part === '.cache'
+      part === '..' ||
+      reservedTerminalPathParts.has(part)
     )
   ) {
     throw new Error('invalid file path')
   }
 
-  return value
+  return parts.join('/')
 }
+
 function normalizeId(value) {
   if (
     typeof value !== 'string' ||
@@ -122,7 +141,7 @@ function normalizeFiles(files) {
   }
 
   let totalBytes = 0
-  const normalized = {}
+  const normalized = Object.create(null)
 
   for (const [name, content] of entries) {
     const safePath = normalizeFilePath(name)
@@ -138,6 +157,18 @@ function normalizeFiles(files) {
     }
 
     normalized[safePath] = content
+  }
+
+  const paths = new Set(Object.keys(normalized))
+
+  for (const filePath of paths) {
+    const parts = filePath.split('/')
+
+    for (let index = 1; index < parts.length; index += 1) {
+      if (paths.has(parts.slice(0, index).join('/'))) {
+        throw new Error('terminal file path conflicts with a directory')
+      }
+    }
   }
 
   return normalized
