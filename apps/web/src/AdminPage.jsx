@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { authClient } from './auth-client'
 
 const DEFAULT_STORAGE_LIMIT_MIB = 15
 
@@ -276,7 +277,6 @@ export default function AdminPage({ session }) {
   }
 
   async function signOut() {
-    const { authClient } = await import('./auth-client')
     await authClient.signOut()
     window.location.assign('/signin')
   }
