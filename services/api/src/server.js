@@ -1830,30 +1830,53 @@ async function createProject(ownerId, payload) {
   const database = getDatabase()
   const storedFiles = encryptProjectSecrets(payload.files)
   const newStorageBytes = getStoredFileBytes(storedFiles)
-  const currentStorageBytes = await getOwnerStorageBytes(ownerId)
-  const storageLimitBytes = await getStorageLimitBytes(ownerId)
-
-  if (currentStorageBytes + newStorageBytes > storageLimitBytes) {
-    throw new Error('storage limit exceeded')
-  }
-
   const id = randomUUID()
   const now = Date.now()
   const statements = [
     {
-      sql: 'INSERT INTO projects (id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      args: [id, ownerId, payload.name, now, now]
+      sql: `INSERT INTO projects (
+        id, owner_id, name, created_at, updated_at
+      )
+      SELECT ?, ?, ?, ?, ?
+      WHERE (
+        SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0)
+        FROM projects p
+        LEFT JOIN project_files pf ON pf.project_id = p.id
+        WHERE p.owner_id = ?
+      ) + ? <= COALESCE(
+        (SELECT limit_bytes FROM user_storage_limits WHERE user_id = ?),
+        ?
+      )`,
+      args: [
+        id,
+        ownerId,
+        payload.name,
+        now,
+        now,
+        ownerId,
+        newStorageBytes,
+        ownerId,
+        DEFAULT_STORAGE_LIMIT_BYTES
+      ]
     }
   ]
 
   for (const [path, content] of Object.entries(storedFiles)) {
     statements.push({
-      sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
-      args: [id, path, content]
+      sql: `INSERT INTO project_files (project_id, path, content)
+        SELECT ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM projects WHERE id = ? AND owner_id = ?
+        )`,
+      args: [id, path, content, id, ownerId]
     })
   }
 
-  await database.batch(statements, 'immediate')
+  const results = await database.batch(statements, 'immediate')
+
+  if (Number(results[0]?.rowsAffected) !== 1) {
+    throw new Error('storage limit exceeded')
+  }
 
   return {
     id,
@@ -1873,40 +1896,75 @@ async function updateProject(projectId, ownerId, payload) {
   }
 
   const storedFiles = encryptProjectSecrets(payload.files)
-  const currentProjectStorageBytes = await getProjectStorageBytes(projectId, ownerId)
-  const currentOwnerStorageBytes = await getOwnerStorageBytes(ownerId)
   const newStorageBytes = getStoredFileBytes(storedFiles)
-  const storageLimitBytes = await getStorageLimitBytes(ownerId)
-
-  if (
-    currentOwnerStorageBytes -
-      currentProjectStorageBytes +
-      newStorageBytes >
-    storageLimitBytes
-  ) {
-    throw new Error('storage limit exceeded')
-  }
-
-  const now = Date.now()
+  const now = Math.max(Date.now(), Number(current.updatedAt) + 1)
   const statements = [
     {
-      sql: 'UPDATE projects SET name = ?, updated_at = ? WHERE id = ? AND owner_id = ?',
-      args: [payload.name, now, projectId, ownerId]
+      sql: `UPDATE projects
+        SET name = ?, updated_at = ?
+        WHERE id = ?
+          AND owner_id = ?
+          AND updated_at = ?
+          AND (
+            SELECT COALESCE(SUM(LENGTH(CAST(pf.content AS BLOB))), 0)
+            FROM projects p
+            LEFT JOIN project_files pf ON pf.project_id = p.id
+            WHERE p.owner_id = ? AND p.id != ?
+          ) + ? <= COALESCE(
+            (SELECT limit_bytes FROM user_storage_limits WHERE user_id = ?),
+            ?
+          )`,
+      args: [
+        payload.name,
+        now,
+        projectId,
+        ownerId,
+        current.updatedAt,
+        ownerId,
+        projectId,
+        newStorageBytes,
+        ownerId,
+        DEFAULT_STORAGE_LIMIT_BYTES
+      ]
     },
     {
-      sql: 'DELETE FROM project_files WHERE project_id = ?',
-      args: [projectId]
+      sql: `DELETE FROM project_files
+        WHERE project_id = ?
+          AND EXISTS (
+            SELECT 1 FROM projects
+            WHERE id = ? AND owner_id = ? AND updated_at = ?
+          )`,
+      args: [projectId, projectId, ownerId, now]
     }
   ]
 
   for (const [path, content] of Object.entries(storedFiles)) {
     statements.push({
-      sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
-      args: [projectId, path, content]
+      sql: `INSERT INTO project_files (project_id, path, content)
+        SELECT ?, ?, ?
+        WHERE EXISTS (
+          SELECT 1 FROM projects
+          WHERE id = ? AND owner_id = ? AND updated_at = ?
+        )`,
+      args: [projectId, path, content, projectId, ownerId, now]
     })
   }
 
-  await database.batch(statements, 'immediate')
+  const results = await database.batch(statements, 'immediate')
+
+  if (Number(results[0]?.rowsAffected) !== 1) {
+    const latest = await getProjectById(projectId, ownerId)
+
+    if (!latest) {
+      return null
+    }
+
+    if (Number(latest.updatedAt) !== Number(current.updatedAt)) {
+      throw new Error('project changed while saving; reload before retrying')
+    }
+
+    throw new Error('storage limit exceeded')
+  }
 
   return {
     id: projectId,
