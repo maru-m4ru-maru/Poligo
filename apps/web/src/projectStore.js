@@ -2,6 +2,8 @@ const API_URL = import.meta.env.VITE_API_URL || ''
 const WORKSPACE_KEY = 'poligo-workspace-id'
 const CURRENT_PROJECT_KEY = 'poligo-current-project'
 
+const projectSaveQueues = new Map()
+
 function createId(prefix) {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID()
@@ -64,20 +66,33 @@ export async function getProject(id) {
 }
 
 export async function saveProject(project) {
-  const saved = await request(
-    '/api/projects/' + encodeURIComponent(project.id),
-    {
-      method: 'PUT',
-      body: JSON.stringify({
-        name: project.name,
-        files: project.files
-      })
+  const previous = projectSaveQueues.get(project.id) || Promise.resolve()
+  const operation = previous.catch(() => {}).then(async () => {
+    const saved = await request(
+      '/api/projects/' + encodeURIComponent(project.id),
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: project.name,
+          files: project.files
+        })
+      }
+    )
+
+    localStorage.setItem(CURRENT_PROJECT_KEY, project.id)
+
+    return saved
+  })
+
+  projectSaveQueues.set(project.id, operation)
+
+  try {
+    return await operation
+  } finally {
+    if (projectSaveQueues.get(project.id) === operation) {
+      projectSaveQueues.delete(project.id)
     }
-  )
-
-  localStorage.setItem(CURRENT_PROJECT_KEY, project.id)
-
-  return saved
+  }
 }
 
 export async function createProject(name, files) {
