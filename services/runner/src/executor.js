@@ -5,6 +5,7 @@ import path from 'node:path'
 import Docker from 'dockerode'
 import { getLanguage, listLanguages } from './languages.js'
 import { decodeDockerLogs } from './dockerLogs.js'
+import { assertNoFileDirectoryConflicts, normalizeRunnerFilePath as normalizeFilePath } from './filePaths.js'
 
 const docker = new Docker({
   socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock'
@@ -56,46 +57,6 @@ const jobCleanupTimer = setInterval(() => {
 
 jobCleanupTimer.unref?.()
 
-const reservedExecutionPathParts = new Set([
-  '.git',
-  'node_modules',
-  '.terminal-cache',
-  '.tmp',
-  '.cache',
-  '__proto__',
-  'prototype',
-  'constructor'
-])
-
-function normalizeFilePath(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    value.length > 240 ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    /^[A-Za-z]:/.test(value) ||
-    value.includes('\\') ||
-    /[\u0000-\u001f\u007f]/.test(value)
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  const parts = value.split('/')
-
-  if (
-    parts.some(part =>
-      !part ||
-      part === '..' ||
-      part === '.' ||
-      reservedExecutionPathParts.has(part)
-    )
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  return parts.join('/')
-}
 
 function truncate(value) {
   if (value.length <= maxOutputBytes) {
@@ -173,7 +134,7 @@ function normalizeEnvironment(env) {
   }
 
   let totalBytes = 0
-  const normalized = {}
+  const normalized = Object.create(null)
 
   for (const [key, value] of entries) {
     if (
@@ -213,17 +174,7 @@ async function prepareWorkspace(files) {
     normalizeFilePath(name),
     content
   ])
-  const paths = new Set(safeEntries.map(([name]) => name))
-
-  for (const filePath of paths) {
-    const parts = filePath.split('/')
-
-    for (let index = 1; index < parts.length; index += 1) {
-      if (paths.has(parts.slice(0, index).join('/'))) {
-        throw new Error('file path conflicts with a directory')
-      }
-    }
-  }
+  assertNoFileDirectoryConflicts(safeEntries.map(([name]) => name))
 
   let totalBytes = 0
   await fs.mkdir(workRoot, { recursive: true, mode: 0o755 })
