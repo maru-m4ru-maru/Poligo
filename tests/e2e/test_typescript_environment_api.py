@@ -5,6 +5,7 @@ import uuid
 from playwright.sync_api import expect, sync_playwright
 
 import test_typescript_production as ts
+from project_cleanup import cleanup_owned_projects
 
 
 BASE_URL = ts.BASE_URL
@@ -205,6 +206,7 @@ def main():
             )
             raise
         finally:
+            cleanup_owned_projects(page, API_URL, BASE_URL, "TypeScript API environment diagnostic")
             context.close()
             browser.close()
 
