@@ -14,6 +14,7 @@ import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
 import { shouldRejectBannedSession } from './sessionPolicy.js'
 import { isAllowedWorkspaceId } from './workspacePolicy.js'
+import { normalizeProjectFileMap } from './projectFiles.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -261,57 +262,10 @@ function decodeExecutionFile(content) {
 }
 
 function normalizeExecutionFiles(files) {
-  if (!files || typeof files !== 'object' || Array.isArray(files)) {
-    throw new Error('project files must be an object')
-  }
-
-  const normalized = {}
-  let totalBytes = 0
-
-  for (const [path, value] of Object.entries(files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path === '__proto__' ||
-      path.includes('\\') ||
-      path.includes('\0') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => !part || part === '..' || part === '.')
-    ) {
-      throw new Error('invalid project file path')
-    }
-
-    if (typeof value !== 'string') {
-      throw new Error('project file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(value, 'utf8')
-
-    if (totalBytes > MAX_PROJECT_BYTES) {
-      throw new Error('project is too large')
-    }
-
-    normalized[path] = value
-  }
-
-  const normalizedPaths = new Set(Object.keys(normalized))
-
-  for (const filePath of normalizedPaths) {
-    const parts = filePath.split('/')
-
-    for (let index = 1; index < parts.length; index += 1) {
-      if (normalizedPaths.has(parts.slice(0, index).join('/'))) {
-        throw new Error('project file path conflicts with a directory')
-      }
-    }
-  }
-
-  if (Object.keys(normalized).length > MAX_FILES) {
-    throw new Error('too many project files')
-  }
-
-  return normalized
+  return normalizeProjectFileMap(files, {
+    maxFiles: MAX_FILES,
+    maxBytes: MAX_PROJECT_BYTES
+  })
 }
 
 function buildPhpAdditionalFiles(files) {
@@ -1797,58 +1751,12 @@ function normalizeProjectPayload(payload) {
     throw new Error('project name is required')
   }
 
-  if (!payload.files || typeof payload.files !== 'object' || Array.isArray(payload.files)) {
-    throw new Error('project files must be an object')
-  }
-
-  const files = {}
-  let totalBytes = 0
-
-  for (const [path, value] of Object.entries(payload.files)) {
-    if (
-      typeof path !== 'string' ||
-      path.length === 0 ||
-      path.length > 240 ||
-      path === '__proto__' ||
-      path.includes('\\') ||
-      path.startsWith('/') ||
-      path.split('/').some(part => !part || part === '..' || part === '.')
-    ) {
-      throw new Error('invalid project file path')
-    }
-
-    if (typeof value !== 'string') {
-      throw new Error('project file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(value, 'utf8')
-
-    if (totalBytes > MAX_PROJECT_BYTES) {
-      throw new Error('project is too large')
-    }
-
-    files[path] = value
-  }
-
-  const filePaths = new Set(Object.keys(files))
-
-  for (const filePath of filePaths) {
-    const parts = filePath.split('/')
-
-    for (let index = 1; index < parts.length; index += 1) {
-      if (filePaths.has(parts.slice(0, index).join('/'))) {
-        throw new Error('project file path conflicts with a directory')
-      }
-    }
-  }
-
-  if (Object.keys(files).length > MAX_FILES) {
-    throw new Error('too many project files')
-  }
-
   return {
     name,
-    files
+    files: normalizeProjectFileMap(payload.files, {
+      maxFiles: MAX_FILES,
+      maxBytes: MAX_PROJECT_BYTES
+    })
   }
 }
 
