@@ -19,6 +19,7 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - run: pnpm install --no-frozen-lockfile
+      - run: pnpm audit --audit-level high
       - run: pnpm build:web
 
   services:
