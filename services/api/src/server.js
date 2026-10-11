@@ -14,6 +14,7 @@ import { shouldUseJudge0 } from './executionRouting.js'
 import { isConfiguredAdmin, isDisposableE2EAccountEmail } from './adminPolicy.js'
 import { DEFAULT_STORAGE_LIMIT_BYTES } from './storageQuota.js'
 import { getRequestInputStatus, readJsonBody } from './requestInput.js'
+import { getWorkspaceClaimDecision } from './workspaceClaimPolicy.js'
 import { normalizeProjectPayload } from './projectValidation.js'
 
 const port = Number(process.env.PORT || 10000)
@@ -1674,6 +1675,23 @@ async function claimWorkspace(request, response) {
 
   const workspaceId = getWorkspaceId(request)
   const database = getDatabase()
+  const registeredOwnerStatement = await database.prepare(
+    'SELECT id FROM "user" WHERE id = ? LIMIT 1'
+  )
+  const registeredOwnerRows = await registeredOwnerStatement.all([workspaceId])
+  const decision = getWorkspaceClaimDecision(
+    workspaceId,
+    session.user.id,
+    registeredOwnerRows.length > 0
+  )
+
+  if (decision === 'owned-by-another-account') {
+    send(response, 403, {
+      error: 'workspace belongs to another account'
+    })
+    return
+  }
+
   const existingStatement = await database.prepare(
     'SELECT COUNT(*) AS count FROM projects WHERE owner_id = ?'
   )
@@ -1681,7 +1699,7 @@ async function claimWorkspace(request, response) {
 
   const count = Number(existing[0]?.count || 0)
 
-  if (count > 0 && workspaceId !== session.user.id) {
+  if (count > 0 && decision === 'legacy-workspace') {
     await database.batch([
       {
         sql: 'UPDATE projects SET owner_id = ? WHERE owner_id = ?',
