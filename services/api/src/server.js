@@ -6068,13 +6068,16 @@ const server = http.createServer(async (request, response) => {
     try {
       await handleProjectRequest(request, response)
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'project request failed'
       const status =
-        error.message === 'authentication required'
+        message === 'authentication required'
           ? 401
-          : 500
+          : message.includes('terminal cleanup failed')
+            ? 503
+            : 500
 
       send(response, status, {
-        error: error instanceof Error ? error.message : 'project request failed'
+        error: message
       })
     }
     return
