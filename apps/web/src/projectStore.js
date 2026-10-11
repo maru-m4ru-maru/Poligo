@@ -1,6 +1,6 @@
 import { normalizeProjectFileMap } from './projectFilePaths'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = import.meta.env?.VITE_API_URL || ''
 const WORKSPACE_KEY = 'poligo-workspace-id'
 const CURRENT_PROJECT_KEY = 'poligo-current-project'
 const projectSaveQueues = new Map()
