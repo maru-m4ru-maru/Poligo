@@ -6,6 +6,7 @@ import path from 'node:path'
 import pty from 'node-pty'
 import tar from 'tar-stream'
 import { workspaceSyncScript } from './workspace-sync.js'
+import { normalizeTerminalFilePath, normalizeTerminalFiles } from './terminalPaths.js'
 
 const execFileAsync = promisify(execFile)
 const workspaceRoot = process.env.TERMINAL_RUN_ROOT || '/tmp/poligo-terminal-sessions'
@@ -41,70 +42,14 @@ function normalizeId(value) {
 }
 
 function normalizeFilePath(value) {
-  if (
-    typeof value !== 'string' ||
-    !value ||
-    value.length > 240 ||
-    value.includes('\0') ||
-    value.startsWith('/') ||
-    value.includes('\\')
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  const parts = value.split('/')
-
-  if (
-    parts.some(part =>
-      !part ||
-      part === '.' ||
-      part === '..' ||
-      part === '.terminal-cache' ||
-      part === '.tmp' ||
-      part === '.cache'
-    )
-  ) {
-    throw new Error('invalid file path')
-  }
-
-  return parts.join('/')
+  return normalizeTerminalFilePath(value)
 }
 
 function normalizeFiles(files) {
-  if (!files || typeof files !== 'object' || Array.isArray(files)) {
-    throw new Error('terminal files must be an object')
-  }
-
-  const entries = Object.entries(files)
-
-  if (!entries.length) {
-    throw new Error('terminal workspace is empty')
-  }
-
-  if (entries.length > maxFiles) {
-    throw new Error('too many terminal files')
-  }
-
-  let totalBytes = 0
-  const normalized = {}
-
-  for (const [name, content] of entries) {
-    const safePath = normalizeFilePath(name)
-
-    if (typeof content !== 'string') {
-      throw new Error('terminal file content must be text')
-    }
-
-    totalBytes += Buffer.byteLength(content, 'utf8')
-
-    if (totalBytes > maxProjectBytes) {
-      throw new Error('terminal workspace is too large')
-    }
-
-    normalized[safePath] = content
-  }
-
-  return normalized
+  return normalizeTerminalFiles(files, {
+    maxFiles,
+    maxBytes: maxProjectBytes
+  })
 }
 
 async function createSystemUser(workspace) {
@@ -387,7 +332,7 @@ async function collectWorkspaceFiles(session) {
 
   return await new Promise((resolve, reject) => {
     const extract = tar.extract()
-    const files = {}
+    const files = Object.create(null)
     let totalBytes = 0
 
     extract.on('entry', (header, stream, next) => {
