@@ -5843,7 +5843,6 @@ async function cleanupDisposableE2EAccountsOnStartup() {
     'SELECT id, email, emailVerified FROM "user"'
   )
   const userRows = await userRowsStatement.all()
-  const disposablePattern = /^poligo-[a-z0-9-]+-[a-f0-9]{32}@example\.invalid$/i
   const exampleInvalidRows = userRows.filter(row =>
     String(row.email || '').trim().toLowerCase().endsWith('@example.invalid')
   )
@@ -5851,7 +5850,7 @@ async function cleanupDisposableE2EAccountsOnStartup() {
     const id = String(row.id || '')
     const email = String(row.email || '').trim().toLowerCase()
 
-    return disposablePattern.test(email) &&
+    return isGeneratedE2EAccountEmail(email) &&
       !isConfiguredAdmin({
         id,
         email,
@@ -5872,10 +5871,7 @@ async function cleanupDisposableE2EAccountsOnStartup() {
   console.log('Disposable E2E cleanup started', {
     totalUsers: userRows.length,
     exampleInvalidUsers: exampleInvalidRows.length,
-    eligibleAccounts: totals.eligibleAccounts,
-    exampleInvalidEmailSamples: exampleInvalidRows
-      .slice(0, 12)
-      .map(row => String(row.email || '').trim().toLowerCase())
+    eligibleAccounts: totals.eligibleAccounts
   })
 
   for (const user of candidates) {
