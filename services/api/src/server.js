@@ -1718,21 +1718,9 @@ async function claimWorkspace(request, response) {
 async function getOwnerStorageBytes(ownerId) {
   const database = getDatabase()
   const storageStatement = await database.prepare(
-    `SELECT
-      COALESCE((
-        SELECT SUM(LENGTH(CAST(pf.content AS BLOB)))
-        FROM projects p
-        INNER JOIN project_files pf ON pf.project_id = p.id
-        WHERE p.owner_id = ?
-      ), 0) + COALESCE((
-        SELECT SUM(LENGTH(CAST(pcf.content AS BLOB)))
-        FROM projects p
-        INNER JOIN project_commits pc ON pc.project_id = p.id
-        INNER JOIN project_commit_files pcf ON pcf.commit_id = pc.id
-        WHERE p.owner_id = ?
-      ), 0) AS storage_bytes`
+    'SELECT current_bytes + snapshot_bytes AS storage_bytes FROM user_storage_usage WHERE user_id = ?'
   )
-  const rows = await storageStatement.all([ownerId, ownerId])
+  const rows = await storageStatement.all([ownerId])
 
   return Number(rows[0]?.storage_bytes || 0)
 }
@@ -3942,6 +3930,10 @@ async function handleAdminUsersRequest(request, response) {
       },
       {
         sql: 'DELETE FROM user_storage_limits WHERE user_id = ?',
+        args: [userId]
+      },
+      {
+        sql: 'DELETE FROM user_storage_usage WHERE user_id = ?',
         args: [userId]
       },
       {
