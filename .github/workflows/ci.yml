@@ -100,7 +100,7 @@ jobs:
             python3 -m venv /tmp/poligo-pip-venv
             /tmp/poligo-pip-venv/bin/python -m pip --version
             /tmp/poligo-pip-venv/bin/python -m pip install --disable-pip-version-check --no-input --retries 1 --timeout 20 requests
-            /tmp/poligo-pip-venv/bin/python -c "import requests; print(\\"PYPI REQUESTS IMPORT: PASS\\", requests.__version__)"
+            /tmp/poligo-pip-venv/bin/python -c "import requests; print(requests.__version__)"
           '
       - name: Run Docker terminal end-to-end test
         run: |
