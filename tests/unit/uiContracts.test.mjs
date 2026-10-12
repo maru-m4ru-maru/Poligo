@@ -45,7 +45,7 @@ test('current sidebar pages are labels, not inert buttons', () => {
   assert.match(admin, /src="\/icons\/ui-plus\.svg"/)
 })
 
-test('official semantic file and utility SVGs are present', () =>
+test('official semantic file and utility SVGs are present', () => {
   const names = [
     'file-code.svg', 'file-braces.svg', 'file-key.svg', 'file-cog.svg',
     'file-text.svg', 'ui-pencil.svg', 'ui-trash-2.svg', 'ui-file-plus-2.svg',
