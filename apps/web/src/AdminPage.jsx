@@ -285,9 +285,7 @@ export default function AdminPage({ session }) {
     <div className="stack-dashboard account-dashboard admin-dashboard">
       <aside className="stack-sidebar">
         <button className="stack-sidebar-brand" onClick={() => navigate('/dashboard')}>
-          <span className="account-brand-logo">
-            <img src="/poligo-logo-dark.svg" alt="Poligo" />
-          </span>
+          <img src="/poligo-logo.svg" alt="Poligo" />
         </button>
         <button className="stack-new-button" onClick={() => navigate('/dashboard')}>
           <img src="/icons/ui-plus.svg" alt="" aria-hidden="true" />
