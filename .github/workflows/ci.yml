@@ -95,11 +95,13 @@ jobs:
       - name: Verify pip, venv, and PyPI package installation
         run: |
           set -euo pipefail
-          docker exec poligo-runner-ci python3 -m pip --version
-          docker exec poligo-runner-ci python3 -m venv /tmp/poligo-pip-venv
-          docker exec poligo-runner-ci /tmp/poligo-pip-venv/bin/python -m pip --version
-          docker exec poligo-runner-ci /tmp/poligo-pip-venv/bin/python -m pip install --disable-pip-version-check --no-input --retries 1 --timeout 20 requests
-          docker exec poligo-runner-ci /tmp/poligo-pip-venv/bin/python -c 'import requests; print("PYPI REQUESTS IMPORT: PASS", requests.__version__)'
+          docker run --rm --entrypoint /bin/sh poligo-runner-ci -ec '
+            python3 -m pip --version
+            python3 -m venv /tmp/poligo-pip-venv
+            /tmp/poligo-pip-venv/bin/python -m pip --version
+            /tmp/poligo-pip-venv/bin/python -m pip install --disable-pip-version-check --no-input --retries 1 --timeout 20 requests
+            /tmp/poligo-pip-venv/bin/python -c "import requests; print(\\"PYPI REQUESTS IMPORT: PASS\\", requests.__version__)"
+          '
       - name: Run Docker terminal end-to-end test
         run: |
           set -euo pipefail

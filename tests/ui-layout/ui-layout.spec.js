@@ -47,54 +47,60 @@ async function mockAuthenticatedApi(page) {
     }
   }
 
-  await page.route('**/api/auth/get-session', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      session: {
-        id: 'ui-layout-session',
-        userId: user.id,
-        token: 'ui-layout-token',
-        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
-        createdAt: now,
-        updatedAt: now
-      },
-      user
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url())
+    const pathname = url.pathname
+    const method = route.request().method()
+    const json = body => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(body)
     })
-  }))
-  await page.route('**/api/workspace/claim', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ claimed: true })
-  }))
-  await page.route('**/api/dashboard', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({
-      user,
-      projects: [project],
-      stats: {
-        projectCount: 1,
-        storageBytes: 512,
-        storageLimitBytes: 15 * 1024 * 1024
-      }
-    })
-  }))
-  await page.route('**/api/projects', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify(route.request().method() === 'GET' ? [project] : project)
-  }))
-  await page.route('**/api/projects/ui-layout-project*', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify(project)
-  }))
-  await page.route('**/api/announcements', route => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify([])
-  }))
+
+    if (pathname === '/api/auth/get-session') {
+      return json({
+        session: {
+          id: 'ui-layout-session',
+          userId: user.id,
+          token: 'ui-layout-token',
+          expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+          createdAt: now,
+          updatedAt: now
+        },
+        user
+      })
+    }
+
+    if (pathname === '/api/workspace/claim') {
+      return json({ claimed: true })
+    }
+
+    if (pathname === '/api/dashboard') {
+      return json({
+        user,
+        projects: [project],
+        stats: {
+          projectCount: 1,
+          storageBytes: 512,
+          storageLimitBytes: 15 * 1024 * 1024
+        }
+      })
+    }
+
+    if (pathname === '/api/projects') {
+      return json(method === 'GET' ? [project] : project)
+    }
+
+    if (pathname.startsWith('/api/projects/')) {
+      if (pathname.endsWith('/commits')) return json([])
+      if (pathname.includes('/commits/')) return json({ commits: [], diff: [] })
+      return method === 'DELETE' ? route.fulfill({ status: 204, body: '' }) : json(project)
+    }
+
+    if (pathname === '/api/announcements') return json([])
+
+    return json({})
+  })
 }
 
 test('homepage positions and spacing hold at desktop width', async ({ page }) => {
