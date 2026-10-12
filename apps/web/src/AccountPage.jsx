@@ -338,7 +338,7 @@ export default function AccountPage({ session }) {
           className="stack-new-button"
           onClick={() => navigate('/dashboard')}
         >
-          <span>+</span>
+          <img src="/icons/ui-plus.svg" alt="" aria-hidden="true" />
           新規プロジェクト
         </button>
 
@@ -350,10 +350,10 @@ export default function AccountPage({ session }) {
             プロジェクト
           </button>
 
-          <button className="active">
+          <span className="stack-sidebar-static-active" aria-current="page">
             <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/user-round.svg" alt="" aria-hidden="true" /></span>
             アカウント
-          </button>
+          </span>
 
           {isAdmin && (
             <button onClick={() => navigate('/admin')}>

@@ -102,23 +102,18 @@ const SERVER_LANGUAGES = new Set([
 ])
 
 const FILE_ICONS = {
-  html: '/icons/html5.svg',
-  css: '/icons/css.svg',
-  js: '/icons/javascript.svg',
-  node: '/icons/nodejs.svg',
-  python: '/icons/python.svg',
-  java: '/icons/java.svg',
-  go: '/icons/go.svg',
-  rust: '/icons/rust.svg',
-  php: '/icons/php.svg',
-  ruby: '/icons/ruby.svg',
-  kotlin: '/icons/kotlin.svg',
-  c: '/icons/c.svg',
-  cpp: '/icons/cplusplus.svg',
-  csharp: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
-  typescript: '/icons/typescript.svg'
+  html: '/icons/file-code.svg', css: '/icons/file-code.svg',
+  js: '/icons/file-code.svg', node: '/icons/file-code.svg',
+  python: '/icons/file-code.svg', java: '/icons/file-code.svg',
+  go: '/icons/file-code.svg', rust: '/icons/file-code.svg',
+  php: '/icons/file-code.svg', ruby: '/icons/file-code.svg',
+  kotlin: '/icons/file-code.svg', c: '/icons/file-code.svg',
+  cpp: '/icons/file-code.svg', csharp: '/icons/file-code.svg',
+  typescript: '/icons/file-code.svg',
+  json: '/icons/file-braces.svg', markdown: '/icons/file-text.svg',
+  env: '/icons/file-key.svg', config: '/icons/file-cog.svg',
+  text: '/icons/file-text.svg'
 }
-
 function getFileMeta(name) {
   if (name === '.env' || name.startsWith('.env.')) {
     return {
@@ -173,299 +168,24 @@ function getProjectFileIconKind(name, files) {
   return kind
 }
 
-function RenameIcon({ size = 13 }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M4 16.8V20h3.2L18.5 8.7a2.3 2.3 0 0 0 0-3.3l-.9-.9a2.3 2.3 0 0 0-3.3 0z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m13.2 6.2 4.6 4.6"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
+function InterfaceIcon({ src, size = 16, className = '' }) {
+  return <img src={src} alt="" aria-hidden="true" width={size} height={size} className={className || 'interface-icon'} />
 }
-
-function TrashIcon({ size = 13 }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M5 7h14M9 7V4.5h6V7M8 10v7M12 10v7M16 10v7M7 7l.7 13h8.6L17 7"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function NewFileIcon({ size = 14 }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M6 3.5h8l4 4V20H6z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M14 3.5V8h4M12 11v5M9.5 13.5h5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function UploadIcon({ size = 14 }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 15V5M8.5 8.5 12 5l3.5 3.5M5 13v5.5h14V13"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
+function RenameIcon({ size = 13 }) { return <InterfaceIcon src="/icons/ui-pencil.svg" size={size} /> }
+function TrashIcon({ size = 13 }) { return <InterfaceIcon src="/icons/ui-trash-2.svg" size={size} /> }
+function NewFileIcon({ size = 14 }) { return <InterfaceIcon src="/icons/ui-file-plus-2.svg" size={size} /> }
+function UploadIcon({ size = 14 }) { return <InterfaceIcon src="/icons/ui-upload.svg" size={size} /> }
 function FileIcon({ kind, size = 16 }) {
-  const src = FILE_ICONS[kind]
-
-  if (src) {
-    return (
-      <img
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        className="file-icon-image"
-        aria-hidden="true"
-      />
-    )
-  }
-
-  if (kind === 'env') {
-    return (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"
-          fill="#8B6FD7"
-        />
-        <path
-          d="M8 12h8M9.5 9.5h5v5h-5z"
-          stroke="#F1ECFF"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    )
-  }
-
-  if (kind === 'json') {
-    return (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M5 3.5h9l5 5v12H5z"
-          fill="#D8A537"
-        />
-        <path
-          d="M14 3.5v5h5"
-          fill="#F3D889"
-        />
-        <path
-          d="M9 11c-1 0-1.5.7-1.5 1.5S8 14 9 14h1.5M15 11h-1.5c-1 0-1.5.7-1.5 1.5s.5 1.5 1.5 1.5H15"
-          stroke="#FFF8E7"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-        />
-      </svg>
-    )
-  }
-
-  if (kind === 'markdown') {
-    return (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M4 4h16v16H4z"
-          fill="#5B83B7"
-        />
-        <path
-          d="M7.5 16V8l2.5 3 2.5-3v8M16 13l-2-2 2-2M14 11h3"
-          stroke="#F2F6FC"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    )
-  }
-
-  if (kind === 'config') {
-    return (
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M5 3.5h9l5 5v12H5z"
-          fill="#666A70"
-        />
-        <path
-          d="M14 3.5v5h5"
-          fill="#92979E"
-        />
-        <path
-          d="M9 11h6M9 14h4M9 17h5"
-          stroke="#E8EBEF"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-        />
-      </svg>
-    )
-  }
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M5 3.5h9l5 5v12H5z"
-        fill="#64748B"
-      />
-      <path
-        d="M14 3.5v5h5"
-        fill="#94A3B8"
-      />
-      <path
-        d="M8.5 12h7M8.5 15h5"
-        stroke="#E6E9EE"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
+  return <img src={FILE_ICONS[kind] || FILE_ICONS.text} alt="" width={size} height={size} className="file-icon-image" aria-hidden="true" />
 }
-
-
-function FolderIcon({ size = 15 }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M3.5 6.5h6l2 2H20.5v10h-17z"
-        fill="#565650"
-      />
-      <path
-        d="M3.5 8.5h17"
-        stroke="#8A8A82"
-        strokeWidth="1"
-      />
-    </svg>
-  )
+function FolderIcon({ size = 15 }) { return <InterfaceIcon src="/icons/ui-folder.svg" size={size} /> }
+const ACTIVITY_ICONS = {
+  files: '/icons/activity-files.svg', search: '/icons/activity-search.svg',
+  source: '/icons/activity-source.svg', ai: '/icons/activity-ai.svg',
+  preview: '/icons/activity-preview.svg', settings: '/icons/activity-settings.svg'
 }
-
 function ActivityIcon({ type }) {
-  const common = {
-    width: 19,
-    height: 19,
-    viewBox: '0 0 20 20',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.4,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    'aria-hidden': true
-  }
-
-  if (type === 'files') {
-    return <svg {...common}><path d="M3 5h5l1.5 1.7H17v8.3H3z" /><path d="M3 6.7h14" /></svg>
-  }
-
-  if (type === 'search') {
-    return <svg {...common}><circle cx="8.4" cy="8.4" r="4.8" /><path d="m12 12 4 4" /></svg>
-  }
-
-  if (type === 'ai') {
-    return <svg {...common}><path d="M5 6.5h10v7H5z" /><path d="M8 13.5v2M12 13.5v2M8.5 9h.01M11.5 9h.01" /></svg>
-  }
-
-  if (type === 'preview') {
-    return <svg {...common}><rect x="3.5" y="5" width="13" height="10" rx="1.5" /><path d="M6 8h2M6 11h8M11 8h2" /></svg>
-  }
-
-  if (type === 'source') {
-    return <svg {...common}><circle cx="5" cy="5" r="2" /><circle cx="15" cy="15" r="2" /><path d="M7 6.3 13 13.7M7 15h4a4 4 0 0 0 4-4V7" /></svg>
-  }
-
-  return <svg {...common}><circle cx="10" cy="10" r="3" /><path d="m10 2.6.8 1.8 2 .5 1.6-1.1 1.8 1.8-1.1 1.6.5 2 1.8.8v2.6l-1.8.8-.5 2 1.1 1.6-1.8 1.8-1.6-1.1-2 .5-.8 1.8H7.4l-.8-1.8-2-.5L3 16.4l1.1-1.6-.5-2-1.8-.8V7.6l1.8-.8-.5-2L3 3.2l1.6 1.1 2-.5.8-1.8z" /></svg>
+  return <InterfaceIcon src={ACTIVITY_ICONS[type] || ACTIVITY_ICONS.files} size={20} className="activity-icon" />
 }
 
 function setupEditor(monaco) {
@@ -1060,6 +780,11 @@ function IDE({ projectId }) {
   const [activeFile, setActiveFile] = useState('index.html')
   const [openFiles, setOpenFiles] = useState(['index.html'])
   const [activeView, setActiveView] = useState('files')
+  const [editorFontSize, setEditorFontSize] = useState(() => {
+    const stored = Number(localStorage.getItem('poligo-editor-font-size'))
+    return Number.isInteger(stored) && stored >= 12 && stored <= 24 ? stored : 14
+  })
+  const [editorWordWrap, setEditorWordWrap] = useState(() => localStorage.getItem('poligo-editor-word-wrap') === 'on')
   const [rightPaneView, setRightPaneView] = useState('preview')
   const [bottomTab, setBottomTab] = useState('terminal')
   const [bottomOpen, setBottomOpen] = useState(true)
@@ -1125,6 +850,14 @@ function IDE({ projectId }) {
   const editorRef = useRef(null)
   const fileUploadRef = useRef(null)
   const filesRef = useRef(files)
+
+  useEffect(() => {
+    localStorage.setItem('poligo-editor-font-size', String(editorFontSize))
+  }, [editorFontSize])
+
+  useEffect(() => {
+    localStorage.setItem('poligo-editor-word-wrap', editorWordWrap ? 'on' : 'off')
+  }, [editorWordWrap])
 
   const { data: session } = authClient.useSession()
   const currentLanguage = getFileMeta(activeFile).language
@@ -1888,7 +1621,7 @@ function IDE({ projectId }) {
               title={node.path}
             >
               <span className="explorer-folder-arrow">
-                {collapsed ? '›' : '⌄'}
+                <InterfaceIcon src={collapsed ? '/icons/ui-chevron-right.svg' : '/icons/ui-chevron-down.svg'} size={12} />
               </span>
               <FolderIcon />
               <span>{node.name}</span>
@@ -3078,7 +2811,7 @@ function IDE({ projectId }) {
                 disabled={dialogBusy}
                 aria-label="閉じる"
               >
-                ×
+                <InterfaceIcon src="/icons/ui-x.svg" size={13} />
               </button>
             </div>
 
@@ -3198,9 +2931,6 @@ function IDE({ projectId }) {
           >
             <img src="/poligo-mark.svg" alt="" />
           </button>
-          <button className="menu-button">ファイル</button>
-          <button className="menu-button">編集</button>
-          <button className="menu-button">表示</button>
         </div>
         <div className="project-title-wrap">
           <button
@@ -3208,7 +2938,7 @@ function IDE({ projectId }) {
             onClick={() => setProjectMenuOpen(value => !value)}
           >
             <span className="project-title">{projectName}</span>
-            <span className="project-picker-arrow">⌄</span>
+            <span className="project-picker-arrow"><InterfaceIcon src="/icons/ui-chevron-down.svg" size={13} /></span>
             <span className="project-visibility">非公開</span>
             <span className={'save-status ' + saveStatus.replace(/\s/g, '-').replace(' ', '-')}>
               {saveStatus}
@@ -3239,7 +2969,6 @@ function IDE({ projectId }) {
           )}
         </div>
         <div className="topbar-right">
-          <button className="top-icon" title="設定"><ActivityIcon type="settings" /></button>
           <span className="account-name">
             {session?.user?.name}
           </span>
@@ -3254,7 +2983,7 @@ function IDE({ projectId }) {
             {apiStatus}
           </span>
           <button className="top-button" onClick={resetProject}>リセット</button>
-          <button className="run-button" onClick={runProject}><span>▶</span> 実行</button>
+          <button className="run-button" onClick={runProject}><InterfaceIcon src="/icons/ui-play.svg" size={13} className="run-icon" /> 実行</button>
         </div>
       </header>
 
@@ -3333,7 +3062,7 @@ function IDE({ projectId }) {
 
           {activeView === 'files' && (
             <>
-              <button
+              <div role="group" aria-label="プロジェクトのルート"
                 className={'project-folder ' + (dragOverFolder === '' && draggedPath ? 'drop-target' : '')}
                 onDragOver={handleRootDragOver}
                 onDragLeave={() => {
@@ -3344,9 +3073,9 @@ function IDE({ projectId }) {
                 onDrop={event => handleFolderDrop(event, '')}
                 title="プロジェクトのルート"
               >
-                <span>⌄</span>
+                <span className="explorer-folder-arrow"><InterfaceIcon src="/icons/ui-chevron-down.svg" size={12} /></span>
                 <span>POLIGO</span>
-              </button>
+              </div>
               <div className="file-list">
                 {newFileOpen && (
                   <div className="explorer-new-file">
@@ -3533,9 +3262,17 @@ function IDE({ projectId }) {
           )}
 
           {activeView === 'settings' && (
-            <div className="empty-view">
-              <div className="empty-title">設定</div>
-              <div className="empty-text">ワークスペースの設定をここに表示します。</div>
+            <div className="settings-view">
+              <header><span>EDITOR</span><h2>エディター設定</h2></header>
+              <label className="settings-control">
+                <span><span>フォントサイズ</span><output>{editorFontSize}px</output></span>
+                <input type="range" min="12" max="24" step="1" value={editorFontSize} onChange={event => setEditorFontSize(Number(event.target.value))} aria-label="エディターのフォントサイズ" />
+              </label>
+              <label className="settings-toggle">
+                <input type="checkbox" checked={editorWordWrap} onChange={event => setEditorWordWrap(event.target.checked)} aria-label="エディターの行を折り返す" />
+                <span>長い行を折り返す</span>
+              </label>
+              <p className="settings-note">設定はこのブラウザに保存され、次回の起動時にも適用されます。</p>
             </div>
           )}
         </aside>
@@ -3559,7 +3296,7 @@ function IDE({ projectId }) {
                     }}
                     aria-label={'閉じる ' + name}
                   >
-                    ×
+                    <InterfaceIcon src="/icons/ui-x.svg" size={12} />
                   </button>
                 </div>
               ))}
@@ -3609,12 +3346,12 @@ function IDE({ projectId }) {
                 beforeMount={setupEditor}
                 options={{
                   minimap: { enabled: false },
-                  fontSize: 14,
+                  fontSize: editorFontSize,
                   padding: { top: 12, bottom: 12 },
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   smoothScrolling: true,
-                  wordWrap: 'off',
+                  wordWrap: editorWordWrap ? 'on' : 'off',
                   renderWhitespace: 'selection'
                 }}
                 />
@@ -3646,7 +3383,7 @@ function IDE({ projectId }) {
                   onClick={() => setBottomOpen(value => !value)}
                 >
                   <span className="bottom-collapse-icon">
-                    {bottomOpen ? '⌄' : '⌃'}
+                    <InterfaceIcon src={bottomOpen ? '/icons/ui-chevron-down.svg' : '/icons/ui-chevron-up.svg'} size={14} />
                   </span>
                 </button>
               </div>
@@ -3795,7 +3532,7 @@ function IDE({ projectId }) {
                         editorRef.current?.focus()
                       }}
                     >
-                      <span>{marker.severity === 8 ? '!' : '×'}</span>
+                      <span className="problem-icon"><InterfaceIcon src={marker.severity === 8 ? '/icons/ui-circle-x.svg' : '/icons/ui-circle-alert.svg'} size={17} /></span>
                       <div>
                         <strong>{marker.message}</strong>
                         <small>
@@ -3811,7 +3548,7 @@ function IDE({ projectId }) {
                       className="problem-item problem-item-error"
                       onClick={() => setBottomTab('terminal')}
                     >
-                      <span>×</span>
+                      <span className="problem-icon"><InterfaceIcon src="/icons/ui-circle-x.svg" size={17} /></span>
                       <div>
                         <strong>{problem.message}</strong>
                         <small>プレビュー実行時エラー</small>
@@ -3824,7 +3561,7 @@ function IDE({ projectId }) {
                       className="problem-item problem-item-error"
                       onClick={() => setBottomTab('terminal')}
                     >
-                      <span>×</span>
+                      <span className="problem-icon"><InterfaceIcon src="/icons/ui-circle-x.svg" size={17} /></span>
                       <div>
                         <strong>{execution.error}</strong>
                         <small>実行エラー</small>
@@ -3863,20 +3600,12 @@ function IDE({ projectId }) {
             ) : (
               <>
                 <div className="preview-toolbar">
-                  <button className="preview-control">‹</button>
-                  <button className="preview-control">›</button>
-                  <button className="preview-control" onClick={refreshPreview}>↻</button>
+                  <button className="preview-control" onClick={refreshPreview} title="プレビューを再読み込み" aria-label="プレビューを再読み込み"><InterfaceIcon src="/icons/ui-refresh.svg" size={15} /></button>
                   <div className="preview-address">
-                    <span>○</span>
+                    <InterfaceIcon src="/icons/activity-preview.svg" size={13} />
                     <span>プレビュー</span>
                   </div>
-                  <button
-                    className="preview-control"
-                    onClick={openPreviewWindow}
-                    title="新しいタブで開く"
-                  >
-                    ↗
-                  </button>
+                  <button className="preview-control" onClick={openPreviewWindow} title="新しいタブで開く" aria-label="プレビューを新しいタブで開く"><InterfaceIcon src="/icons/ui-external-link.svg" size={15} /></button>
                 </div>
                 <iframe
                   ref={previewFrameRef}

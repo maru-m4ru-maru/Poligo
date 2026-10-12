@@ -93,7 +93,9 @@ test('language and runtime marks are real sourced brand assets, not hand-drawn p
   const microsoftCSharpLogo = 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png'
 
   assert.ok(dashboard.includes("'C#': '" + microsoftCSharpLogo + "'"))
-  assert.ok(ide.includes("csharp: '" + microsoftCSharpLogo + "'"))
+  assert.ok(ide.includes("csharp: '/icons/file-code.svg'"))
+  assert.doesNotMatch(ide, /python: '\/icons\/python\.svg'/)
+  assert.doesNotMatch(ide, /typescript: '\/icons\/typescript\.svg'/)
   assert.ok(homepage.includes("icon: '" + microsoftCSharpLogo + "'"))
   assert.doesNotMatch(dashboard, /fill="#52647A"/)
 })

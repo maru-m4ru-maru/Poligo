@@ -21,6 +21,10 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm audit --audit-level=moderate
       - run: pnpm build:web
+      - name: Check responsive browser layouts
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:ui-layout
       - name: Enforce initial JavaScript bundle budget
         run: |
           node --input-type=module -e '
@@ -88,6 +92,43 @@ jobs:
           curl --silent --fail http://127.0.0.1:10002/v1/languages \
             -H 'Authorization: Bearer runner-ci-token' |
             node -e 'let data = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", chunk => data += chunk); process.stdin.on("end", () => { const result = JSON.parse(data); if (!Array.isArray(result.languages) || !result.languages.includes("node")) process.exit(1); console.log("PRODUCTION RUNNER IMAGE: PASS", result.languages.join(", ")); })'
+      - name: Verify pip, venv, and PyPI package installation
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint /bin/sh poligo-runner-ci -ec '
+            python3 -m pip --version
+            python3 -m venv /tmp/poligo-pip-venv
+            /tmp/poligo-pip-venv/bin/python -m pip --version
+            /tmp/poligo-pip-venv/bin/python -m pip install --disable-pip-version-check --no-input --retries 1 --timeout 20 requests
+            /tmp/poligo-pip-venv/bin/python -c "import requests; print(requests.__version__)"
+          '
+      - name: Run process terminal pip end-to-end test
+        run: |
+          set -euo pipefail
+          docker run -d --name poligo-runner-process-ci -p 10003:10001 -e PORT=10001 -e RUNNER_TOKEN=terminal-process-e2e-token -e TERMINAL_BACKEND=process -e TERMINAL_RUN_ROOT=/tmp/poligo-process-e2e poligo-runner-ci
+          cleanup() {
+            docker logs poligo-runner-process-ci || true
+            docker rm -f poligo-runner-process-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in $(seq 1 100); do
+            if curl --silent --fail http://127.0.0.1:10003/health >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' poligo-runner-process-ci 2>/dev/null || true)" != true ]; then
+              docker logs poligo-runner-process-ci || true
+              exit 1
+            fi
+            sleep 0.2
+          done
+          if [ "$ready" != true ]; then
+            docker logs poligo-runner-process-ci || true
+            echo "Process terminal runner did not become ready" >&2
+            exit 1
+          fi
+          TERMINAL_E2E_URL=http://127.0.0.1:10003 TERMINAL_E2E_TOKEN=terminal-process-e2e-token TERMINAL_E2E_BACKEND=process node tests/e2e/test_terminal_runner.mjs
       - name: Run Docker terminal end-to-end test
         run: |
           set -euo pipefail

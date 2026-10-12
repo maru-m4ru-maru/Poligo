@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     passwd \
     procps \
     python3 \
+    python3-pip \
+    python3-venv \
     tar \
     util-linux \
     && rm -rf /var/lib/apt/lists/*

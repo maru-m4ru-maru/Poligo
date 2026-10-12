@@ -214,13 +214,24 @@ function appendOutput(session, data) {
 
 function terminalEnvironment(session) {
   const cache = path.join(session.workspace, '.terminal-cache')
+  const pythonVenv = path.join(cache, 'python-venv')
 
   return {
     HOME: session.workspace,
     USER: session.username,
     LOGNAME: session.username,
     SHELL: '/bin/bash',
-    PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+    PATH: [
+      path.join(pythonVenv, 'bin'),
+      '/usr/local/sbin',
+      '/usr/local/bin',
+      '/usr/sbin',
+      '/usr/bin',
+      '/sbin',
+      '/bin'
+    ].join(':'),
+    VIRTUAL_ENV: pythonVenv,
+    PIP_CACHE_DIR: path.join(cache, 'pip'),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     LANG: 'C.UTF-8',
@@ -231,6 +242,30 @@ function terminalEnvironment(session) {
     PS1: '\\u@poligo:\\w$ ',
     PWD: session.workspace
   }
+}
+
+async function initializePythonVenv(session) {
+  const env = terminalEnvironment(session)
+  const pythonVenv = env.VIRTUAL_ENV
+
+  delete env.VIRTUAL_ENV
+  env.PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+  await execFileAsync(
+    '/usr/bin/setpriv',
+    setprivArguments(session, '/usr/bin/python3', [
+      '-m',
+      'venv',
+      pythonVenv
+    ]),
+    {
+      cwd: session.workspace,
+      env,
+      encoding: 'utf8',
+      timeout: 60_000,
+      maxBuffer: 65_536
+    }
+  )
 }
 
 function setprivArguments(session, command, args) {
@@ -584,6 +619,7 @@ export async function createTerminalSession({
     })
     await fs.chown(path.join(workspace, '.terminal-cache'), session.uid, session.uid)
     await fs.chown(path.join(workspace, '.terminal-cache', 'tmp'), session.uid, session.uid)
+    await initializePythonVenv(session)
 
     const startup = [
       'umask 077',

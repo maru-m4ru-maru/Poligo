@@ -36,3 +36,39 @@ Functional controls are not language brands. Poligo uses unbranded icons from [L
 | `file-code.svg` | [file-code](https://github.com/lucide-icons/lucide/blob/main/icons/file-code.svg) |
 
 The downloaded Lucide paths use a muted neutral stroke to fit the existing theme; their geometry is unmodified. Keep controls accessible (decorative sidebar icons remain hidden from assistive technology because their buttons have visible text) and check both dashboard and account-page variants when replacing an asset.
+
+## Additional semantic SVG assets
+
+The following assets are copied from the upstream Lucide SVGs. The source geometry is unchanged; only the stroke color is set to a neutral tone for Poligo's themes. Keep the upstream source link with the asset when updating it.
+
+| Local asset | Upstream Lucide source | Use |
+|---|---|---|
+| activity-files.svg | https://github.com/lucide-icons/lucide/blob/main/icons/files.svg | Explorer activity |
+| activity-search.svg | https://github.com/lucide-icons/lucide/blob/main/icons/search.svg | Search activity |
+| activity-source.svg | https://github.com/lucide-icons/lucide/blob/main/icons/git-branch.svg | Source control activity |
+| activity-ai.svg | https://github.com/lucide-icons/lucide/blob/main/icons/sparkles.svg | AI activity |
+| activity-preview.svg | https://github.com/lucide-icons/lucide/blob/main/icons/monitor.svg | Preview activity |
+| activity-settings.svg | https://github.com/lucide-icons/lucide/blob/main/icons/sliders-horizontal.svg | Settings activity |
+| ui-pencil.svg | https://github.com/lucide-icons/lucide/blob/main/icons/pencil.svg | Rename |
+| ui-trash-2.svg | https://github.com/lucide-icons/lucide/blob/main/icons/trash.svg | Delete |
+| ui-file-plus-2.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-plus.svg | New file |
+| ui-upload.svg | https://github.com/lucide-icons/lucide/blob/main/icons/upload.svg | Upload |
+| ui-folder.svg | https://github.com/lucide-icons/lucide/blob/main/icons/folder.svg | Folder |
+| ui-refresh.svg | https://github.com/lucide-icons/lucide/blob/main/icons/refresh-cw.svg | Refresh preview |
+| ui-external-link.svg | https://github.com/lucide-icons/lucide/blob/main/icons/external-link.svg | Open preview in a new tab |
+| ui-chevron-down.svg | https://github.com/lucide-icons/lucide/blob/main/icons/chevron-down.svg | Expand / dropdown |
+| ui-chevron-up.svg | https://github.com/lucide-icons/lucide/blob/main/icons/chevron-up.svg | Collapse |
+| ui-x.svg | https://github.com/lucide-icons/lucide/blob/main/icons/x.svg | Close dialog |
+| ui-plus.svg | https://github.com/lucide-icons/lucide/blob/main/icons/plus.svg | Create project |
+| file-braces.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-braces.svg | JSON / structured source file |
+| file-key.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-key.svg | Environment file |
+| file-cog.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-cog.svg | Configuration file |
+| file-text.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-text.svg | Text and Markdown documents |
+
+Language logos remain restricted to language and runtime cards; a file in the IDE tree never borrows a language's trademark logo. A generic source-file glyph is deliberately shared by source-code files, while JSON, environment, configuration, and text documents receive distinct file-type symbols. Decorative images use empty alt text; buttons keep accessible names in their text or ARIA labels.
+
+| ui-chevron-right.svg | https://github.com/lucide-icons/lucide/blob/main/icons/chevron-right.svg | Folder disclosure |
+| ui-play.svg | https://github.com/lucide-icons/lucide/blob/main/icons/play.svg | Run project |
+| ui-circle-x.svg | https://github.com/lucide-icons/lucide/blob/main/icons/circle-x.svg | Error indicators |
+| ui-circle-alert.svg | https://github.com/lucide-icons/lucide/blob/main/icons/circle-alert.svg | Warning and diagnostic indicators |
+| ui-arrow-right.svg | https://github.com/lucide-icons/lucide/blob/main/icons/arrow-right.svg | Primary call-to-action direction |

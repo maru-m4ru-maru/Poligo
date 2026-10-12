@@ -290,7 +290,7 @@ export default function AdminPage({ session }) {
           </span>
         </button>
         <button className="stack-new-button" onClick={() => navigate('/dashboard')}>
-          <span>+</span>
+          <img src="/icons/ui-plus.svg" alt="" aria-hidden="true" />
           新規プロジェクト
         </button>
         <nav className="stack-sidebar-nav">
@@ -302,10 +302,10 @@ export default function AdminPage({ session }) {
             <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/user-round.svg" alt="" aria-hidden="true" /></span>
             アカウント
           </button>
-          <button className="active" type="button">
+          <span className="stack-sidebar-static-active" aria-current="page">
             <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/shield-check.svg" alt="" aria-hidden="true" /></span>
             管理画面
-          </button>
+          </span>
         </nav>
         <div className="stack-sidebar-bottom">
           <div className="stack-sidebar-user">
