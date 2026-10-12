@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const main = readFileSync(path.join(root, 'apps/web/src/main.jsx'), 'utf8')
+const homePage = readFileSync(path.join(root, 'apps/web/src/HomePage.jsx'), 'utf8')
+const dashboard = readFileSync(path.join(root, 'apps/web/src/Dashboard.jsx'), 'utf8')
 const css = readFileSync(path.join(root, 'apps/web/src/styles.css'), 'utf8')
 const iconRoot = path.join(root, 'apps/web/public/icons')
 
@@ -52,7 +54,7 @@ test('remaining UI symbols use official SVG assets, not Unicode stand-ins', () =
     '/icons/ui-circle-x.svg',
     '/icons/ui-circle-alert.svg',
     '/icons/ui-arrow-right.svg'
-  ]) assert.ok(main.includes(asset), 'Missing icon reference: ' + asset)
+  ]) assert.ok([main, homePage, dashboard].some(source => source.includes(asset)), 'Missing icon reference: ' + asset)
 
   for (const glyph of [
     '<span>⌄</span>',
