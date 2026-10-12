@@ -114,6 +114,60 @@ const FILE_ICONS = {
   env: '/icons/file-key.svg', config: '/icons/file-cog.svg',
   text: '/icons/file-text.svg'
 }
+function getFileMeta(name) {
+  if (name === '.env' || name.startsWith('.env.')) {
+    return {
+      language: 'plaintext',
+      kind: 'env'
+    }
+  }
+
+  if (name === '.gitignore' || name === '.dockerignore') {
+    return {
+      language: 'plaintext',
+      kind: 'config'
+    }
+  }
+
+  const rawExtension = name.includes('.')
+    ? name.slice(name.lastIndexOf('.'))
+    : ''
+
+  if (rawExtension === '.C') {
+    return {
+      language: 'cpp',
+      kind: 'cpp'
+    }
+  }
+
+  const extension = rawExtension
+    ? rawExtension.slice(1).toLowerCase()
+    : ''
+
+  return lookupFileMetadata(extension, FILE_META) || {
+    language: 'plaintext',
+    kind: 'text'
+  }
+}
+
+function getProjectFileIconKind(name, files) {
+  const kind = getFileMeta(name).kind
+
+  if (kind !== 'js') {
+    return kind
+  }
+
+  try {
+    const manifest = JSON.parse(files?.['package.json'] || '{}')
+
+    if (manifest?.poligo?.runtime === 'node') {
+      return 'node'
+    }
+  } catch {}
+
+  return kind
+}
+
 function InterfaceIcon({ src, size = 16, className = '' }) {
   return <img src={src} alt="" aria-hidden="true" width={size} height={size} className={className || 'interface-icon'} />
 }

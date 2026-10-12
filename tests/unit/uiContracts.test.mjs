@@ -11,6 +11,12 @@ const dashboard = readFileSync(path.join(root, 'apps/web/src/Dashboard.jsx'), 'u
 const css = readFileSync(path.join(root, 'apps/web/src/styles.css'), 'utf8')
 const iconRoot = path.join(root, 'apps/web/public/icons')
 
+test('file metadata helpers remain available to the IDE at runtime', () => {
+  assert.match(main, /function getFileMeta\\(name\\)/)
+  assert.match(main, /function getProjectFileIconKind\\(name, files\\)/)
+  assert.match(main, /lookupFileMetadata\\(extension, FILE_META\\)/)
+})
+
 test('editor preferences change Monaco options and persist across reloads', () => {
   assert.match(main, /setEditorFontSize/)
   assert.match(main, /fontSize: editorFontSize/)
