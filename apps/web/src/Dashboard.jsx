@@ -544,8 +544,7 @@ export default function Dashboard({ session }) {
     <div className="stack-dashboard">
       <aside className="stack-sidebar">
         <button className="stack-sidebar-brand" onClick={() => setActiveSection('projects')}>
-          <img src="/poligo-mark.svg" alt="" />
-          <span>Poligo</span>
+          <img src="/poligo-logo.svg" alt="Poligo" />
         </button>
 
         <button
