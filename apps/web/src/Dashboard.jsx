@@ -555,7 +555,7 @@ export default function Dashboard({ session }) {
             setNewProjectOpen(current => !current)
           }}
         >
-          <span>+</span>
+          <img src="/icons/ui-plus.svg" alt="" aria-hidden="true" />
           新規プロジェクト
         </button>
 
@@ -625,14 +625,14 @@ export default function Dashboard({ session }) {
               <div className="stack-new-project-account">
                 <span>追加先</span>
                 <strong>{data.user.name}</strong>
-                <span>⌄</span>
+                <img src="/icons/ui-chevron-down.svg" alt="" aria-hidden="true" className="interface-icon" />
               </div>
               <button
                 className="stack-new-project-close"
                 onClick={() => setNewProjectOpen(false)}
-                aria-label="Close"
+                aria-label="閉じる"
               >
-                ×
+                <img src="/icons/ui-x.svg" alt="" aria-hidden="true" />
               </button>
             </div>
 
@@ -676,7 +676,7 @@ export default function Dashboard({ session }) {
               ) && (
                 <div className="stack-template-empty">
                   <strong>テンプレートはありません</strong>
-                  <span>対応ランタイムを順次追加します。</span>
+                  <span>このカテゴリで利用できるテンプレートは現在ありません。</span>
                 </div>
               )}
             </div>
