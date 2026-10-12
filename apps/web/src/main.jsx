@@ -110,7 +110,7 @@ const FILE_ICONS = {
   kotlin: '/icons/file-code.svg', c: '/icons/file-code.svg',
   cpp: '/icons/file-code.svg', csharp: '/icons/file-code.svg',
   typescript: '/icons/file-code.svg',
-  json: '/icons/file-json.svg', markdown: '/icons/file-markdown.svg',
+  json: '/icons/file-braces.svg', markdown: '/icons/file-text.svg',
   env: '/icons/file-key.svg', config: '/icons/file-cog.svg',
   text: '/icons/file-text.svg'
 }

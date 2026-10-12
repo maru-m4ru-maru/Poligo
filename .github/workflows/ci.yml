@@ -21,6 +21,10 @@ jobs:
       - run: pnpm install --no-frozen-lockfile
       - run: pnpm audit --audit-level=moderate
       - run: pnpm build:web
+      - name: Check responsive browser layouts
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:ui-layout
       - name: Enforce initial JavaScript bundle budget
         run: |
           node --input-type=module -e '
