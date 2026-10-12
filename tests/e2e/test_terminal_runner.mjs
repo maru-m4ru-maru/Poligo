@@ -5,8 +5,9 @@ import { createRequire } from 'node:module'
 const requireRunnerDependency = createRequire(new URL('../../services/runner/package.json', import.meta.url))
 const WebSocket = requireRunnerDependency('ws')
 
-const token = 'terminal-e2e-token'
-const baseUrl = 'http://127.0.0.1:10001'
+const token = process.env.TERMINAL_E2E_TOKEN || 'terminal-e2e-token'
+const baseUrl = process.env.TERMINAL_E2E_URL || 'http://127.0.0.1:10001'
+const processBackend = process.env.TERMINAL_E2E_BACKEND === 'process'
 const id = randomUUID()
 
 function request(path, options = {}, body) {
@@ -197,11 +198,12 @@ socket.send(
 
 const pwdOutput = await waitForOutput(
   socket,
-  output => output.includes('/workspace')
+  output => output.includes(processBackend ? '/tmp/poligo-process-e2e/' : '/workspace')
 )
 
-if (!pwdOutput.includes('/workspace')) {
-  throw new Error('workspace path was not reported')
+const expectedWorkspace = processBackend ? '/tmp/poligo-process-e2e/' : '/workspace'
+if (!pwdOutput.includes(expectedWorkspace)) {
+  throw new Error('workspace path was not reported: ' + pwdOutput)
 }
 
 socket.send(
@@ -213,11 +215,15 @@ socket.send(
 
 const identityOutput = await waitForOutput(
   socket,
-  output => output.includes('POLIGO_ID:1000:1000')
+  output => /POLIGO_ID:\d+:\d+/.test(output)
 )
 
-if (!identityOutput.includes('POLIGO_ID:1000:1000')) {
-  throw new Error('Docker terminal must run as unprivileged UID/GID 1000: ' + identityOutput)
+const identityMatch = identityOutput.match(/POLIGO_ID:(\d+):(\d+)/)
+if (!identityMatch || identityMatch[1] !== identityMatch[2] || Number(identityMatch[1]) === 0) {
+  throw new Error('Terminal must run as an unprivileged UID/GID: ' + identityOutput)
+}
+if (!processBackend && identityMatch[1] !== '1000') {
+  throw new Error('Docker terminal must run as UID/GID 1000: ' + identityOutput)
 }
 
 socket.send(
@@ -234,6 +240,47 @@ const ptyOutput = await waitForOutput(
 
 if (!ptyOutput.includes('PTY_OK')) {
   throw new Error('PTY command output was missing')
+}
+
+if (processBackend) {
+  socket.send(JSON.stringify({
+    type: 'input',
+    data: 'command -v python3; command -v pip; python3 -m pip --version\n'
+  }))
+
+  const pipPathOutput = await waitForOutput(
+    socket,
+    output => output.includes('/.terminal-cache/python-venv/bin/pip')
+  )
+
+  if (!pipPathOutput.includes('/.terminal-cache/python-venv/bin/pip')) {
+    throw new Error('Python venv pip was not active in the terminal: ' + pipPathOutput)
+  }
+
+  socket.send(JSON.stringify({
+    type: 'input',
+    data: 'pip install --disable-pip-version-check --no-input --retries 1 --timeout 20 requests\n'
+  }))
+
+  await waitForOutput(
+    socket,
+    output => /Successfully installed[^\r\n]*requests|Requirement already satisfied: requests/.test(output),
+    90_000
+  )
+
+  socket.send(JSON.stringify({
+    type: 'input',
+    data: "python3 -c \"import requests; print('PYPI_IMPORT_OK:' + requests.__version__)\"\n"
+  }))
+
+  const pipImportOutput = await waitForOutput(
+    socket,
+    output => output.includes('PYPI_IMPORT_OK:')
+  )
+
+  if (!pipImportOutput.includes('PYPI_IMPORT_OK:')) {
+    throw new Error('Package installed from PyPI could not be imported: ' + pipImportOutput)
+  }
 }
 
 socket.send(

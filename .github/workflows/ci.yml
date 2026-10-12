@@ -102,6 +102,33 @@ jobs:
             /tmp/poligo-pip-venv/bin/python -m pip install --disable-pip-version-check --no-input --retries 1 --timeout 20 requests
             /tmp/poligo-pip-venv/bin/python -c "import requests; print(requests.__version__)"
           '
+      - name: Run process terminal pip end-to-end test
+        run: |
+          set -euo pipefail
+          docker run -d --name poligo-runner-process-ci -p 10003:10001 -e PORT=10001 -e RUNNER_TOKEN=terminal-process-e2e-token -e TERMINAL_BACKEND=process -e TERMINAL_RUN_ROOT=/tmp/poligo-process-e2e poligo-runner-ci
+          cleanup() {
+            docker logs poligo-runner-process-ci || true
+            docker rm -f poligo-runner-process-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in $(seq 1 100); do
+            if curl --silent --fail http://127.0.0.1:10003/health >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' poligo-runner-process-ci 2>/dev/null || true)" != true ]; then
+              docker logs poligo-runner-process-ci || true
+              exit 1
+            fi
+            sleep 0.2
+          done
+          if [ "$ready" != true ]; then
+            docker logs poligo-runner-process-ci || true
+            echo "Process terminal runner did not become ready" >&2
+            exit 1
+          fi
+          TERMINAL_E2E_URL=http://127.0.0.1:10003 TERMINAL_E2E_TOKEN=terminal-process-e2e-token TERMINAL_E2E_BACKEND=process node tests/e2e/test_terminal_runner.mjs
       - name: Run Docker terminal end-to-end test
         run: |
           set -euo pipefail
