@@ -45,6 +45,18 @@ test('current sidebar pages are labels, not inert buttons', () => {
   assert.match(admin, /src="\/icons\/ui-plus\.svg"/)
 })
 
+test('remaining UI symbols use official SVG assets, not Unicode stand-ins', () => {
+  assert.match(main, /ui-chevron-right\\.svg/)
+  assert.match(main, /ui-play\\.svg/)
+  assert.match(main, /ui-circle-x\\.svg/)
+  assert.match(main, /className="problem-icon"/)
+  assert.doesNotMatch(main, /<span>⌄<\\/span>/)
+  assert.doesNotMatch(main, /<span>›<\\/span>/)
+  assert.doesNotMatch(main, /<span>▶<\\/span>/)
+  assert.doesNotMatch(main, /<span>×<\\/span>/)
+  assert.match(main, /role="group" aria-label="プロジェクトのルート"/)
+})
+
 test('official semantic file and utility SVGs are present', () => {
   const names = [
     'file-code.svg', 'file-braces.svg', 'file-key.svg', 'file-cog.svg',

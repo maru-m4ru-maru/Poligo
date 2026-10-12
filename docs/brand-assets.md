@@ -66,3 +66,9 @@ The following assets are copied from the upstream Lucide SVGs. The source geomet
 | file-text.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-text.svg | Text and Markdown documents |
 
 Language logos remain restricted to language and runtime cards; a file in the IDE tree never borrows a language's trademark logo. A generic source-file glyph is deliberately shared by source-code files, while JSON, environment, configuration, and text documents receive distinct file-type symbols. Decorative images use empty alt text; buttons keep accessible names in their text or ARIA labels.
+
+| ui-chevron-right.svg | https://github.com/lucide-icons/lucide/blob/main/icons/chevron-right.svg | Folder disclosure |
+| ui-play.svg | https://github.com/lucide-icons/lucide/blob/main/icons/play.svg | Run project |
+| ui-circle-x.svg | https://github.com/lucide-icons/lucide/blob/main/icons/circle-x.svg | Error indicators |
+| ui-circle-alert.svg | https://github.com/lucide-icons/lucide/blob/main/icons/circle-alert.svg | Warning and diagnostic indicators |
+| ui-arrow-right.svg | https://github.com/lucide-icons/lucide/blob/main/icons/arrow-right.svg | Primary call-to-action direction |

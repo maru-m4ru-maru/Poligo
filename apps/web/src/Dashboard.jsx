@@ -803,7 +803,7 @@ export default function Dashboard({ session }) {
                 onClick={() => setQuery('')}
               >
                 すべて表示
-                <span>›</span>
+                <img src="/icons/ui-chevron-right.svg" alt="" aria-hidden="true" />
               </button>
             </div>
 

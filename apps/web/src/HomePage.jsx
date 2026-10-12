@@ -86,7 +86,7 @@ export default function HomePage({ session }) {
                 navigate(projectId ? '/ide/' + encodeURIComponent(projectId) : '/dashboard')
               }}>
                 {session?.user ? 'IDEを開く' : 'アカウントを作成'}
-                <span>→</span>
+                <img src="/icons/ui-arrow-right.svg" alt="" aria-hidden="true" />
               </button>
               <button className="home-secondary-button" onClick={() => {
                 if (session?.user) {

@@ -1567,7 +1567,7 @@ function IDE({ projectId }) {
               title={node.path}
             >
               <span className="explorer-folder-arrow">
-                {collapsed ? '›' : '⌄'}
+                <InterfaceIcon src={collapsed ? '/icons/ui-chevron-right.svg' : '/icons/ui-chevron-down.svg'} size={12} />
               </span>
               <FolderIcon />
               <span>{node.name}</span>
@@ -2757,7 +2757,7 @@ function IDE({ projectId }) {
                 disabled={dialogBusy}
                 aria-label="閉じる"
               >
-                ×
+                <InterfaceIcon src="/icons/ui-x.svg" size={13} />
               </button>
             </div>
 
@@ -2929,7 +2929,7 @@ function IDE({ projectId }) {
             {apiStatus}
           </span>
           <button className="top-button" onClick={resetProject}>リセット</button>
-          <button className="run-button" onClick={runProject}><span>▶</span> 実行</button>
+          <button className="run-button" onClick={runProject}><InterfaceIcon src="/icons/ui-play.svg" size={13} className="run-icon" /> 実行</button>
         </div>
       </header>
 
@@ -3008,7 +3008,7 @@ function IDE({ projectId }) {
 
           {activeView === 'files' && (
             <>
-              <button
+              <div role="group" aria-label="プロジェクトのルート"
                 className={'project-folder ' + (dragOverFolder === '' && draggedPath ? 'drop-target' : '')}
                 onDragOver={handleRootDragOver}
                 onDragLeave={() => {
@@ -3019,9 +3019,9 @@ function IDE({ projectId }) {
                 onDrop={event => handleFolderDrop(event, '')}
                 title="プロジェクトのルート"
               >
-                <span>⌄</span>
+                <span className="explorer-folder-arrow"><InterfaceIcon src="/icons/ui-chevron-down.svg" size={12} /></span>
                 <span>POLIGO</span>
-              </button>
+              </div>
               <div className="file-list">
                 {newFileOpen && (
                   <div className="explorer-new-file">
@@ -3242,7 +3242,7 @@ function IDE({ projectId }) {
                     }}
                     aria-label={'閉じる ' + name}
                   >
-                    ×
+                    <InterfaceIcon src="/icons/ui-x.svg" size={12} />
                   </button>
                 </div>
               ))}
@@ -3478,7 +3478,7 @@ function IDE({ projectId }) {
                         editorRef.current?.focus()
                       }}
                     >
-                      <span>{marker.severity === 8 ? '!' : '×'}</span>
+                      <span className="problem-icon"><InterfaceIcon src={marker.severity === 8 ? '/icons/ui-circle-x.svg' : '/icons/ui-circle-alert.svg'} size={17} /></span>
                       <div>
                         <strong>{marker.message}</strong>
                         <small>
@@ -3494,7 +3494,7 @@ function IDE({ projectId }) {
                       className="problem-item problem-item-error"
                       onClick={() => setBottomTab('terminal')}
                     >
-                      <span>×</span>
+                      <span className="problem-icon"><InterfaceIcon src="/icons/ui-circle-x.svg" size={17} /></span>
                       <div>
                         <strong>{problem.message}</strong>
                         <small>プレビュー実行時エラー</small>
@@ -3507,7 +3507,7 @@ function IDE({ projectId }) {
                       className="problem-item problem-item-error"
                       onClick={() => setBottomTab('terminal')}
                     >
-                      <span>×</span>
+                      <span className="problem-icon"><InterfaceIcon src="/icons/ui-circle-x.svg" size={17} /></span>
                       <div>
                         <strong>{execution.error}</strong>
                         <small>実行エラー</small>
