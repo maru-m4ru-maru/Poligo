@@ -275,7 +275,7 @@ if (processBackend) {
 
   const pipImportOutput = await waitForOutput(
     socket,
-    output => /PYPI_IMPORT_OK:\\d+\\.\\d+/.test(output)
+    output => /PYPI_IMPORT_OK:\d+\.\d+/.test(output)
   )
 
   if (!pipImportOutput.includes('PYPI_IMPORT_OK:')) {
