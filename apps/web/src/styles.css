@@ -108,9 +108,10 @@ button img{pointer-events:none}
 .stack-new-button:hover{background:var(--blue-hover)}
 .stack-new-button img{width:17px;height:17px;filter:brightness(0) invert(1)}
 .stack-sidebar-nav{display:grid;gap:5px}
-.stack-sidebar-nav button{display:flex;align-items:center;gap:12px;width:100%;min-height:42px;padding:0 11px;border:1px solid transparent;border-radius:10px;color:#68758b;background:transparent;text-align:left;font-size:13px;font-weight:600}
+.stack-sidebar-nav button,.stack-sidebar-nav .stack-sidebar-static-active{display:flex;align-items:center;gap:12px;width:100%;min-height:42px;padding:0 11px;border:1px solid transparent;border-radius:10px;color:#68758b;background:transparent;text-align:left;font-size:13px;font-weight:600}
+.stack-sidebar-nav .stack-sidebar-static-active{cursor:default}
 .stack-sidebar-nav button:hover{color:#2c3854;background:#f7f8fd}
-.stack-sidebar-nav button.active{color:#4842cb;border-color:#e1e3ff;background:#f0f1ff}
+.stack-sidebar-nav button.active,.stack-sidebar-nav .stack-sidebar-static-active{color:#4842cb;border-color:#e1e3ff;background:#f0f1ff}
 .stack-nav-icon{display:grid;place-items:center;width:23px;height:23px}
 .stack-nav-image-icon{width:20px;height:20px;object-fit:contain}
 .stack-sidebar-bottom{display:grid;gap:13px;margin-top:auto;padding-top:17px;border-top:1px solid #edf0f6}
@@ -602,7 +603,7 @@ button img{pointer-events:none}
  .stack-sidebar-brand img{width:27px;height:27px}
  .stack-new-button{position:absolute;top:11px;right:14px;min-height:35px;padding:0 10px;font-size:10px}
  .stack-sidebar-nav{display:flex;gap:5px;overflow-x:auto}
- .stack-sidebar-nav button{flex:0 0 auto;width:auto;min-height:38px;padding:0 9px;gap:6px;white-space:nowrap;font-size:11px}
+ .stack-sidebar-nav button,.stack-sidebar-nav .stack-sidebar-static-active{flex:0 0 auto;width:auto;min-height:38px;padding:0 9px;gap:6px;white-space:nowrap;font-size:11px}
  .stack-nav-icon{width:18px;height:18px}
  .stack-nav-image-icon{width:17px;height:17px}
  .stack-sidebar-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;padding-top:10px}

@@ -172,7 +172,7 @@ test('dashboard and project template dialog stay inside desktop and mobile viewp
 test('IDE panels align at desktop and reflow into non-overlapping rows on mobile', async ({ page }) => {
   await mockAuthenticatedApi(page)
   await page.setViewportSize({ width: 1440, height: 960 })
-  await page.goto('/#/ide/ui-layout-project')
+  await page.goto('/ide/ui-layout-project')
   await expect(page.locator('.app-shell')).toBeVisible()
   await expect(page.locator('.activity-bar')).toBeVisible()
   await expect(page.locator('.explorer')).toBeVisible()

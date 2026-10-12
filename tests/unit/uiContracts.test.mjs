@@ -34,7 +34,18 @@ test('responsive CSS includes IDE and settings layouts', () => {
   ]) assert.ok(css.includes(selector), 'Missing CSS rule: ' + selector)
 })
 
-test('official semantic file and utility SVGs are present', () => {
+test('current sidebar pages are labels, not inert buttons', () => {
+  const account = readFileSync(path.join(root, 'apps/web/src/AccountPage.jsx'), 'utf8')
+  const admin = readFileSync(path.join(root, 'apps/web/src/AdminPage.jsx'), 'utf8')
+  assert.match(account, /stack-sidebar-static-active" aria-current="page"[\s\S]*?アカウント/)
+  assert.match(admin, /stack-sidebar-static-active" aria-current="page"[\s\S]*?管理画面/)
+  assert.doesNotMatch(account, /<button className="active">[\s\S]*?アカウント[\s\S]*?<\/button>/)
+  assert.doesNotMatch(admin, /<button className="active" type="button">[\s\S]*?管理画面[\s\S]*?<\/button>/)
+  assert.match(account, /src="\/icons\/ui-plus\.svg"/)
+  assert.match(admin, /src="\/icons\/ui-plus\.svg"/)
+})
+
+test('official semantic file and utility SVGs are present', () =>
   const names = [
     'file-code.svg', 'file-braces.svg', 'file-key.svg', 'file-cog.svg',
     'file-text.svg', 'ui-pencil.svg', 'ui-trash-2.svg', 'ui-file-plus-2.svg',
