@@ -34,7 +34,7 @@ export default function HomePage({ session }) {
     <div className="home-page">
       <header className="home-nav">
         <button className="home-brand" onClick={() => navigate('/')}>
-          <img src="/poligo-logo-dark.svg" alt="Poligo" />
+          <img src="/poligo-logo.svg" alt="Poligo" />
         </button>
 
         <div className="home-nav-actions">
