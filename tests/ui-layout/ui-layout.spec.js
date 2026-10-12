@@ -23,6 +23,7 @@ async function assertFitsHorizontally(page, selectors) {
 }
 
 async function mockAuthenticatedApi(page) {
+  const apiRequests = []
   const now = new Date().toISOString()
   const user = {
     id: 'ui-layout-user',
@@ -51,6 +52,7 @@ async function mockAuthenticatedApi(page) {
     const url = new URL(route.request().url())
     const pathname = url.pathname
     const method = route.request().method()
+    apiRequests.push({ method, pathname })
     const json = body => route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -101,6 +103,8 @@ async function mockAuthenticatedApi(page) {
 
     return json({})
   })
+
+  return { apiRequests }
 }
 
 test('homepage positions and spacing hold at desktop width', async ({ page }) => {
@@ -170,10 +174,24 @@ test('dashboard and project template dialog stay inside desktop and mobile viewp
 })
 
 test('IDE panels align at desktop and reflow into non-overlapping rows on mobile', async ({ page }) => {
-  await mockAuthenticatedApi(page)
+  const fixture = await mockAuthenticatedApi(page)
+  const pageErrors = []
+  page.on('pageerror', error => pageErrors.push(error.message))
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/#/ide/ui-layout-project')
-  await expect(page.locator('.app-shell')).toBeVisible()
+  try {
+    await expect(page.locator('.app-shell')).toBeVisible({ timeout: 12_000 })
+  } catch (error) {
+    const body = await page.locator('body').innerText().catch(() => '')
+    throw new Error([
+      'IDE failed to mount after mocked authentication and project load.',
+      'URL: ' + page.url(),
+      'Body: ' + body.slice(0, 1800),
+      'API requests: ' + JSON.stringify(fixture.apiRequests),
+      'Page errors: ' + JSON.stringify(pageErrors),
+      'Original failure: ' + error.message
+    ].join('\\n'))
+  }
   await expect(page.locator('.activity-bar')).toBeVisible()
   await expect(page.locator('.explorer')).toBeVisible()
   await expect(page.locator('.editor-section')).toBeVisible()

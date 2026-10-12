@@ -46,15 +46,25 @@ test('current sidebar pages are labels, not inert buttons', () => {
 })
 
 test('remaining UI symbols use official SVG assets, not Unicode stand-ins', () => {
-  assert.match(main, /ui-chevron-right\\.svg/)
-  assert.match(main, /ui-play\\.svg/)
-  assert.match(main, /ui-circle-x\\.svg/)
-  assert.match(main, /className="problem-icon"/)
-  assert.doesNotMatch(main, /<span>⌄<\\/span>/)
-  assert.doesNotMatch(main, /<span>›<\\/span>/)
-  assert.doesNotMatch(main, /<span>▶<\\/span>/)
-  assert.doesNotMatch(main, /<span>×<\\/span>/)
-  assert.match(main, /role="group" aria-label="プロジェクトのルート"/)
+  for (const asset of [
+    '/icons/ui-chevron-right.svg',
+    '/icons/ui-play.svg',
+    '/icons/ui-circle-x.svg',
+    '/icons/ui-circle-alert.svg',
+    '/icons/ui-arrow-right.svg'
+  ]) assert.ok(main.includes(asset), 'Missing icon reference: ' + asset)
+
+  for (const glyph of [
+    '<span>⌄</span>',
+    '<span>›</span>',
+    '<span>▶</span>',
+    '<span>×</span>',
+    '<span>→</span>'
+  ]) assert.ok(!main.includes(glyph) && !readFileSync(path.join(root, 'apps/web/src/HomePage.jsx'), 'utf8').includes(glyph) &&
+    !readFileSync(path.join(root, 'apps/web/src/Dashboard.jsx'), 'utf8').includes(glyph),
+    'Unicode icon glyph should be replaced by SVG: ' + glyph)
+
+  assert.ok(main.includes('role="group" aria-label="プロジェクトのルート"'))
 })
 
 test('official semantic file and utility SVGs are present', () => {
