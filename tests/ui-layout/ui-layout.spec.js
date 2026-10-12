@@ -119,6 +119,7 @@ test('homepage positions and spacing hold at desktop width', async ({ page }) =>
 
   const brand = await page.locator('.home-brand').boundingBox()
   const firstAction = await page.locator('.home-nav-actions button').first().boundingBox()
+  await expect(page.locator('.home-brand img')).toHaveAttribute('src', '/poligo-logo.svg')
   expect(brand.x + brand.width).toBeLessThan(firstAction.x)
 })
 
@@ -151,6 +152,22 @@ test('dashboard and project template dialog stay inside desktop and mobile viewp
   await expect(page.locator('.stack-dashboard')).toBeVisible()
   await expect(page.locator('.stack-project-table')).toBeVisible()
   await assertNoHorizontalOverflow(page)
+  const brandLogo = page.locator('.stack-sidebar-brand img')
+  await expect(brandLogo).toHaveAttribute('src', '/poligo-logo.svg')
+  const brandLogoBounds = await brandLogo.boundingBox()
+  expect(brandLogoBounds.width).toBeGreaterThanOrEqual(110)
+
+  await expect(page.locator('.stack-project-table-head > span')).toHaveCount(6)
+  const projectRow = page.locator('.stack-project-list-row').first()
+  await expect(projectRow.locator(':scope > *')).toHaveCount(6)
+  const checkboxBounds = await projectRow.locator('.stack-project-check').boundingBox()
+  const menuBounds = await projectRow.locator('.stack-project-menu-button').boundingBox()
+  expect(Math.abs(
+    checkboxBounds.y + checkboxBounds.height / 2 - menuBounds.y - menuBounds.height / 2
+  )).toBeLessThan(8)
+  const iconBounds = await projectRow.locator('.stack-project-project-icon').boundingBox()
+  const titleBounds = await projectRow.locator('.stack-project-title-copy').boundingBox()
+  expect(titleBounds.x).toBeGreaterThanOrEqual(iconBounds.x + iconBounds.width + 8)
   await assertFitsHorizontally(page, [
     '.stack-sidebar', '.stack-dashboard-main', '.stack-dashboard-topbar', '.stack-dashboard-content'
   ])
@@ -168,6 +185,13 @@ test('dashboard and project template dialog stay inside desktop and mobile viewp
   await expect(page.locator('.stack-dashboard')).toBeVisible()
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, ['.stack-sidebar', '.stack-dashboard-main', '.stack-dashboard-topbar'])
+  const mobileProjectRow = page.locator('.stack-project-list-row').first()
+  await expect(mobileProjectRow.locator('.stack-project-list-title strong')).toBeVisible()
+  const mobileCheckbox = await mobileProjectRow.locator('.stack-project-check').boundingBox()
+  const mobileMenu = await mobileProjectRow.locator('.stack-project-menu-button').boundingBox()
+  expect(Math.abs(
+    mobileCheckbox.y + mobileCheckbox.height / 2 - mobileMenu.y - mobileMenu.height / 2
+  )).toBeLessThan(8)
   await page.getByRole('button', { name: /新規プロジェクト/ }).click()
   await expect(page.locator('.stack-new-project-menu')).toBeVisible()
   await assertFitsHorizontally(page, ['.stack-new-project-menu'])
