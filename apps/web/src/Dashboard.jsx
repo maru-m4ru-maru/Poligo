@@ -577,7 +577,7 @@ export default function Dashboard({ session }) {
               window.location.hash = '/community'
             }}
           >
-            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/globe.svg" alt="" aria-hidden="true" /></span>
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/ui-globe.svg" alt="" aria-hidden="true" /></span>
             コミュニティ
           </button>
 
