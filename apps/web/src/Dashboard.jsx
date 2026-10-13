@@ -571,6 +571,17 @@ export default function Dashboard({ session }) {
           </button>
 
           <button
+            type="button"
+            onClick={() => {
+              window.history.pushState({}, '', '/')
+              window.location.hash = '/community'
+            }}
+          >
+            <span className="stack-nav-icon"><img className="stack-nav-image-icon" src="/icons/globe.svg" alt="" aria-hidden="true" /></span>
+            コミュニティ
+          </button>
+
+          <button
             className={activeSection === 'account' ? 'active' : ''}
             onClick={() => {
               window.history.pushState({}, '', '/')
