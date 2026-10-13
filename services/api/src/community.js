@@ -4,6 +4,7 @@ import { getDatabase } from './turso.js'
 import { decryptProjectSecrets } from './secretStore.js'
 import { auth } from './auth.js'
 import { fromNodeHeaders } from 'better-auth/node'
+import { detectLanguage, isSecretPath, normalizeCommunityVisibility, parseCommunityFeedLimit } from './communityPolicy.js'
 
 const { Pool } = pg
 const connectionString = process.env.COCKROACH_DATABASE_URL || ''
@@ -37,12 +38,14 @@ export async function initializeCommunityDatabase() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       featured BOOLEAN NOT NULL DEFAULT false,
       featured_at TIMESTAMPTZ,
+      visibility STRING NOT NULL DEFAULT 'public',
       stars INT8 NOT NULL DEFAULT 0,
       forks INT8 NOT NULL DEFAULT 0,
       CONSTRAINT community_projects_name_length CHECK (length(name) BETWEEN 1 AND 120),
       CONSTRAINT community_projects_description_length CHECK (length(description) <= 500)
     )
   `)
+  await pool.query("ALTER TABLE community_projects ADD COLUMN IF NOT EXISTS visibility STRING NOT NULL DEFAULT 'public'")
   await pool.query(`
     CREATE TABLE IF NOT EXISTS community_stars (
       project_id UUID NOT NULL REFERENCES community_projects(id) ON DELETE CASCADE,
@@ -70,6 +73,7 @@ export async function initializeCommunityDatabase() {
     )
   `)
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_feed ON community_projects (featured DESC, published_at DESC)')
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_visibility_feed ON community_projects (visibility, featured DESC, published_at DESC)')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_stars ON community_projects (stars DESC, published_at DESC)')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_comments_project ON community_comments (project_id, created_at DESC)')
   initialized = true
@@ -88,22 +92,6 @@ async function sessionFor(request) {
 
 function normalizeDescription(value) {
   return typeof value === 'string' ? value.trim().slice(0, 500) : ''
-}
-
-function isSecretPath(path) {
-  const name = String(path).split('/').pop() || String(path)
-  return name === '.env' || (name.startsWith('.env.') && name !== '.env.example')
-}
-
-function detectLanguage(files) {
-  const extensions = Object.keys(files).map(path => path.split('.').pop()?.toLowerCase())
-  const pairs = [
-    ['Python', ['py']], ['TypeScript', ['ts', 'tsx']], ['JavaScript', ['js', 'jsx', 'mjs', 'cjs']],
-    ['Rust', ['rs']], ['Go', ['go']], ['Java', ['java']], ['Kotlin', ['kt', 'kts']],
-    ['PHP', ['php']], ['Ruby', ['rb']], ['C++', ['cpp', 'cc', 'cxx', 'hpp']],
-    ['C#', ['cs']], ['C', ['c', 'h']], ['HTML/CSS', ['html', 'css']]
-  ]
-  return pairs.find(([, exts]) => extensions.some(ext => exts.includes(ext)))?.[0] || 'Other'
 }
 
 async function getOwnedProject(projectId, ownerId) {
@@ -140,19 +128,27 @@ async function handleCommunityRequest(request, response, { createProject } = {})
   }
 
   if (request.method === 'GET' && parts.length === 3 && parts[2] === 'projects') {
-    const sort = url.searchParams.get('sort') === 'stars' ? 'stars DESC, published_at DESC' : 'featured DESC, published_at DESC'
+    const sortOption = url.searchParams.get('sort')
+    const sort = sortOption === 'stars'
+      ? 'p.stars DESC, p.published_at DESC'
+      : sortOption === 'forks'
+        ? 'p.forks DESC, p.published_at DESC'
+        : sortOption === 'recent'
+          ? 'p.published_at DESC'
+          : 'p.featured DESC, p.published_at DESC'
     const search = (url.searchParams.get('q') || '').trim().slice(0, 80)
-    const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
+    const limit = parseCommunityFeedLimit(url.searchParams.get('limit'))
     const result = await pool.query(
       `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language,
-              p.published_at, p.featured, p.stars, p.forks,
+              p.published_at, p.featured, p.visibility, p.stars, p.forks,
               (s.user_id IS NOT NULL) AS starred,
               (f.user_id IS NOT NULL) AS favorited,
               (SELECT count(*) FROM community_comments c WHERE c.project_id = p.id) AS comment_count
        FROM community_projects p
        LEFT JOIN community_stars s ON s.project_id = p.id AND s.user_id = $1
        LEFT JOIN community_favorites f ON f.project_id = p.id AND f.user_id = $1
-       WHERE ($2 = '' OR p.name ILIKE '%' || $2 || '%' OR p.description ILIKE '%' || $2 || '%' OR p.language ILIKE '%' || $2 || '%')
+       WHERE p.visibility = 'public'
+         AND ($2 = '' OR p.name ILIKE '%' || $2 || '%' OR p.description ILIKE '%' || $2 || '%' OR p.language ILIKE '%' || $2 || '%')
        ORDER BY ${sort} LIMIT $3`,
       [userId || null, search, limit]
     )
@@ -195,12 +191,13 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     }
     const language = detectLanguage(project.files)
     const result = await pool.query(
-      `INSERT INTO community_projects (source_project_id, owner_id, name, description, language)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO community_projects (source_project_id, owner_id, name, description, language, visibility)
+       VALUES ($1, $2, $3, $4, $5, 'public')
        ON CONFLICT (source_project_id) DO UPDATE SET
-         name = excluded.name, description = excluded.description, language = excluded.language, updated_at = now()
+         name = excluded.name, description = excluded.description, language = excluded.language,
+         visibility = 'public', updated_at = now()
        WHERE community_projects.owner_id = excluded.owner_id
-       RETURNING id, source_project_id, owner_id, name, description, language, published_at, featured, stars, forks`,
+       RETURNING id, source_project_id, owner_id, name, description, language, published_at, featured, visibility, stars, forks`,
       [projectId, userId, name, description, language]
     )
     if (!result.rows[0]) {
@@ -224,12 +221,12 @@ async function handleCommunityRequest(request, response, { createProject } = {})
   if (parts[2] === 'projects' && parts.length === 4 && request.method === 'GET') {
     const result = await pool.query(
       `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language,
-              p.published_at, p.featured, p.stars, p.forks,
+              p.published_at, p.featured, p.visibility, p.stars, p.forks,
               (s.user_id IS NOT NULL) AS starred, (f.user_id IS NOT NULL) AS favorited
        FROM community_projects p
        LEFT JOIN community_stars s ON s.project_id = p.id AND s.user_id = $1
        LEFT JOIN community_favorites f ON f.project_id = p.id AND f.user_id = $1
-       WHERE p.id = $2`,
+       WHERE p.id = $2 AND (p.visibility = 'public' OR p.owner_id = $1)`,
       [userId || null, parts[3]]
     )
     const communityProject = result.rows[0]
@@ -258,11 +255,37 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     return
   }
 
+  if (parts[2] === 'projects' && parts.length === 5 && parts[4] === 'visibility' && request.method === 'POST') {
+    if (!requireUser()) return
+    const payload = await readJsonBody(request, { maxBytes: 1024 })
+    const visibility = normalizeCommunityVisibility(payload.visibility)
+    if (!visibility) {
+      send(response, 400, { error: 'visibility must be public or private' })
+      return
+    }
+    const result = await pool.query(
+      `UPDATE community_projects
+       SET visibility = $1,
+           featured = CASE WHEN $1 = 'private' THEN false ELSE featured END,
+           featured_at = CASE WHEN $1 = 'private' THEN NULL ELSE featured_at END,
+           updated_at = now()
+       WHERE id = $2 AND owner_id = $3
+       RETURNING id, visibility, featured`,
+      [visibility, parts[3], userId]
+    )
+    if (!result.rows[0]) {
+      send(response, 404, { error: 'project not found' })
+      return
+    }
+    send(response, 200, { project: result.rows[0] })
+    return
+  }
+
   if (parts[2] === 'projects' && parts.length === 5 && ['star', 'favorite'].includes(parts[4]) && request.method === 'POST') {
     if (!requireUser()) return
     const table = parts[4] === 'star' ? 'community_stars' : 'community_favorites'
     const column = parts[4] === 'star' ? 'stars' : null
-    const exists = await pool.query('SELECT id FROM community_projects WHERE id = $1', [parts[3]])
+    const exists = await pool.query("SELECT id FROM community_projects WHERE id = $1 AND visibility = 'public'", [parts[3]])
     if (!exists.rows[0]) {
       send(response, 404, { error: 'project not found' })
       return
@@ -287,13 +310,13 @@ async function handleCommunityRequest(request, response, { createProject } = {})
 
   if (parts[2] === 'projects' && parts.length === 5 && parts[4] === 'comments' && request.method === 'POST') {
     if (!requireUser()) return
-    const payload = await request.json().catch(() => ({}))
+    const payload = await readJsonBody(request, { maxBytes: 16_000 })
     const body = typeof payload.body === 'string' ? payload.body.trim().slice(0, 2000) : ''
     if (!body) {
       send(response, 400, { error: 'comment body is required' })
       return
     }
-    const exists = await pool.query('SELECT id FROM community_projects WHERE id = $1', [parts[3]])
+    const exists = await pool.query("SELECT id FROM community_projects WHERE id = $1 AND visibility = 'public'", [parts[3]])
     if (!exists.rows[0]) {
       send(response, 404, { error: 'project not found' })
       return
@@ -306,13 +329,32 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     return
   }
 
+  if (parts[2] === 'mine' && parts.length === 3 && request.method === 'GET') {
+    if (!requireUser()) return
+    const result = await pool.query(
+      `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language,
+              p.published_at, p.featured, p.visibility, p.stars, p.forks,
+              (s.user_id IS NOT NULL) AS starred,
+              (f.user_id IS NOT NULL) AS favorited,
+              (SELECT count(*) FROM community_comments c WHERE c.project_id = p.id) AS comment_count
+       FROM community_projects p
+       LEFT JOIN community_stars s ON s.project_id = p.id AND s.user_id = $1
+       LEFT JOIN community_favorites f ON f.project_id = p.id AND f.user_id = $1
+       WHERE p.owner_id = $1
+       ORDER BY p.updated_at DESC, p.published_at DESC LIMIT 100`,
+      [userId]
+    )
+    send(response, 200, { projects: result.rows })
+    return
+  }
+
   if (parts[2] === 'favorites' && parts.length === 3 && request.method === 'GET') {
     if (!requireUser()) return
     const result = await pool.query(
       `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language,
-              p.published_at, p.featured, p.stars, p.forks, true AS favorited
+              p.published_at, p.featured, p.visibility, p.stars, p.forks, true AS favorited
        FROM community_favorites f JOIN community_projects p ON p.id = f.project_id
-       WHERE f.user_id = $1 ORDER BY f.created_at DESC LIMIT 100`,
+       WHERE f.user_id = $1 AND p.visibility = 'public' ORDER BY f.created_at DESC LIMIT 100`,
       [userId]
     )
     send(response, 200, { projects: result.rows })
@@ -322,7 +364,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
   if (parts[2] === 'projects' && parts.length === 5 && parts[4] === 'fork' && request.method === 'POST') {
     if (!requireUser()) return
     const result = await pool.query(
-      'SELECT source_project_id, owner_id FROM community_projects WHERE id = $1',
+      "SELECT source_project_id, owner_id FROM community_projects WHERE id = $1 AND visibility = 'public'",
       [parts[3]]
     )
     const source = result.rows[0]
@@ -343,14 +385,14 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     const forkName = ('Fork of ' + project.name).slice(0, 120)
     const fork = await createProject(userId, { name: forkName, files })
     await pool.query('UPDATE community_projects SET forks = forks + 1 WHERE id = $1', [parts[3]])
-    send(response, 201, { project: { id: newId, name: forkName, files } })
+    send(response, 201, { project: { id: fork.id, name: fork.name, files: fork.files } })
     return
   }
 
   if (parts[2] === 'featured' && parts.length === 3 && request.method === 'GET') {
     const result = await pool.query(
       `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language, p.published_at, p.stars, p.forks
-       FROM community_projects p WHERE p.featured = true ORDER BY p.featured_at DESC NULLS LAST LIMIT 12`
+       FROM community_projects p WHERE p.featured = true AND p.visibility = 'public' ORDER BY p.featured_at DESC NULLS LAST LIMIT 12`
     )
     send(response, 200, { projects: result.rows })
     return
@@ -365,10 +407,10 @@ async function handleCommunityRequest(request, response, { createProject } = {})
       send(response, 403, { error: 'administrator access required' })
       return
     }
-    const payload = await request.json().catch(() => ({}))
+    const payload = await readJsonBody(request, { maxBytes: 16_000 })
     const featured = payload.featured === true
     const result = await pool.query(
-      'UPDATE community_projects SET featured = $1, featured_at = CASE WHEN $1 THEN now() ELSE NULL END WHERE id = $2 RETURNING id, featured',
+      "UPDATE community_projects SET featured = $1, featured_at = CASE WHEN $1 THEN now() ELSE NULL END WHERE id = $2 AND ($1 = false OR visibility = 'public') RETURNING id, featured",
       [featured, parts[3]]
     )
     send(response, result.rowCount ? 200 : 404, result.rowCount ? { project: result.rows[0] } : { error: 'project not found' })

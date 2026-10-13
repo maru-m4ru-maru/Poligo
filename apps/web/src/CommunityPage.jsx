@@ -29,13 +29,16 @@ function ProjectCard({ project, onOpen, onToggle }) {
       <button className="community-card-main" onClick={() => onOpen(project)} type="button">
         <span className="community-project-language">{project.language || 'Other'}</span>
         {project.featured && <span className="community-featured-label">運営のおすすめ</span>}
+        {project.visibility === 'private' && <span className="community-private-label">非公開</span>}
         <h3>{project.name}</h3>
         <p>{project.description || '説明はまだありません。'}</p>
         <span className="community-card-date">{shortDate(project.published_at)}</span>
       </button>
       <div className="community-card-footer">
-        <button type="button" onClick={() => onToggle(project, 'star')} aria-pressed={Boolean(project.starred)} className={project.starred ? 'is-active' : ''}>★ {Number(project.stars || 0)} スター</button>
-        <button type="button" onClick={() => onToggle(project, 'favorite')} aria-pressed={Boolean(project.favorited)} className={project.favorited ? 'is-active' : ''}>♥ {project.favorited ? 'お気に入り済み' : 'お気に入り'}</button>
+        {project.visibility !== 'private' ? <>
+          <button type="button" onClick={() => onToggle(project, 'star')} aria-pressed={Boolean(project.starred)} className={project.starred ? 'is-active' : ''}>★ {Number(project.stars || 0)} スター</button>
+          <button type="button" onClick={() => onToggle(project, 'favorite')} aria-pressed={Boolean(project.favorited)} className={project.favorited ? 'is-active' : ''}>♥ {project.favorited ? 'お気に入り済み' : 'お気に入り'}</button>
+        </> : <span className="community-private-note">非公開プロジェクト</span>}
         <span>⑂ {Number(project.forks || 0)} フォーク</span>
       </div>
     </article>
@@ -45,6 +48,8 @@ function ProjectCard({ project, onOpen, onToggle }) {
 export default function CommunityPage({ session }) {
   const [projects, setProjects] = useState([])
   const [ownedProjects, setOwnedProjects] = useState([])
+  const [communityOwnedProjects, setCommunityOwnedProjects] = useState([])
+  const [favorites, setFavorites] = useState([])
   const [featured, setFeatured] = useState([])
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
@@ -62,18 +67,22 @@ export default function CommunityPage({ session }) {
   const load = useCallback(async () => {
     setError('')
     try {
-      const [feed, featuredFeed, own] = await Promise.all([
+      const [feed, featuredFeed, own, mine, favoriteFeed] = await Promise.all([
         api('/api/community/projects?sort=' + encodeURIComponent(sort) + '&q=' + encodeURIComponent(query)),
         api('/api/community/featured'),
-        session?.user ? api('/api/projects') : Promise.resolve({ projects: [] })
+        session?.user ? api('/api/projects') : Promise.resolve({ projects: [] }),
+        session?.user ? api('/api/community/mine') : Promise.resolve({ projects: [] }),
+        session?.user && view === 'favorites' ? api('/api/community/favorites') : Promise.resolve({ projects: [] })
       ])
       setProjects(feed.projects || [])
       setFeatured(featuredFeed.projects || [])
       setOwnedProjects(own.projects || own || [])
+      setCommunityOwnedProjects(mine.projects || [])
+      setFavorites(favoriteFeed.projects || [])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'コミュニティを読み込めませんでした')
     }
-  }, [query, sort, session?.user?.id])
+  }, [query, sort, view, session?.user?.id])
 
   useEffect(() => { void load() }, [load])
 
@@ -85,7 +94,13 @@ export default function CommunityPage({ session }) {
         [key]: result.active,
         ...(kind === 'star' ? { stars: Math.max(0, Number(project.stars || 0) + (result.active ? 1 : -1)) } : {})
       }
-      setProjects(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      const update = items => items.map(item => item.id === project.id ? { ...item, ...changes } : item)
+      setProjects(update)
+      setFeatured(update)
+      setFavorites(current => kind === 'favorite' && !result.active
+        ? current.filter(item => item.id !== project.id)
+        : update(current))
+      setCommunityOwnedProjects(update)
       setSelected(current => current?.id === project.id ? { ...current, ...changes } : current)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作に失敗しました')
@@ -160,16 +175,38 @@ export default function CommunityPage({ session }) {
     }
   }
 
-  async function unpublish(project) {
-    if (!window.confirm('「' + project.name + '」をコミュニティから非公開にしますか？')) return
+  async function changeVisibility(project) {
+    const visibility = project.visibility === 'private' ? 'public' : 'private'
+    const action = visibility === 'public' ? '公開' : '非公開'
+    if (!window.confirm('「' + project.name + '」を' + action + 'に切り替えますか？')) return
+    setBusy(true)
+    setError('')
     try {
-      await api('/api/community/projects/' + encodeURIComponent(project.id), { method: 'DELETE' })
-      setProjects(current => current.filter(item => item.id !== project.id))
-      setNotice('コミュニティから非公開にしました。')
+      const result = await api('/api/community/projects/' + encodeURIComponent(project.id) + '/visibility', {
+        method: 'POST',
+        body: JSON.stringify({ visibility })
+      })
+      const changes = { ...result.project }
+      setSelected(current => current?.id === project.id ? { ...current, ...changes } : current)
+      setCommunityOwnedProjects(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      setNotice('「' + project.name + '」を' + action + 'に切り替えました。')
+      await load()
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '非公開にできませんでした')
+      setError(reason instanceof Error ? reason.message : action + 'に切り替えられませんでした')
+    } finally {
+      setBusy(false)
     }
   }
+
+  const visibleProjects = view === 'favorites'
+    ? favorites
+    : view === 'mine' ? communityOwnedProjects : projects
+  const emptyTitle = view === 'favorites'
+    ? 'お気に入りはまだありません'
+    : view === 'mine' ? '管理できる公開プロジェクトはありません' : 'まだ公開プロジェクトがありません'
+  const emptyDescription = view === 'favorites'
+    ? '気になるプロジェクトをお気に入りに追加すると、ここに表示されます。'
+    : view === 'mine' ? 'プロジェクトを公開すると、公開状態をここから管理できます。' : '最初の作品を公開して、コミュニティを始めましょう。'
 
   return (
     <main className="community-page">
@@ -190,6 +227,7 @@ export default function CommunityPage({ session }) {
           <div className="community-tabs">
             <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}>探索</button>
             <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}>お気に入り</button>
+            {session?.user && <button type="button" className={view === 'mine' ? 'active' : ''} onClick={() => setView('mine')}>自分のプロジェクト</button>}
             <button type="button" className={view === 'publish' ? 'active' : ''} onClick={() => setView('publish')}>公開する</button>
           </div>
         </section>
@@ -221,17 +259,17 @@ export default function CommunityPage({ session }) {
               </section>
             )}
             <section className="community-explore">
-              <div className="community-section-heading"><div><span>COMMUNITY</span><h2>{view === 'favorites' ? 'お気に入り' : 'みんなのプロジェクト'}</h2></div></div>
+              <div className="community-section-heading"><div><span>{view === 'mine' ? 'YOUR PROJECTS' : 'COMMUNITY'}</span><h2>{view === 'favorites' ? 'お気に入り' : view === 'mine' ? '自分のプロジェクト' : 'みんなのプロジェクト'}</h2></div></div>
               <div className="community-filters">
                 <input aria-label="プロジェクトを検索" value={query} onChange={event => setQuery(event.target.value)} placeholder="名前・説明・言語で検索" />
-                <select aria-label="並び順" value={sort} onChange={event => setSort(event.target.value)}><option value="featured">おすすめ順</option><option value="stars">スター数順</option></select>
+                <select aria-label="並び順" value={sort} onChange={event => setSort(event.target.value)}><option value="featured">おすすめ順</option><option value="recent">新着順</option><option value="stars">スター数順</option><option value="forks">フォーク数順</option></select>
               </div>
               <div className="community-project-grid">
-                {(view === 'favorites' ? projects.filter(project => project.favorited) : projects).map(project => (
+                {visibleProjects.map(project => (
                   <ProjectCard key={project.id} project={project} onOpen={openProject} onToggle={toggle} />
                 ))}
               </div>
-              {!projects.length && <div className="community-empty"><h3>まだ公開プロジェクトがありません</h3><p>最初の作品を公開して、コミュニティを始めましょう。</p><button type="button" onClick={() => setView('publish')}>プロジェクトを公開</button></div>}
+              {!visibleProjects.length && <div className="community-empty"><h3>{emptyTitle}</h3><p>{emptyDescription}</p>{view !== 'favorites' && <button type="button" onClick={() => setView('publish')}>プロジェクトを公開</button>}</div>}
             </section>
           </>
         )}
@@ -243,16 +281,18 @@ export default function CommunityPage({ session }) {
             <header><div><span className="community-project-language">{selected.language}</span><h2 id="community-modal-title">{selected.name}</h2></div><button type="button" aria-label="閉じる" onClick={() => setSelected(null)}>×</button></header>
             <p>{selected.description || '説明はまだありません。'}</p>
             <div className="community-modal-actions">
-              <button type="button" onClick={() => void toggle(selected, 'star')}>★ スター {selected.stars || 0}</button>
-              <button type="button" onClick={() => void toggle(selected, 'favorite')}>♥ お気に入り</button>
-              <button type="button" className="community-primary-button" disabled={busy} onClick={() => void forkProject()}>⑂ フォークして編集</button>
+              {selected.visibility !== 'private' && <>
+                <button type="button" onClick={() => void toggle(selected, 'star')}>★ スター {selected.stars || 0}</button>
+                <button type="button" onClick={() => void toggle(selected, 'favorite')}>♥ お気に入り</button>
+                <button type="button" className="community-primary-button" disabled={busy} onClick={() => void forkProject()}>⑂ フォークして編集</button>
+              </>}
             </div>
             <h3>ソースファイル</h3>
             <div className="community-file-list">{Object.keys(selected.files || {}).sort().map(path => <div key={path}><code>{path}</code><span>{String(selected.files[path]).split('\n').length} 行</span></div>)}</div>
             <h3>意見・改善案</h3>
-            <form className="community-comment-form" onSubmit={submitComment}><textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder={session?.user ? '改善案やフィードバックを書く' : '投稿するにはログインしてください'} disabled={!session?.user || busy} /><button type="submit" disabled={!session?.user || busy || !comment.trim()}>投稿</button></form>
+            <form className="community-comment-form" onSubmit={submitComment}><textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder={selected.visibility === 'private' ? '非公開中は意見を投稿できません' : session?.user ? '改善案やフィードバックを書く' : '投稿するにはログインしてください'} disabled={!session?.user || busy || selected.visibility === 'private'} /><button type="submit" disabled={!session?.user || busy || selected.visibility === 'private' || !comment.trim()}>投稿</button></form>
             <div className="community-comments">{comments.map(item => <article key={item.id}><p>{item.body}</p><time>{shortDate(item.createdAt)}</time></article>)}{!comments.length && <p className="community-muted">まだ意見はありません。建設的な最初のコメントをどうぞ。</p>}</div>
-            {session?.user?.id === selected.owner_id && <button className="community-unpublish" type="button" onClick={() => { void unpublish(selected); setSelected(null) }}>コミュニティから非公開にする</button>}
+            {session?.user?.id === selected.owner_id && <button className="community-unpublish" type="button" disabled={busy} onClick={() => void changeVisibility(selected)}>{selected.visibility === 'private' ? 'コミュニティに公開する' : 'コミュニティから非公開にする'}</button>}
           </section>
         </div>
       )}

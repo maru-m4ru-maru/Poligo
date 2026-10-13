@@ -91,4 +91,8 @@ Poligo Community stores social metadata separately from project files. Project f
 
 Configure the API service with `COCKROACH_DATABASE_URL` using a CockroachDB connection string. The API initializes the community tables automatically. Optionally set `COCKROACH_SSL=disable` only for a trusted local development database, and `COMMUNITY_DB_POOL_SIZE` to tune the connection pool. Without the connection string, normal Poligo projects continue to work, while community endpoints return HTTP 503.
 
-Public projects cannot contain `.env` or other secret environment files. Forks are created through the existing project-creation path so account storage quotas continue to apply. Public project source is read from the original owner's Turso project and only secret-file paths are excluded from community responses.
+Public projects cannot contain `.env` or other secret environment files. Secret-file detection is case-insensitive and handles nested paths. Forks are created through the existing project-creation path so account storage quotas continue to apply. Public project source is read from the original owner's Turso project and only secret-file paths are excluded from community responses.
+
+Community listings support public/private visibility, operator-curated recommendations, searching, sorting by recency/stars/forks, comments, stars, and favorites. Private listings are omitted from public feeds and recommendations; only their owner can read their listing metadata or source through the community API. Switching a listing to private preserves its comments and reactions, and clears any operator recommendation. Existing CockroachDB installations receive the `visibility` column through an automatic additive migration.
+
+Run the isolated community policy tests with `pnpm test:api`.
