@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload failure screenshot
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: poligo-go-production-e2e-failure
           path: poligo-go-production-e2e-failure.png
