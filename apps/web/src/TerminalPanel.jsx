@@ -9,6 +9,82 @@ import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
+async function waitForTerminalRunner({ wakeUrl, isCancelled }) {
+  let healthUrl
+
+  try {
+    const parsed = new URL(wakeUrl)
+
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error('invalid terminal wake URL protocol')
+    }
+
+    parsed.pathname = '/health'
+    parsed.search = ''
+    parsed.hash = ''
+    healthUrl = parsed.toString()
+  } catch {
+    throw new Error('ターミナル起動先URLが正しくありません。')
+  }
+
+  const frame = document.createElement('iframe')
+  frame.title = 'Poligo terminal service startup'
+  frame.setAttribute('aria-hidden', 'true')
+  frame.tabIndex = -1
+  Object.assign(frame.style, {
+    position: 'fixed',
+    left: '-10000px',
+    top: '0',
+    width: '1px',
+    height: '1px',
+    border: '0',
+    opacity: '0',
+    pointerEvents: 'none'
+  })
+
+  const firstVisit = new URL(healthUrl)
+  firstVisit.searchParams.set('poligo-wake', String(Date.now()))
+  frame.src = firstVisit.toString()
+  document.body.appendChild(frame)
+
+  const deadline = Date.now() + 90_000
+
+  try {
+    while (Date.now() < deadline) {
+      if (isCancelled()) {
+        return false
+      }
+
+      try {
+        const response = await fetch(healthUrl, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-store',
+          credentials: 'omit',
+          signal: AbortSignal.timeout(2500)
+        })
+
+        if (response.ok) {
+          const health = await response.json().catch(() => null)
+
+          if (
+            health?.service === 'runner' &&
+            health?.terminalReady === true
+          ) {
+            return true
+          }
+        }
+      } catch {}
+
+      await new Promise(resolve => window.setTimeout(resolve, 2000))
+    }
+  } finally {
+    frame.remove()
+  }
+
+  throw new Error('ターミナルの起動がタイムアウトしました。再接続してもう一度お試しください。')
+}
+
 const TerminalPanel = forwardRef(function TerminalPanel(
   {
     apiUrl,
@@ -293,6 +369,26 @@ const TerminalPanel = forwardRef(function TerminalPanel(
       terminal.writeln('')
 
       try {
+        const terminalWakeUrl = String(
+          import.meta.env.VITE_TERMINAL_WAKE_URL || ''
+        ).trim()
+
+        if (terminalWakeUrl) {
+          terminal.writeln('\x1b[90mターミナルを起動中...\x1b[0m')
+
+          const terminalReady = await waitForTerminalRunner({
+            wakeUrl: terminalWakeUrl,
+            isCancelled: () => cancelled
+          })
+
+          if (!terminalReady || cancelled) {
+            return
+          }
+
+          terminal.writeln('\x1b[90mターミナルに接続しています...\x1b[0m')
+          terminal.writeln('')
+        }
+
         let reconnecting = Boolean(
           reuseExistingSessionRef.current &&
           sessionIdRef.current

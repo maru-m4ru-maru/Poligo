@@ -74,13 +74,23 @@ const server = http.createServer(async (request, response) => {
       executionReady
     }
 
+    const healthHeaders = {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store'
+    }
+    const browserOrigin = process.env.RUNNER_BROWSER_ORIGIN || ''
+
+    if (browserOrigin && request.headers.origin === browserOrigin) {
+      healthHeaders['Access-Control-Allow-Origin'] = browserOrigin
+      healthHeaders.Vary = 'Origin'
+    }
+
     if (request.method === 'HEAD') {
-      response.writeHead(200, {
-        'Content-Type': 'application/json; charset=utf-8'
-      })
+      response.writeHead(200, healthHeaders)
       response.end()
     } else {
-      send(response, 200, health)
+      response.writeHead(200, healthHeaders)
+      response.end(JSON.stringify(health))
     }
 
     return
