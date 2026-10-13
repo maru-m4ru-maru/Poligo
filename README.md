@@ -84,3 +84,11 @@ Set these API environment variables in Render:
 The runner can be hosted independently and replaced without changing the IDE frontend. If the configured runner does not support a language, the API falls back to Judge0.
 
 Java execution supports single-file programs as well as multi-file projects, package declarations, project resources, command-line arguments, and `.env` environment variables. Java projects that need the extended execution path use Judge0's multi-file program profile with generated UTF-8 compile and run scripts.
+
+## Community
+
+Poligo Community stores social metadata separately from project files. Project files remain in Turso; CockroachDB stores public listings, stars, favorites, comments, fork counts, and operator-curated recommendations. This keeps high-volume community reads and reactions away from the existing project database.
+
+Configure the API service with `COCKROACH_DATABASE_URL` using a CockroachDB connection string. The API initializes the community tables automatically. Optionally set `COCKROACH_SSL=disable` only for a trusted local development database, and `COMMUNITY_DB_POOL_SIZE` to tune the connection pool. Without the connection string, normal Poligo projects continue to work, while community endpoints return HTTP 503.
+
+Public projects cannot contain `.env` or other secret environment files. Forks are created through the existing project-creation path so account storage quotas continue to apply. Public project source is read from the original owner's Turso project and only secret-file paths are excluded from community responses.
