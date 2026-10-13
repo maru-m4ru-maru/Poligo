@@ -30,6 +30,7 @@ const HomePage = lazy(() => import('./HomePage'))
 const TermsPage = lazy(() => import('./TermsPage'))
 const AccountPage = lazy(() => import('./AccountPage'))
 const AdminPage = lazy(() => import('./AdminPage'))
+const CommunityPage = lazy(() => import('./CommunityPage'))
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -3633,6 +3634,7 @@ function getRoutePath() {
     hashPath === '/dashboard' ||
     hashPath === '/account' ||
     hashPath === '/admin' ||
+    hashPath === '/community' ||
     hashPath === '/ide' ||
     /^\/ide\/[^/]+$/.test(hashPath)
   ) {
@@ -3647,6 +3649,7 @@ function navigate(path) {
     path === '/dashboard' ||
     path === '/account' ||
     path === '/admin' ||
+    path === '/community' ||
     path === '/ide' ||
     path.startsWith('/ide/')
   ) {
@@ -3666,6 +3669,7 @@ function AppRouter() {
   const authPath = pathname === '/signin' || pathname === '/createaccount'
   const publicPath = pathname === '/' || pathname === '/terms'
   const accountPath = pathname === '/account'
+  const communityPath = pathname === '/community'
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
@@ -3733,6 +3737,10 @@ function AppRouter() {
 
   if (accountPath) {
     return <AccountPage session={session} />
+  }
+
+  if (communityPath) {
+    return <CommunityPage session={session} />
   }
 
   if (pathname === '/admin') {
