@@ -4,6 +4,7 @@ import { getDatabase } from './turso.js'
 import { decryptProjectSecrets } from './secretStore.js'
 import { auth } from './auth.js'
 import { fromNodeHeaders } from 'better-auth/node'
+import { detectLanguage, isSecretPath, normalizeCommunityVisibility, parseCommunityFeedLimit } from './communityPolicy.js'
 
 const { Pool } = pg
 const connectionString = process.env.COCKROACH_DATABASE_URL || ''
@@ -93,22 +94,6 @@ function normalizeDescription(value) {
   return typeof value === 'string' ? value.trim().slice(0, 500) : ''
 }
 
-function isSecretPath(path) {
-  const name = (String(path).split('/').pop() || String(path)).toLowerCase()
-  return name === '.env' || (name.startsWith('.env.') && name !== '.env.example')
-}
-
-function detectLanguage(files) {
-  const extensions = Object.keys(files).map(path => path.split('.').pop()?.toLowerCase())
-  const pairs = [
-    ['Python', ['py']], ['TypeScript', ['ts', 'tsx']], ['JavaScript', ['js', 'jsx', 'mjs', 'cjs']],
-    ['Rust', ['rs']], ['Go', ['go']], ['Java', ['java']], ['Kotlin', ['kt', 'kts']],
-    ['PHP', ['php']], ['Ruby', ['rb']], ['C++', ['cpp', 'cc', 'cxx', 'hpp']],
-    ['C#', ['cs']], ['C', ['c', 'h']], ['HTML/CSS', ['html', 'css']]
-  ]
-  return pairs.find(([, exts]) => extensions.some(ext => exts.includes(ext)))?.[0] || 'Other'
-}
-
 async function getOwnedProject(projectId, ownerId) {
   const database = getDatabase()
   const result = await (await database.prepare(
@@ -152,8 +137,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
           ? 'p.published_at DESC'
           : 'p.featured DESC, p.published_at DESC'
     const search = (url.searchParams.get('q') || '').trim().slice(0, 80)
-    const requestedLimit = Number(url.searchParams.get('limit') || 30)
-    const limit = Number.isFinite(requestedLimit) ? Math.min(50, Math.max(1, Math.trunc(requestedLimit))) : 30
+    const limit = parseCommunityFeedLimit(url.searchParams.get('limit'))
     const result = await pool.query(
       `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language,
               p.published_at, p.featured, p.visibility, p.stars, p.forks,
@@ -274,7 +258,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
   if (parts[2] === 'projects' && parts.length === 5 && parts[4] === 'visibility' && request.method === 'POST') {
     if (!requireUser()) return
     const payload = await readJsonBody(request, { maxBytes: 1024 })
-    const visibility = payload.visibility === 'private' ? 'private' : payload.visibility === 'public' ? 'public' : ''
+    const visibility = normalizeCommunityVisibility(payload.visibility)
     if (!visibility) {
       send(response, 400, { error: 'visibility must be public or private' })
       return
