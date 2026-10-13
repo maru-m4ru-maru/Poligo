@@ -5982,7 +5982,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (requestPath === '/api/community' || requestPath.startsWith('/api/community/')) {
-    await routeCommunityRequest(request, response)
+    await routeCommunityRequest(request, response, { createProject })
     return
   }
 
