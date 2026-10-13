@@ -94,7 +94,7 @@ function normalizeDescription(value) {
 }
 
 function isSecretPath(path) {
-  const name = String(path).split('/').pop() || String(path)
+  const name = (String(path).split('/').pop() || String(path)).toLowerCase()
   return name === '.env' || (name.startsWith('.env.') && name !== '.env.example')
 }
 
@@ -373,7 +373,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
   if (parts[2] === 'projects' && parts.length === 5 && parts[4] === 'fork' && request.method === 'POST') {
     if (!requireUser()) return
     const result = await pool.query(
-      'SELECT source_project_id, owner_id FROM community_projects WHERE id = $1',
+      "SELECT source_project_id, owner_id FROM community_projects WHERE id = $1 AND visibility = 'public'",
       [parts[3]]
     )
     const source = result.rows[0]
