@@ -65,7 +65,7 @@ export default function CommunityPage({ session }) {
       const [feed, featuredFeed, own] = await Promise.all([
         api('/api/community/projects?sort=' + encodeURIComponent(sort) + '&q=' + encodeURIComponent(query)),
         api('/api/community/featured'),
-        api('/api/projects')
+        session?.user ? api('/api/projects') : Promise.resolve({ projects: [] })
       ])
       setProjects(feed.projects || [])
       setFeatured(featuredFeed.projects || [])
@@ -73,7 +73,7 @@ export default function CommunityPage({ session }) {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'コミュニティを読み込めませんでした')
     }
-  }, [query, sort])
+  }, [query, sort, session?.user?.id])
 
   useEffect(() => { void load() }, [load])
 
