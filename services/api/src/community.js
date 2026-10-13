@@ -1,4 +1,6 @@
 import pg from 'pg'
+import { randomUUID } from 'node:crypto'
+import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { getDatabase } from './turso.js'
 import { decryptProjectSecrets } from './secretStore.js'
 import { auth } from './auth.js'
@@ -138,7 +140,7 @@ async function handleCommunityRequest(request, response) {
     return
   }
 
-  if (request.method === 'GET' && parts.length === 2) {
+  if (request.method === 'GET' && parts.length === 3 && parts[2] === 'projects') {
     const sort = url.searchParams.get('sort') === 'stars' ? 'stars DESC, published_at DESC' : 'featured DESC, published_at DESC'
     const search = (url.searchParams.get('q') || '').trim().slice(0, 80)
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
@@ -166,7 +168,7 @@ async function handleCommunityRequest(request, response) {
 
   if (parts[2] === 'projects' && parts.length === 3 && request.method === 'POST') {
     if (!requireUser()) return
-    const payload = await request.json().catch(() => ({}))
+    const payload = await readJsonBody(request, { maxBytes: 16_000 })
     const projectId = typeof payload.projectId === 'string' ? payload.projectId.slice(0, 80) : ''
     if (!projectId) {
       send(response, 400, { error: 'projectId is required' })
@@ -326,7 +328,7 @@ async function handleCommunityRequest(request, response) {
     }
     const files = Object.fromEntries(Object.entries(project.files).filter(([path]) => !isSecretPath(path)))
     const database = getDatabase()
-    const newId = crypto.randomUUID()
+    const newId = randomUUID()
     const now = Date.now()
     const forkName = ('Fork of ' + project.name).slice(0, 120)
     const statements = [
