@@ -66,6 +66,7 @@ jobs:
             -p 10002:10001 \
             -e PORT=10001 \
             -e RUNNER_TOKEN=runner-ci-token \
+            -e RUNNER_BROWSER_ORIGIN=https://poligo-web-2n2l.onrender.com \
             -e TERMINAL_BACKEND=process \
             poligo-runner-ci
           cleanup() {
@@ -88,6 +89,21 @@ jobs:
           if [ "$ready" != true ]; then
             docker logs poligo-runner-ci || true
             echo "Production runner image did not become ready" >&2
+            exit 1
+          fi
+          curl --silent --show-error --fail \
+            -H 'Origin: https://poligo-web-2n2l.onrender.com' \
+            -D /tmp/poligo-runner-health-headers \
+            -o /tmp/poligo-runner-health-body \
+            http://127.0.0.1:10002/health
+          grep -Fqi 'Access-Control-Allow-Origin: https://poligo-web-2n2l.onrender.com' /tmp/poligo-runner-health-headers
+          curl --silent --show-error --fail \
+            -H 'Origin: https://untrusted.example' \
+            -D /tmp/poligo-runner-untrusted-headers \
+            -o /dev/null \
+            http://127.0.0.1:10002/health
+          if grep -Fqi 'Access-Control-Allow-Origin:' /tmp/poligo-runner-untrusted-headers; then
+            echo "Runner health endpoint allowed an untrusted browser origin" >&2
             exit 1
           fi
           curl --silent --fail http://127.0.0.1:10002/v1/languages \
