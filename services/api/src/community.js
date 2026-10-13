@@ -10,7 +10,7 @@ const connectionString = process.env.COCKROACH_DATABASE_URL || ''
 const pool = connectionString
   ? new Pool({
       connectionString,
-      ssl: process.env.COCKROACH_SSL === 'disable' ? false : { rejectUnauthorized: false },
+      ...(process.env.COCKROACH_SSL === 'disable' ? { ssl: false } : {}),
       max: Number(process.env.COMMUNITY_DB_POOL_SIZE || 5),
       connectionTimeoutMillis: 5000,
       idleTimeoutMillis: 30000
