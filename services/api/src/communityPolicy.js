@@ -1,5 +1,5 @@
 export function isSecretPath(path) {
-  const normalizedPath = String(path).replaceAll('\\\\', '/')
+  const normalizedPath = String(path).replaceAll(String.fromCharCode(92), '/')
   const name = (normalizedPath.split('/').pop() || normalizedPath).toLowerCase()
   return name === '.env' || (name.startsWith('.env.') && name !== '.env.example')
 }
