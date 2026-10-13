@@ -81,9 +81,12 @@ export default function CommunityPage({ session }) {
     try {
       const result = await api('/api/community/projects/' + encodeURIComponent(project.id) + '/' + kind, { method: 'POST' })
       const key = kind === 'star' ? 'starred' : 'favorited'
-      setProjects(current => current.map(item => item.id === project.id
-        ? { ...item, [key]: result.active, ...(kind === 'star' ? { stars: Math.max(0, Number(item.stars || 0) + (result.active ? 1 : -1)) } : {}) }
-        : item))
+      const changes = {
+        [key]: result.active,
+        ...(kind === 'star' ? { stars: Math.max(0, Number(project.stars || 0) + (result.active ? 1 : -1)) } : {})
+      }
+      setProjects(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      setSelected(current => current?.id === project.id ? { ...current, ...changes } : current)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作に失敗しました')
     }
