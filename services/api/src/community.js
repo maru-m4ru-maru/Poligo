@@ -165,6 +165,11 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     return
   }
 
+  if (parts[2] === 'projects' && parts.length >= 4 && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(parts[3])) {
+    send(response, 400, { error: 'invalid community project id' })
+    return
+  }
+
   if (parts[2] === 'projects' && parts.length === 3 && request.method === 'POST') {
     if (!requireUser()) return
     const payload = await readJsonBody(request, { maxBytes: 16_000 })
@@ -262,14 +267,19 @@ async function handleCommunityRequest(request, response, { createProject } = {})
       send(response, 404, { error: 'project not found' })
       return
     }
-    const current = await pool.query(`SELECT 1 FROM ${table} WHERE project_id = $1 AND user_id = $2`, [parts[3], userId])
-    if (current.rows.length) {
-      await pool.query(`DELETE FROM ${table} WHERE project_id = $1 AND user_id = $2`, [parts[3], userId])
+    const removed = await pool.query(
+      `DELETE FROM ${table} WHERE project_id = $1 AND user_id = $2 RETURNING project_id`,
+      [parts[3], userId]
+    )
+    if (removed.rowCount) {
       if (column) await pool.query('UPDATE community_projects SET stars = greatest(stars - 1, 0) WHERE id = $1', [parts[3]])
       send(response, 200, { active: false })
     } else {
-      await pool.query(`INSERT INTO ${table} (project_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [parts[3], userId])
-      if (column) await pool.query('UPDATE community_projects SET stars = stars + 1 WHERE id = $1', [parts[3]])
+      const added = await pool.query(
+        `INSERT INTO ${table} (project_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING project_id`,
+        [parts[3], userId]
+      )
+      if (column && added.rowCount) await pool.query('UPDATE community_projects SET stars = stars + 1 WHERE id = $1', [parts[3]])
       send(response, 200, { active: true })
     }
     return
