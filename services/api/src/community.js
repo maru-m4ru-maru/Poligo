@@ -1,5 +1,4 @@
 import pg from 'pg'
-import { randomUUID } from 'node:crypto'
 import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { getDatabase } from './turso.js'
 import { decryptProjectSecrets } from './secretStore.js'
