@@ -97,7 +97,9 @@ export default function CommunityPage({ session }) {
       const update = items => items.map(item => item.id === project.id ? { ...item, ...changes } : item)
       setProjects(update)
       setFeatured(update)
-      setFavorites(update)
+      setFavorites(current => kind === 'favorite' && !result.active
+        ? current.filter(item => item.id !== project.id)
+        : update(current))
       setCommunityOwnedProjects(update)
       setSelected(current => current?.id === project.id ? { ...current, ...changes } : current)
     } catch (reason) {
@@ -279,14 +281,16 @@ export default function CommunityPage({ session }) {
             <header><div><span className="community-project-language">{selected.language}</span><h2 id="community-modal-title">{selected.name}</h2></div><button type="button" aria-label="閉じる" onClick={() => setSelected(null)}>×</button></header>
             <p>{selected.description || '説明はまだありません。'}</p>
             <div className="community-modal-actions">
-              <button type="button" onClick={() => void toggle(selected, 'star')}>★ スター {selected.stars || 0}</button>
-              <button type="button" onClick={() => void toggle(selected, 'favorite')}>♥ お気に入り</button>
-              <button type="button" className="community-primary-button" disabled={busy} onClick={() => void forkProject()}>⑂ フォークして編集</button>
+              {selected.visibility !== 'private' && <>
+                <button type="button" onClick={() => void toggle(selected, 'star')}>★ スター {selected.stars || 0}</button>
+                <button type="button" onClick={() => void toggle(selected, 'favorite')}>♥ お気に入り</button>
+                <button type="button" className="community-primary-button" disabled={busy} onClick={() => void forkProject()}>⑂ フォークして編集</button>
+              </>}
             </div>
             <h3>ソースファイル</h3>
             <div className="community-file-list">{Object.keys(selected.files || {}).sort().map(path => <div key={path}><code>{path}</code><span>{String(selected.files[path]).split('\n').length} 行</span></div>)}</div>
             <h3>意見・改善案</h3>
-            <form className="community-comment-form" onSubmit={submitComment}><textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder={session?.user ? '改善案やフィードバックを書く' : '投稿するにはログインしてください'} disabled={!session?.user || busy} /><button type="submit" disabled={!session?.user || busy || !comment.trim()}>投稿</button></form>
+            <form className="community-comment-form" onSubmit={submitComment}><textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder={selected.visibility === 'private' ? '非公開中は意見を投稿できません' : session?.user ? '改善案やフィードバックを書く' : '投稿するにはログインしてください'} disabled={!session?.user || busy || selected.visibility === 'private'} /><button type="submit" disabled={!session?.user || busy || selected.visibility === 'private' || !comment.trim()}>投稿</button></form>
             <div className="community-comments">{comments.map(item => <article key={item.id}><p>{item.body}</p><time>{shortDate(item.createdAt)}</time></article>)}{!comments.length && <p className="community-muted">まだ意見はありません。建設的な最初のコメントをどうぞ。</p>}</div>
             {session?.user?.id === selected.owner_id && <button className="community-unpublish" type="button" disabled={busy} onClick={() => void changeVisibility(selected)}>{selected.visibility === 'private' ? 'コミュニティに公開する' : 'コミュニティから非公開にする'}</button>}
           </section>
