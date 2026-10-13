@@ -9,7 +9,8 @@
     "dev:api": "pnpm --dir services/api dev",
     "dev:runner": "pnpm --dir services/runner dev",
     "build": "pnpm build:web",
-    "test:ui-layout": "playwright test --config=playwright.config.mjs"
+    "test:ui-layout": "playwright test --config=playwright.config.mjs",
+    "test:api": "pnpm --dir services/api test"
   },
   "dependencies": {
     "email-disposable": "1.0.108"
