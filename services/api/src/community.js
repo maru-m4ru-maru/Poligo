@@ -143,7 +143,14 @@ async function handleCommunityRequest(request, response, { createProject } = {})
   }
 
   if (request.method === 'GET' && parts.length === 3 && parts[2] === 'projects') {
-    const sort = url.searchParams.get('sort') === 'stars' ? 'stars DESC, published_at DESC' : 'featured DESC, published_at DESC'
+    const sortOption = url.searchParams.get('sort')
+    const sort = sortOption === 'stars'
+      ? 'p.stars DESC, p.published_at DESC'
+      : sortOption === 'forks'
+        ? 'p.forks DESC, p.published_at DESC'
+        : sortOption === 'recent'
+          ? 'p.published_at DESC'
+          : 'p.featured DESC, p.published_at DESC'
     const search = (url.searchParams.get('q') || '').trim().slice(0, 80)
     const requestedLimit = Number(url.searchParams.get('limit') || 30)
     const limit = Number.isFinite(requestedLimit) ? Math.min(50, Math.max(1, Math.trunc(requestedLimit))) : 30
