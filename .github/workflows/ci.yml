@@ -52,6 +52,7 @@ jobs:
       - run: node --check services/api/src/server.js
       - run: node --check services/api/src/auth.js
       - run: node --check services/api/src/authSchema.js
+      - run: node --check services/api/src/community.js
       - run: node --check services/api/src/adminPolicy.js
       - run: node --check services/api/src/terminalSync.js
       - run: npm install --prefix services/runner

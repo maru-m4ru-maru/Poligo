@@ -9,6 +9,7 @@ import ts from 'typescript'
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node'
 import { auth, initializeAuthDatabase } from './auth.js'
 import { getDatabase, getDatabaseStatus, initializeDatabase } from './turso.js'
+import { getCommunityDatabaseStatus, initializeCommunityDatabase, routeCommunityRequest } from './community.js'
 import {
   decryptProjectSecrets,
   encryptProjectSecrets
@@ -5980,6 +5981,11 @@ const server = http.createServer(async (request, response) => {
     return
   }
 
+  if (requestPath === '/api/community' || requestPath.startsWith('/api/community/')) {
+    await routeCommunityRequest(request, response, { createProject })
+    return
+  }
+
   if (
     request.url === '/api/admin/users' ||
     request.url.startsWith('/api/admin/users/') ||
@@ -6081,6 +6087,7 @@ const server = http.createServer(async (request, response) => {
       terminalRunner: Boolean(terminalRunnerUrl),
       executor: runnerExecutionReady ? 'runner' : 'judge0',
       typescriptExecutor: 'judge0',
+      community: getCommunityDatabaseStatus(),
       database: {
         ...databaseStatus,
         initialization: !databaseInitializationComplete
@@ -6678,6 +6685,13 @@ server.listen(port, '0.0.0.0', () => {
 
       await initializeAuthDatabase()
       console.log('Poligo authentication database ready')
+
+      try {
+        const communityReady = await initializeCommunityDatabase()
+        console.log(communityReady ? 'Poligo community database ready' : 'Poligo community database is not configured')
+      } catch (communityError) {
+        console.error('Poligo community database initialization failed:', communityError instanceof Error ? communityError.message : String(communityError))
+      }
 
       if (projectDatabaseInitialized) {
         await restoreTerminalOwners()
