@@ -262,7 +262,7 @@ export default function CommunityPage({ session }) {
               <div className="community-section-heading"><div><span>{view === 'mine' ? 'YOUR PROJECTS' : 'COMMUNITY'}</span><h2>{view === 'favorites' ? 'お気に入り' : view === 'mine' ? '自分のプロジェクト' : 'みんなのプロジェクト'}</h2></div></div>
               <div className="community-filters">
                 <input aria-label="プロジェクトを検索" value={query} onChange={event => setQuery(event.target.value)} placeholder="名前・説明・言語で検索" />
-                <select aria-label="並び順" value={sort} onChange={event => setSort(event.target.value)}><option value="featured">おすすめ順</option><option value="stars">スター数順</option></select>
+                <select aria-label="並び順" value={sort} onChange={event => setSort(event.target.value)}><option value="featured">おすすめ順</option><option value="recent">新着順</option><option value="stars">スター数順</option><option value="forks">フォーク数順</option></select>
               </div>
               <div className="community-project-grid">
                 {visibleProjects.map(project => (
