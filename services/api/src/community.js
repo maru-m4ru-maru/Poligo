@@ -382,7 +382,15 @@ export async function routeCommunityRequest(request, response, dependencies = {}
   try {
     await handleCommunityRequest(request, response, dependencies)
   } catch (error) {
-    console.error('Community API request failed', error)
-    send(response, 500, { error: 'community request failed' })
+    const message = error instanceof Error ? error.message : 'community request failed'
+    const status = message === 'authentication required'
+      ? 401
+      : message.includes('storage limit exceeded')
+        ? 409
+        : message === 'request too large' || message.includes('required') || message.includes('invalid')
+          ? 400
+          : 500
+    if (status === 500) console.error('Community API request failed', error)
+    send(response, status, { error: status === 500 ? 'community request failed' : message })
   }
 }
