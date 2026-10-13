@@ -3667,7 +3667,7 @@ function AppRouter() {
   const [authResolved, setAuthResolved] = useState(false)
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
-  const publicPath = pathname === '/' || pathname === '/terms'
+  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/community'
   const accountPath = pathname === '/account'
   const communityPath = pathname === '/community'
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
