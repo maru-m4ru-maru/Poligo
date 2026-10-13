@@ -294,7 +294,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     if (!requireUser()) return
     const table = parts[4] === 'star' ? 'community_stars' : 'community_favorites'
     const column = parts[4] === 'star' ? 'stars' : null
-    const exists = await pool.query('SELECT id FROM community_projects WHERE id = $1 AND visibility = 'public'', [parts[3]])
+    const exists = await pool.query("SELECT id FROM community_projects WHERE id = $1 AND visibility = 'public'", [parts[3]])
     if (!exists.rows[0]) {
       send(response, 404, { error: 'project not found' })
       return
@@ -325,7 +325,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
       send(response, 400, { error: 'comment body is required' })
       return
     }
-    const exists = await pool.query('SELECT id FROM community_projects WHERE id = $1 AND visibility = 'public'', [parts[3]])
+    const exists = await pool.query("SELECT id FROM community_projects WHERE id = $1 AND visibility = 'public'", [parts[3]])
     if (!exists.rows[0]) {
       send(response, 404, { error: 'project not found' })
       return
