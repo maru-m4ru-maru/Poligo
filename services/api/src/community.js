@@ -122,7 +122,7 @@ async function getOwnedProject(projectId, ownerId) {
   return { ...project, files: decryptProjectSecrets(rawFiles) }
 }
 
-async function handleCommunityRequest(request, response) {
+async function handleCommunityRequest(request, response, { createProject } = {}) {
   const url = new URL(request.url || '/', 'http://localhost')
   const parts = url.pathname.split('/').filter(Boolean)
   const session = await sessionFor(request)
@@ -327,18 +327,12 @@ async function handleCommunityRequest(request, response) {
       return
     }
     const files = Object.fromEntries(Object.entries(project.files).filter(([path]) => !isSecretPath(path)))
-    const database = getDatabase()
-    const newId = randomUUID()
-    const now = Date.now()
+    if (typeof createProject !== 'function') {
+      send(response, 503, { error: 'project creation is unavailable' })
+      return
+    }
     const forkName = ('Fork of ' + project.name).slice(0, 120)
-    const statements = [
-      { sql: 'INSERT INTO projects (id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', args: [newId, userId, forkName, now, now] },
-      ...Object.entries(files).map(([path, content]) => ({
-        sql: 'INSERT INTO project_files (project_id, path, content) VALUES (?, ?, ?)',
-        args: [newId, path, content]
-      }))
-    ]
-    await database.batch(statements, 'immediate')
+    const fork = await createProject(userId, { name: forkName, files })
     await pool.query('UPDATE community_projects SET forks = forks + 1 WHERE id = $1', [parts[3]])
     send(response, 201, { project: { id: newId, name: forkName, files } })
     return
@@ -375,9 +369,9 @@ async function handleCommunityRequest(request, response) {
   send(response, 404, { error: 'not found' })
 }
 
-export async function routeCommunityRequest(request, response) {
+export async function routeCommunityRequest(request, response, dependencies = {}) {
   try {
-    await handleCommunityRequest(request, response)
+    await handleCommunityRequest(request, response, dependencies)
   } catch (error) {
     console.error('Community API request failed', error)
     send(response, 500, { error: 'community request failed' })
