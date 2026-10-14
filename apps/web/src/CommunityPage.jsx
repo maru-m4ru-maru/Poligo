@@ -169,6 +169,11 @@ export default function CommunityPage({ session }) {
   }, [load])
 
   async function toggle(project, kind) {
+    if (!session?.user) {
+      window.location.href = '/signin'
+      return
+    }
+
     try {
       const result = await api('/api/community/projects/' + encodeURIComponent(project.id) + '/' + kind, { method: 'POST' })
       const key = kind === 'star' ? 'starred' : 'favorited'
@@ -218,6 +223,10 @@ export default function CommunityPage({ session }) {
 
   async function forkProject() {
     if (!selected) return
+    if (!session?.user) {
+      window.location.href = '/signin'
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -295,7 +304,7 @@ export default function CommunityPage({ session }) {
           <span className="community-header-context">コミュニティ <span>作品を見つける・共有する</span></span>
         </div>
         <nav>
-          <button type="button" className="community-dashboard-link" onClick={() => { window.location.hash = '/dashboard' }}><Icon name="grid" size={15} /> ダッシュボード</button>
+          <button type="button" className="community-dashboard-link" onClick={() => { window.location.href = session?.user ? '/#/dashboard' : '/signin' }}><Icon name="grid" size={15} /> {session?.user ? 'ダッシュボード' : 'ログイン'}</button>
           <button type="button" className="community-publish-top" onClick={() => setView(view === 'publish' ? 'explore' : 'publish')}><Icon name="plus" size={16} /> プロジェクトを公開</button>
         </nav>
       </header>
@@ -337,7 +346,7 @@ export default function CommunityPage({ session }) {
             )}
             <div className="community-spotlight-bottom"><span>おすすめから、新しい発見を</span><span>POLIGO COMMUNITY</span></div>
           </aside>
-          <div className="community-hero-index"><span>01</span><span /> COMMUNITY / DISCOVER</div>
+          <div className="community-hero-index"><span>作品を見つける</span><span /></div>
         </section>
 
         <section className="community-guide-strip" aria-label="コミュニティの楽しみ方">
@@ -371,6 +380,18 @@ export default function CommunityPage({ session }) {
 
           <div className="community-workspace-content">
             {view === 'publish' ? (
+              !session?.user ? (
+                <section className="community-signin-panel">
+                  <div className="community-signin-mark"><Icon name="shield" size={23} /></div>
+                  <span className="community-section-kicker">作品を共有する</span>
+                  <h2>ログインして、作品を公開しよう。</h2>
+                  <p>ログインすると、自分のプロジェクトを公開したり、お気に入りを保存したり、作品に意見を投稿したりできます。</p>
+                  <div className="community-signin-actions">
+                    <button type="button" className="community-primary-button" onClick={() => { window.location.href = '/signin' }}>ログインして続ける <Icon name="arrow-up-right" size={15} /></button>
+                    <button type="button" className="community-secondary-button" onClick={() => setView('explore')}>作品を見てみる</button>
+                  </div>
+                </section>
+              ) : (
               <section className="community-publish-layout">
                 <div className="community-content-heading">
                   <div><span className="community-section-kicker">自分の作品を共有</span><h2>作品を公開する</h2><p>あなたのアイデアを共有して、誰かの次の発見につなげましょう。</p></div>
@@ -392,7 +413,7 @@ export default function CommunityPage({ session }) {
                       <label>コミュニティでの表示名
                         <input maxLength={120} value={publishName} onChange={event => setPublishName(event.target.value)} placeholder="プロジェクト名" required />
                       </label>
-                      <label>説明 <span className="community-label-optional">OPTIONAL / 500文字まで</span>
+                      <label>説明 <span className="community-label-optional">任意 / 500文字まで</span>
                         <textarea maxLength={500} rows={5} value={publishDescription} onChange={event => setPublishDescription(event.target.value)} placeholder="何を作った？ 技術スタックや工夫した点など。" />
                       </label>
                       <div className="community-publish-warning"><Icon name="shield" size={17} /><p>公開後は誰でもソースを閲覧・フォークできます。APIキーやパスワードなどの秘密情報は公開前に必ず取り除いてください。.envなど一部の秘密ファイルを含むプロジェクトは公開できません。</p></div>
@@ -409,6 +430,7 @@ export default function CommunityPage({ session }) {
                   </aside>
                 </div>
               </section>
+              )
             ) : (
               <>
                 {featured.length > 1 && view === 'explore' && (
@@ -492,10 +514,14 @@ export default function CommunityPage({ session }) {
             </section>
             <section className="community-modal-section">
               <div className="community-modal-section-heading"><h3>意見・改善案</h3><span>{comments.length} 件</span></div>
-              <form className="community-comment-form" onSubmit={submitComment}>
-                <textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder={session?.user ? '改善案やフィードバックを書く...' : '投稿するにはログインしてください'} disabled={!session?.user || busy} />
-                <button type="submit" disabled={!session?.user || busy || !comment.trim()}>{busy ? '投稿中…' : '意見を投稿'} <Icon name="arrow-up-right" size={14} /></button>
-              </form>
+              {session?.user ? (
+                <form className="community-comment-form" onSubmit={submitComment}>
+                  <textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder="改善案やフィードバックを書く..." disabled={busy} />
+                  <button type="submit" disabled={busy || !comment.trim()}>{busy ? '投稿中…' : '意見を投稿'} <Icon name="arrow-up-right" size={14} /></button>
+                </form>
+              ) : (
+                <div className="community-comment-login"><p>ログインすると、作品への感想や改善案を投稿できます。</p><button type="button" onClick={() => { window.location.href = '/signin' }}>ログインして投稿</button></div>
+              )}
               <div className="community-comments">{comments.map(item => <article key={item.id}><p>{item.body}</p><time>{shortDate(item.createdAt)}</time></article>)}{!comments.length && <p className="community-muted">まだ意見はありません。建設的な最初のコメントをどうぞ。</p>}</div>
             </section>
             {session?.user?.id === selected.owner_id && (
