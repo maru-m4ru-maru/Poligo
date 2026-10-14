@@ -242,3 +242,36 @@ test('IDE panels align at desktop and reflow into non-overlapping rows on mobile
   expect(mobileExplorer.y).toBeGreaterThanOrEqual(mobileActivity.y + mobileActivity.height - 1)
   expect(mobileWorkspace.y).toBeGreaterThanOrEqual(mobileExplorer.y + mobileExplorer.height - 1)
 })
+
+
+test('community discovery layout fits desktop and narrow mobile viewports', async ({ page }) => {
+  await mockAuthenticatedApi(page)
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/#/community')
+  await expect(page.locator('.community-hero')).toBeVisible()
+  await expect(page.locator('.community-spotlight')).toBeVisible()
+  await expect(page.locator('.community-sidebar')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, [
+    '.community-header', '.community-hero', '.community-spotlight',
+    '.community-statbar', '.community-sidebar', '.community-workspace-content'
+  ])
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload()
+  await expect(page.locator('.community-hero')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, [
+    '.community-header', '.community-hero', '.community-spotlight',
+    '.community-statbar', '.community-sidebar', '.community-workspace-content'
+  ])
+
+  await page.setViewportSize({ width: 320, height: 740 })
+  await page.reload()
+  await expect(page.locator('.community-hero')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, [
+    '.community-header', '.community-hero', '.community-spotlight',
+    '.community-statbar', '.community-sidebar', '.community-workspace-content'
+  ])
+})
