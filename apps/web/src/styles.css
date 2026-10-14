@@ -1058,7 +1058,7 @@ button img{pointer-events:none}
   .community-workspace{gap:22px;margin-top:27px}
   .community-sidebar nav{gap:4px}
   .community-sidebar nav button{grid-template-columns:17px minmax(0,1fr);gap:5px;padding:0 6px;font-size:9px}
-  .community-content-heading{align-items:flex-start}
+  .community-content-heading{align-items:flex-start;flex-wrap:wrap}
   .community-content-heading h2{font-size:22px}
   .community-content-heading p{font-size:10px}
   .community-results-count{gap:5px;font-size:7px}
