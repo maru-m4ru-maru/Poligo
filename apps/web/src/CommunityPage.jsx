@@ -103,7 +103,7 @@ function ProjectCard({ project, index, onOpen, onToggle }) {
         <div className="community-card-content">
           <div className="community-card-meta">
             <span className="community-project-language">{project.language || 'Other'}</span>
-            {project.featured && <span className="community-featured-label"><span /> 運営のおすすめ</span>}
+            {project.featured && <span className="community-featured-label"><span /> Poligoおすすめ</span>}
           </div>
           <h3>{project.name}</h3>
           <p>{project.description || '説明はまだありません。作品の中身を見てみましょう。'}</p>
@@ -282,8 +282,6 @@ export default function CommunityPage({ session }) {
       .filter(project => languageFilter === 'all' || String(project.language || 'Other') === languageFilter)
   }, [projects, view, languageFilter])
 
-  const totalStars = projects.reduce((sum, project) => sum + Number(project.stars || 0), 0)
-  const totalForks = projects.reduce((sum, project) => sum + Number(project.forks || 0), 0)
   const spotlight = featured[0]
 
   return (
@@ -294,7 +292,7 @@ export default function CommunityPage({ session }) {
             <img src="/poligo-logo.svg" alt="Poligo" />
           </button>
           <span className="community-header-divider" />
-          <span className="community-header-context">COMMUNITY <span>PUBLIC WORKSPACE</span></span>
+          <span className="community-header-context">コミュニティ <span>作品を見つける・共有する</span></span>
         </div>
         <nav>
           <button type="button" className="community-dashboard-link" onClick={() => { window.location.hash = '/dashboard' }}><Icon name="grid" size={15} /> ダッシュボード</button>
@@ -305,25 +303,25 @@ export default function CommunityPage({ session }) {
       <div className="community-main">
         <section className="community-hero">
           <div className="community-hero-copy">
-            <div className="community-eyebrow"><span /> POLIGO COMMUNITY <span className="community-eyebrow-divider">/</span> OPEN WORKSPACE</div>
-            <h1>作品を公開し、<br /><span>次のアイデアへ。</span></h1>
-            <p>作ったものを共有する。誰かのコードから学ぶ。フォークして、改善して、また公開する。開発の続きを、ここから。</p>
+            <div className="community-eyebrow"><span /> POLIGO COMMUNITY <span className="community-eyebrow-divider">/</span> 作品を探す・共有する</div>
+            <h1>つくる人と、<br /><span>つながる場所。</span></h1>
+            <p>誰かの作品からアイデアを見つけたり、自分のコードを公開したり。スターやコメントで感想を伝え、気になる作品はフォークして自分なりに発展させられます。</p>
             <div className="community-hero-actions">
               <button type="button" className="community-primary-button" onClick={() => { setView('explore'); document.getElementById('community-projects')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}>作品を探す <Icon name="arrow-up-right" size={16} /></button>
               <button type="button" className="community-secondary-button" onClick={() => setView('publish')}><Icon name="plus" size={15} /> 作品を公開する</button>
             </div>
-            <div className="community-hero-footnote"><span className="community-status-dot" /> 公開プロジェクトを探索中 <span className="community-hero-footnote-separator" /> FOR BUILDERS, BY BUILDERS</div>
+            <div className="community-hero-footnote"><span className="community-status-dot" /> 気になる作品は、お気に入りに保存できます</div>
           </div>
 
           <aside className="community-spotlight">
-            <div className="community-spotlight-top"><span><i /> EDITOR'S SELECTION</span><span>FEATURE 001</span></div>
+            <div className="community-spotlight-top"><span><i /> ピックアップ作品</span><span>おすすめ</span></div>
             {spotlight ? (
               <button type="button" className="community-spotlight-project" onClick={() => void openProject(spotlight)}>
                 <ProjectArtwork project={spotlight} index={3} />
                 <div className="community-spotlight-detail">
-                  <span className="community-spotlight-label">今月のピックアップ</span>
+                  <span className="community-spotlight-label">おすすめの作品</span>
                   <h2>{spotlight.name}</h2>
-                  <p>{spotlight.description || '運営が選んだ、コミュニティで見つけたプロジェクト。'}</p>
+                  <p>{spotlight.description || 'コミュニティで出会った、ぜひ見てほしい作品。'}</p>
                   <div className="community-spotlight-meta"><span>{spotlight.language || 'Other'}</span><span><Icon name="star" size={13} /> {formatCount(spotlight.stars)}</span><span><Icon name="fork" size={13} /> {formatCount(spotlight.forks)}</span></div>
                   <span className="community-spotlight-open">プロジェクトを見る <Icon name="arrow-up-right" size={15} /></span>
                 </div>
@@ -331,22 +329,22 @@ export default function CommunityPage({ session }) {
             ) : (
               <div className="community-spotlight-empty">
                 <div className="community-spotlight-empty-mark"><Icon name="layers" size={24} /></div>
-                <span>THE NEXT FEATURED PROJECT</span>
-                <h2>次の主役は、ここから。</h2>
-                <p>作品を公開して、Poligoコミュニティの最初の一歩を作りましょう。</p>
-                <button type="button" onClick={() => setView('publish')}>最初の作品を公開 <Icon name="arrow-up-right" size={14} /></button>
+                <span>おすすめ作品</span>
+                <h2>次のお気に入りを見つけよう。</h2>
+                <p>作品が公開されると、ここにピックアップが表示されます。気になる作品に出会ったら、ぜひチェックしてみてください。</p>
+                <button type="button" onClick={() => setView('explore')}>作品を探す <Icon name="arrow-up-right" size={14} /></button>
               </div>
             )}
-            <div className="community-spotlight-bottom"><span>CURATED BY POLIGO</span><span>CODE. SHARE. GROW.</span></div>
+            <div className="community-spotlight-bottom"><span>おすすめから、新しい発見を</span><span>POLIGO COMMUNITY</span></div>
           </aside>
           <div className="community-hero-index"><span>01</span><span /> COMMUNITY / DISCOVER</div>
         </section>
 
-        <section className="community-statbar" aria-label="コミュニティの概要">
-          <div><span>PROJECTS IN VIEW</span><strong>{formatCount(projects.length)}</strong><small>表示中の作品</small></div>
-          <div><span>CURATED PICKS</span><strong>{formatCount(featured.length)}</strong><small>運営のおすすめ</small></div>
-          <div><span>COMMUNITY STARS</span><strong>{formatCount(totalStars)}</strong><small>表示中のスター合計</small></div>
-          <div><span>FORK ACTIVITY</span><strong>{formatCount(totalForks)}</strong><small>表示中のフォーク合計</small></div>
+        <section className="community-guide-strip" aria-label="コミュニティの楽しみ方">
+          <div className="community-guide-intro"><span>コミュニティの楽しみ方</span><strong>見つける、保存する、<br />自分の作品に育てる。</strong></div>
+          <div className="community-guide-step"><span>01</span><div><strong>作品を探す</strong><p>言語やキーワードから、気になる作品を見つけましょう。</p></div></div>
+          <div className="community-guide-step"><span>02</span><div><strong>お気に入りに保存</strong><p>あとで見返したい作品は、ハートでいつでも保存。</p></div></div>
+          <div className="community-guide-step"><span>03</span><div><strong>フォークして発展</strong><p>コードを引き継いで、自分なりのアイデアを試せます。</p></div></div>
         </section>
 
         {notice && <p className="community-notice" role="status"><span className="community-notice-mark">✓</span>{notice}</p>}
@@ -354,7 +352,7 @@ export default function CommunityPage({ session }) {
 
         <div className="community-workspace">
           <aside className="community-sidebar">
-            <span className="community-sidebar-label">WORKSPACE</span>
+            <span className="community-sidebar-label">メニュー</span>
             <nav aria-label="コミュニティメニュー">
               <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><Icon name="grid" size={16} /><span>作品を探す</span><Icon name="chevron-right" size={14} /></button>
               <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}><Icon name="heart" size={16} /><span>お気に入り</span><Icon name="chevron-right" size={14} /></button>
@@ -363,23 +361,23 @@ export default function CommunityPage({ session }) {
             <div className="community-sidebar-rule" />
             <div className="community-sidebar-note">
               <div className="community-sidebar-note-icon"><Icon name="code" size={17} /></div>
-              <span className="community-sidebar-label">BUILD IN PUBLIC</span>
-              <h3>共有から、開発を前へ。</h3>
-              <p>気になる作品をフォークして、自分のプロジェクトとして発展させましょう。</p>
-              <span className="community-sidebar-note-index">POLIGO / 01</span>
+              <span className="community-sidebar-label">コミュニティの使い方</span>
+              <h3>好きな作品を、自分の手で。</h3>
+              <p>気になる作品をフォークすると、自分のプロジェクトとして編集できます。</p>
+              <span className="community-sidebar-note-index">見つける → 試す → 育てる</span>
             </div>
-            <div className="community-sidebar-bottom"><span className="community-status-dot" /> COMMUNITY IS OPEN</div>
+            <div className="community-sidebar-bottom"><span className="community-status-dot" /> 新しい作品を見つけよう</div>
           </aside>
 
           <div className="community-workspace-content">
             {view === 'publish' ? (
               <section className="community-publish-layout">
                 <div className="community-content-heading">
-                  <div><span className="community-section-kicker">SHARE YOUR WORK / 03</span><h2>作品を公開する</h2><p>作ったものを、次のアイデアにつなげよう。</p></div>
+                  <div><span className="community-section-kicker">自分の作品を共有</span><h2>作品を公開する</h2><p>あなたのアイデアを共有して、誰かの次の発見につなげましょう。</p></div>
                 </div>
                 <div className="community-publish-grid">
                   <section className="community-publish-panel">
-                    <div className="community-panel-topline"><span>NEW PUBLICATION</span><span>STEP 01 — 03</span></div>
+                    <div className="community-panel-topline"><span>公開する作品</span><span>公開設定</span></div>
                     <form onSubmit={publishProject}>
                       <label>公開するプロジェクト
                         <select required value={publishId} onChange={event => {
@@ -397,17 +395,17 @@ export default function CommunityPage({ session }) {
                       <label>説明 <span className="community-label-optional">OPTIONAL / 500文字まで</span>
                         <textarea maxLength={500} rows={5} value={publishDescription} onChange={event => setPublishDescription(event.target.value)} placeholder="何を作った？ 技術スタックや工夫した点など。" />
                       </label>
-                      <div className="community-publish-warning"><Icon name="shield" size={17} /><p>公開後は誰でもソースを閲覧・フォークできます。.envなどの秘密ファイルを含むプロジェクトは公開できません。</p></div>
+                      <div className="community-publish-warning"><Icon name="shield" size={17} /><p>公開後は誰でもソースを閲覧・フォークできます。APIキーやパスワードなどの秘密情報は公開前に必ず取り除いてください。.envなど一部の秘密ファイルを含むプロジェクトは公開できません。</p></div>
                       <button className="community-primary-button community-publish-submit" type="submit" disabled={busy || !publishId}>{busy ? '公開処理中…' : 'コミュニティに公開する'} <Icon name="arrow-up-right" size={16} /></button>
                     </form>
                   </section>
                   <aside className="community-publish-aside">
-                    <span className="community-section-kicker">BEFORE YOU SHARE</span>
-                    <h3>公開前に、3つだけ。</h3>
+                    <span className="community-section-kicker">公開前のチェック</span>
+                    <h3>公開する前に確認。</h3>
                     <div className="community-publish-check"><span>01</span><div><strong>秘密情報を含めない</strong><p>APIキー、パスワード、.envの値を確認。</p></div></div>
                     <div className="community-publish-check"><span>02</span><div><strong>作品の目的を伝える</strong><p>説明に機能、技術、工夫した点を書く。</p></div></div>
                     <div className="community-publish-check"><span>03</span><div><strong>フォークを歓迎する</strong><p>改善や学びにつながる共有にしよう。</p></div></div>
-                    <div className="community-publish-aside-footer"><Icon name="shield" size={15} /> YOUR PROJECTS. YOUR CONTROL.</div>
+                    <div className="community-publish-aside-footer"><Icon name="shield" size={15} /> 公開範囲はあなたが決められます</div>
                   </aside>
                 </div>
               </section>
@@ -415,13 +413,13 @@ export default function CommunityPage({ session }) {
               <>
                 {featured.length > 1 && view === 'explore' && (
                   <section className="community-curated">
-                    <div className="community-curated-heading"><div><span className="community-section-kicker">HANDPICKED / 02</span><h2>運営のセレクション</h2></div><span>SELECTED BY POLIGO</span></div>
+                    <div className="community-curated-heading"><div><span className="community-section-kicker">ピックアップ作品</span><h2>おすすめの作品</h2></div><span>新しいアイデアを見つけよう</span></div>
                     <div className="community-curated-list">
                       {featured.slice(1, 4).map((project, index) => (
                         <button type="button" className="community-curated-item" key={project.id} onClick={() => void openProject(project)}>
                           <span className="community-curated-number">0{index + 2}</span>
                           <span className="community-curated-symbol">{languageMark(project.language)}</span>
-                          <span className="community-curated-copy"><strong>{project.name}</strong><small>{project.language || 'Other'} <span /> {formatCount(project.stars)} stars</small></span>
+                          <span className="community-curated-copy"><strong>{project.name}</strong><small>{project.language || 'Other'} <span /> {formatCount(project.stars)} スター</small></span>
                           <Icon name="arrow-up-right" size={16} />
                         </button>
                       ))}
@@ -431,8 +429,8 @@ export default function CommunityPage({ session }) {
 
                 <section className="community-explore" id="community-projects">
                   <div className="community-content-heading">
-                    <div><span className="community-section-kicker">{view === 'favorites' ? 'YOUR COLLECTION / 02' : 'OPEN PROJECTS / 02'}</span><h2>{view === 'favorites' ? 'お気に入り' : 'コミュニティを探索'}</h2><p>{view === 'favorites' ? 'あとで見返したい作品をまとめて確認できます。' : '言語やキーワードから、新しい作品を見つけましょう。'}</p></div>
-                    <span className="community-results-count"><strong>{visibleProjects.length.toString().padStart(2, '0')}</strong> RESULTS</span>
+                    <div><span className="community-section-kicker">{view === 'favorites' ? '保存した作品' : 'みんなの作品'}</span><h2>{view === 'favorites' ? 'お気に入り' : '作品を探す'}</h2><p>{view === 'favorites' ? 'あとで見返したい作品をまとめて確認できます。' : '言語やキーワードから、気になる作品を見つけましょう。'}</p></div>
+                    <span className="community-results-count"><strong>{visibleProjects.length}</strong> 件の作品</span>
                   </div>
 
                   <div className="community-filters">
@@ -448,7 +446,7 @@ export default function CommunityPage({ session }) {
                   </div>
 
                   {loading ? (
-                    <div className="community-loading" role="status"><span className="community-loading-indicator" /><span>作品を読み込んでいます</span><small>LOADING COMMUNITY INDEX</small></div>
+                    <div className="community-loading" role="status"><span className="community-loading-indicator" /><span>作品を読み込んでいます</span><small>まもなく表示されます</small></div>
                   ) : visibleProjects.length ? (
                     <div className="community-project-grid">
                       {visibleProjects.map((project, index) => <ProjectCard key={project.id} project={project} index={index} onOpen={openProject} onToggle={toggle} />)}
@@ -456,7 +454,7 @@ export default function CommunityPage({ session }) {
                   ) : (
                     <div className="community-empty">
                       <div className="community-empty-icon"><Icon name={view === 'favorites' ? 'heart' : 'search'} size={24} /></div>
-                      <span className="community-section-kicker">{view === 'favorites' ? 'COLLECTION EMPTY' : 'NO MATCHING PROJECTS'}</span>
+                      <span className="community-section-kicker">{view === 'favorites' ? 'お気に入り' : '検索結果'}</span>
                       <h3>{view === 'favorites' ? 'お気に入りはまだありません。' : projects.length ? '条件に合う作品がありません。' : 'まだ公開プロジェクトがありません。'}</h3>
                       <p>{view === 'favorites' ? '作品カードのハートを押すと、ここに保存されます。' : projects.length ? '検索語や言語フィルターを変えて、もう一度探してみてください。' : '最初の作品を公開して、コミュニティを始めましょう。'}</p>
                       <div className="community-empty-actions">
@@ -465,21 +463,21 @@ export default function CommunityPage({ session }) {
                       </div>
                     </div>
                   )}
-                  <div className="community-grid-footer"><span>END OF CURRENT LIST</span><span>POLIGO COMMUNITY <i /></span></div>
+                  <div className="community-grid-footer"><span>気になる作品はスターやお気に入りで保存できます。</span><span>POLIGO COMMUNITY <i /></span></div>
                 </section>
               </>
             )}
           </div>
         </div>
 
-        <footer className="community-footer"><button type="button" onClick={() => { window.location.hash = '/dashboard' }}><img src="/poligo-logo.svg" alt="" /> <span>BACK TO WORKSPACE</span></button><span>BUILD SOMETHING WORTH SHARING.</span><span>POLIGO COMMUNITY <strong>©</strong> 2026</span></footer>
+        <footer className="community-footer"><button type="button" onClick={() => { window.location.hash = '/dashboard' }}><img src="/poligo-logo.svg" alt="" /> <span>ダッシュボードへ</span></button><span>気になる作品から、新しいアイデアを。</span><span>Poligo コミュニティ <strong>©</strong> 2026</span></footer>
       </div>
 
       {selected && (
         <div className="community-modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) { setSelected(null); setConfirmUnpublish(false) } }}>
           <section className="community-modal" role="dialog" aria-modal="true" aria-labelledby="community-modal-title">
             <header className="community-modal-header">
-              <div><span className="community-section-kicker">PROJECT DETAILS / COMMUNITY</span><h2 id="community-modal-title">{selected.name}</h2><span className="community-project-language">{selected.language || 'Other'}</span></div>
+              <div><span className="community-section-kicker">作品の詳細</span><h2 id="community-modal-title">{selected.name}</h2><span className="community-project-language">{selected.language || 'Other'}</span></div>
               <button type="button" aria-label="閉じる" onClick={() => { setSelected(null); setConfirmUnpublish(false) }}><Icon name="close" size={17} /></button>
             </header>
             <p className="community-modal-description">{selected.description || '説明はまだありません。'}</p>
@@ -493,7 +491,7 @@ export default function CommunityPage({ session }) {
               <div className="community-file-list">{Object.keys(selected.files || {}).sort().map(path => <div key={path}><code><Icon name="code" size={13} /> {path}</code><span>{String(selected.files[path]).split('\n').length} 行</span></div>)}</div>
             </section>
             <section className="community-modal-section">
-              <div className="community-modal-section-heading"><h3>意見・改善案</h3><span>{comments.length.toString().padStart(2, '0')} COMMENTS</span></div>
+              <div className="community-modal-section-heading"><h3>意見・改善案</h3><span>{comments.length} 件</span></div>
               <form className="community-comment-form" onSubmit={submitComment}>
                 <textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder={session?.user ? '改善案やフィードバックを書く...' : '投稿するにはログインしてください'} disabled={!session?.user || busy} />
                 <button type="submit" disabled={!session?.user || busy || !comment.trim()}>{busy ? '投稿中…' : '意見を投稿'} <Icon name="arrow-up-right" size={14} /></button>
