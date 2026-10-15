@@ -147,7 +147,6 @@ export async function initializeCommunityDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       decided_at TIMESTAMPTZ,
       CONSTRAINT community_team_request_status CHECK (status IN ('pending', 'approved', 'rejected')),
-      UNIQUE (team_id, user_id, status)
     )
   `)
   await pool.query(`
@@ -436,41 +435,19 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     return
   }
 
-  if (parts[2] === 'notifications' && parts.length === 4 && validUuid.test(parts[3]) && ['read', 'hide'].includes(parts[4]) === false && (request.method === 'POST')) {
-    send(response, 404, { error: 'not found' })
+  if (parts[2] === 'notifications' && parts.length === 5 && validUuid.test(parts[3]) && ['read', 'hide'].includes(parts[4]) && request.method === 'POST') {
+    if (!requireUser()) return
+    const result = await pool.query(
+      parts[4] === 'read'
+        ? 'UPDATE community_notifications SET is_read = true WHERE id = $1 AND user_id = $2 RETURNING id'
+        : 'UPDATE community_notifications SET is_read = true, is_hidden = true WHERE id = $1 AND user_id = $2 RETURNING id',
+      [parts[3], userId]
+    )
+    send(response, result.rowCount ? 200 : 404, result.rowCount ? { ok: true } : { error: 'notification not found' })
     return
   }
 
-  if (parts[2] === 'notifications' && parts.length === 4 && validUuid.test(parts[3]) && ['read', 'hide'].includes(parts[3]) === false && request.method === 'POST') {
-    if (!requireUser()) return
-    if (parts[3] === 'read') {
-      send(response, 404, { error: 'notification id is required' })
-      return
-    }
-  }
-
-  if (parts[2] === 'notifications' && parts.length === 4 && validUuid.test(parts[3]) && request.method === 'POST') {
-    if (!requireUser()) return
-    const action = url.searchParams.get('action') || ''
-    if (action === 'read') {
-      const result = await pool.query(
-        'UPDATE community_notifications SET is_read = true WHERE id = $1 AND user_id = $2 RETURNING id',
-        [parts[3], userId]
-      )
-      send(response, result.rowCount ? 200 : 404, result.rowCount ? { ok: true } : { error: 'notification not found' })
-      return
-    }
-    if (action === 'hide') {
-      const result = await pool.query(
-        'UPDATE community_notifications SET is_read = true, is_hidden = true WHERE id = $1 AND user_id = $2 RETURNING id',
-        [parts[3], userId]
-      )
-      send(response, result.rowCount ? 200 : 404, result.rowCount ? { ok: true } : { error: 'notification not found' })
-      return
-    }
-  }
-
-  if (parts[2] === 'invites' && parts.length === 4 && validUuid.test(parts[3]) && ['accept', 'decline'].includes(parts[4]) && request.method === 'POST') {
+  if (parts[2] === 'invites' && parts.length === 5 && validUuid.test(parts[3]) && ['accept', 'decline'].includes(parts[4]) && request.method === 'POST') {
     if (!requireUser()) return
     const action = parts[4]
     const result = await withCommunityTransaction(async client => {
