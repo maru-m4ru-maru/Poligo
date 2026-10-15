@@ -146,7 +146,7 @@ export async function initializeCommunityDatabase() {
       status STRING NOT NULL DEFAULT 'pending',
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       decided_at TIMESTAMPTZ,
-      CONSTRAINT community_team_request_status CHECK (status IN ('pending', 'approved', 'rejected')),
+      CONSTRAINT community_team_request_status CHECK (status IN ('pending', 'approved', 'rejected'))
     )
   `)
   await pool.query(`
@@ -1037,7 +1037,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     if (!requireUser()) return
     const table = parts[4] === 'star' ? 'community_stars' : 'community_favorites'
     const column = parts[4] === 'star' ? 'stars' : null
-    const exists = await pool.query('SELECT id FROM community_projects WHERE id = $1', [parts[3]])
+    const exists = await pool.query('SELECT id, owner_id, name FROM community_projects WHERE id = $1', [parts[3]])
     if (!exists.rows[0]) {
       send(response, 404, { error: 'project not found' })
       return
@@ -1054,7 +1054,21 @@ async function handleCommunityRequest(request, response, { createProject } = {})
         `INSERT INTO ${table} (project_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING project_id`,
         [parts[3], userId]
       )
-      if (column && added.rowCount) await pool.query('UPDATE community_projects SET stars = stars + 1 WHERE id = $1', [parts[3]])
+      if (column && added.rowCount) {
+        await pool.query('UPDATE community_projects SET stars = stars + 1 WHERE id = $1', [parts[3]])
+        if (exists.rows[0].owner_id !== userId) {
+          await createCommunityNotification(pool, {
+            userId: exists.rows[0].owner_id,
+            actorId: userId,
+            actorName: userDisplayName(session),
+            kind: 'project_star',
+            title: '作品にスターが付きました',
+            body: userDisplayName(session) + ' が「' + exists.rows[0].name + '」にスターしました。',
+            resourceType: 'community_project',
+            resourceId: parts[3]
+          })
+        }
+      }
       send(response, 200, { active: true })
     }
     return
@@ -1068,7 +1082,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
       send(response, 400, { error: 'comment body is required' })
       return
     }
-    const exists = await pool.query('SELECT id FROM community_projects WHERE id = $1', [parts[3]])
+    const exists = await pool.query('SELECT id, owner_id, name FROM community_projects WHERE id = $1', [parts[3]])
     if (!exists.rows[0]) {
       send(response, 404, { error: 'project not found' })
       return
@@ -1077,6 +1091,18 @@ async function handleCommunityRequest(request, response, { createProject } = {})
       'INSERT INTO community_comments (project_id, author_id, body) VALUES ($1, $2, $3) RETURNING id, author_id, body, created_at',
       [parts[3], userId, body]
     )
+    if (exists.rows[0].owner_id !== userId) {
+      await createCommunityNotification(pool, {
+        userId: exists.rows[0].owner_id,
+        actorId: userId,
+        actorName: userDisplayName(session),
+        kind: 'project_comment',
+        title: '作品に意見が届きました',
+        body: userDisplayName(session) + ' が「' + exists.rows[0].name + '」にコメントしました: ' + body,
+        resourceType: 'community_project',
+        resourceId: parts[3]
+      })
+    }
     send(response, 201, { comment: { ...result.rows[0], authorId: userId, createdAt: result.rows[0].created_at } })
     return
   }
