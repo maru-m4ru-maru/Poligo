@@ -75,17 +75,19 @@ function Icon({ name, size = 16 }) {
 function ProjectCard({ project, index, onOpen, onToggle }) {
   return (
     <article className="community-project-card">
+      <span className="community-card-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+      <span className="community-card-symbol" aria-hidden="true">{languageMark(project.language)}</span>
       <button className="community-card-open" onClick={() => onOpen(project)} type="button" aria-label={project.name + ' の詳細を開く'}>
-        <div className="community-card-symbol" aria-hidden="true">{languageMark(project.language)}</div>
         <div className="community-card-content">
           <div className="community-card-meta">
             <span className="community-project-language">{project.language || 'Other'}</span>
-            {project.featured && <span className="community-featured-label"><span /> Poligoおすすめ</span>}
+            {project.featured && <span className="community-featured-label">おすすめ</span>}
           </div>
           <h3>{project.name}</h3>
-          <p>{project.description || '説明はまだありません。作品の中身を見てみましょう。'}</p>
+          <p>{project.description || '説明はまだありません。'}</p>
           <span className="community-card-date">{shortDate(project.published_at)}</span>
         </div>
+        <span className="community-card-open-mark"><Icon name="arrow-up-right" size={15} /></span>
       </button>
       <div className="community-card-footer">
         <button type="button" onClick={() => onToggle(project, 'star')} aria-pressed={Boolean(project.starred)} className={project.starred ? 'is-active' : ''} aria-label={'スター ' + Number(project.stars || 0)}>
@@ -95,7 +97,6 @@ function ProjectCard({ project, index, onOpen, onToggle }) {
           <Icon name="heart" size={14} /><span>{project.favorited ? '保存済み' : '保存'}</span>
         </button>
         <span className="community-card-forks"><Icon name="fork" size={14} /><span>{formatCount(project.forks)}</span></span>
-        <button type="button" className="community-card-arrow" onClick={() => onOpen(project)} aria-label={project.name + ' を開く'}><Icon name="arrow-up-right" size={15} /></button>
       </div>
     </article>
   )
@@ -288,7 +289,7 @@ export default function CommunityPage({ session }) {
       <div className="community-main">
         <section className="community-page-heading">
           <h1>コミュニティ</h1>
-          <p>公開されたプロジェクトを探したり、自分の作品を共有できます。</p>
+          <p>公開されたコードを閲覧し、気になる作品をフォークできます。</p>
         </section>
         {notice && <p className="community-notice" role="status"><span className="community-notice-mark">✓</span>{notice}</p>}
         {error && <p className="community-error" role="alert"><span className="community-error-mark">!</span>{error}</p>}
@@ -296,7 +297,7 @@ export default function CommunityPage({ session }) {
         <div className="community-workspace">
           <aside className="community-sidebar">
             <nav aria-label="コミュニティメニュー">
-              <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><Icon name="grid" size={16} /><span>作品を探す</span></button>
+              <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><Icon name="grid" size={16} /><span>作品一覧</span></button>
               <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}><Icon name="heart" size={16} /><span>お気に入り</span></button>
               <button type="button" className={view === 'publish' ? 'active' : ''} onClick={() => setView('publish')}><Icon name="plus" size={16} /><span>作品を公開</span></button>
             </nav>
@@ -352,7 +353,7 @@ export default function CommunityPage({ session }) {
               <>
                 <section className="community-explore" id="community-projects">
                   <div className="community-content-heading">
-                    <div><span className="community-section-kicker">{view === 'favorites' ? '保存した作品' : 'みんなの作品'}</span><h2>{view === 'favorites' ? 'お気に入り' : '作品を探す'}</h2><p>{view === 'favorites' ? 'あとで見返したい作品をまとめて確認できます。' : '言語やキーワードから、気になる作品を見つけましょう。'}</p></div>
+                    <div><h2>{view === 'favorites' ? 'お気に入り' : '公開プロジェクト'}</h2></div>
                     <span className="community-results-count"><strong>{visibleProjects.length}</strong> 件の作品</span>
                   </div>
 
