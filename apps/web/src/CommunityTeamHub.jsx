@@ -52,6 +52,7 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState(false)
 
   const isSignedIn = Boolean(session?.user?.id)
   const isManager = ['owner', 'admin'].includes(activeTeam?.team?.my_role)
@@ -108,6 +109,7 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
     setLoading(true)
     setError('')
     setNotice('')
+    setConfirmDeleteTeam(false)
     try {
       const result = await api('/api/community/teams/' + encodeURIComponent(teamId))
       setActiveTeam(result)
@@ -323,6 +325,7 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
     try {
       await api('/api/community/teams/' + encodeURIComponent(activeTeam.team.id), { method: 'DELETE' })
       setActiveTeam(null)
+      setConfirmDeleteTeam(false)
       setNotice('チームを削除しました。')
       await loadTeams()
     } catch (reason) {
@@ -575,7 +578,14 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
               <section className="community-team-panel community-team-panel-danger">
                 <div className="community-team-panel-heading"><h3>チームから退出</h3></div>
                 {isOwner ? <p className="community-team-muted">オーナーは退出できません。チームを削除するか、今後の更新でオーナーを引き継いでください。</p> : <button type="button" className="community-team-button is-secondary" disabled={busy} onClick={() => void leaveTeam()}>チームを退出</button>}
-                {isOwner && <button type="button" className="community-team-button is-danger" disabled={busy} onClick={() => void deleteTeam()}>チームを削除</button>}
+                {isOwner && (confirmDeleteTeam ? (
+                  <div className="community-team-delete-confirm">
+                    <p>チーム、メンバー、チーム内メッセージは削除されます。この操作は元に戻せません。</p>
+                    <div><button type="button" className="community-team-button is-danger" disabled={busy} onClick={() => void deleteTeam()}>削除を確定</button><button type="button" className="community-team-button is-secondary" disabled={busy} onClick={() => setConfirmDeleteTeam(false)}>キャンセル</button></div>
+                  </div>
+                ) : (
+                  <button type="button" className="community-team-button is-danger" disabled={busy} onClick={() => setConfirmDeleteTeam(true)}>チームを削除</button>
+                ))}
               </section>
             </aside>
           </div>
