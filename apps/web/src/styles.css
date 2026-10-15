@@ -2035,3 +2035,264 @@ button img{pointer-events:none}
  .community-team-delete-confirm>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
  .community-team-delete-confirm button{min-width:0;padding:0 8px;font-size:10px}
 }
+
+
+/* Poligo community icon system */
+.community-icon{
+  display:inline-block;
+  flex:0 0 auto;
+  vertical-align:middle;
+}
+.community-header-nav>button{
+  gap:7px;
+}
+.community-header-nav>button>.community-icon{
+  opacity:.8;
+  transition:opacity .15s,transform .15s;
+}
+.community-header-nav>button:hover>.community-icon,
+.community-header-nav>button.active>.community-icon{
+  opacity:1;
+}
+.community-notification-nav>span:not(.community-notification-count){
+  display:inline;
+  min-width:0;
+  height:auto;
+  padding:0;
+  border-radius:0;
+  color:inherit;
+  background:transparent;
+  font-size:inherit;
+  font-weight:inherit;
+}
+.community-notification-nav>.community-notification-count{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:17px;
+  height:17px;
+  padding:0 4px;
+  border-radius:999px;
+  color:#fff;
+  background:#285fd6;
+  font-size:9px;
+  font-weight:800;
+}
+.community-team-button>.community-icon{
+  width:14px;
+  height:14px;
+}
+.community-team-tag{
+  gap:5px;
+}
+.community-team-tag-icon{
+  opacity:.8;
+}
+.community-team-section-heading h2{
+  display:flex;
+  align-items:center;
+  gap:11px;
+}
+.community-team-heading-icon{
+  display:inline-grid;
+  flex:0 0 42px;
+  place-items:center;
+  width:42px;
+  height:42px;
+  border:1px solid #dce7fa;
+  border-radius:12px;
+  color:#285fd6;
+  background:linear-gradient(145deg,#f7faff,#eaf1ff);
+  box-shadow:inset 0 1px rgba(255,255,255,.95);
+}
+.community-team-heading-icon>.community-icon{
+  width:21px;
+  height:21px;
+}
+.community-team-detail-header h2{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.community-team-detail-mark{
+  display:inline-grid;
+  flex:0 0 46px;
+  place-items:center;
+  width:46px;
+  height:46px;
+  border:1px solid #dce7fa;
+  border-radius:13px;
+  color:#285fd6;
+  background:linear-gradient(145deg,#f9fbff,#e8efff);
+}
+.community-team-detail-mark>.community-icon{
+  width:24px;
+  height:24px;
+}
+.community-team-panel-heading h3{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.community-team-panel-heading h3>.community-icon{
+  color:#285fd6;
+}
+.community-team-back{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.community-icon-back{
+  transform:rotate(180deg);
+}
+.community-team-channel-tabs>button{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.community-team-dm-label{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+.community-team-message-form .community-team-button,
+.community-team-invite-form .community-team-button,
+.community-team-card-actions .community-team-button{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+}
+.community-team-invite-code-copy{
+  display:flex;
+  align-items:center;
+  gap:13px;
+  min-width:0;
+}
+.community-team-invite-code-copy>div{
+  min-width:0;
+}
+.community-invite-code-mark{
+  display:grid;
+  flex:0 0 42px;
+  place-items:center;
+  width:42px;
+  height:42px;
+  border:1px solid #dce7fa;
+  border-radius:12px;
+  color:#285fd6;
+  background:#f0f5ff;
+}
+.community-team-search-label{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap;
+}
+.community-team-search-label>.community-icon{
+  color:#5e78ab;
+}
+.community-team-card-open h3{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.community-team-card-icon{
+  display:inline-grid;
+  flex:0 0 36px;
+  place-items:center;
+  width:36px;
+  height:36px;
+  border:1px solid #e0e8fb;
+  border-radius:11px;
+  color:#285fd6;
+  background:linear-gradient(145deg,#fafcff,#edf3ff);
+}
+.community-team-card-icon>.community-icon{
+  width:18px;
+  height:18px;
+}
+.community-team-card-meta>span{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+.community-team-card-meta .community-icon{
+  color:#6f82a3;
+}
+.community-notification-content{
+  grid-template-columns:38px minmax(0,1fr);
+  align-items:start;
+  gap:11px;
+}
+.community-notification-icon{
+  display:grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  border:1px solid #dce7fa;
+  border-radius:11px;
+  color:#285fd6;
+  background:#f0f5ff;
+}
+.community-notification-copy{
+  display:grid;
+  justify-items:start;
+  gap:6px;
+  min-width:0;
+}
+.community-notification-body{
+  display:block;
+  color:#656f7e;
+  font-size:11px;
+  line-height:1.8;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.community-notification-actions .community-icon,
+.community-notification-hide .community-icon{
+  vertical-align:middle;
+}
+.community-notification-actions .community-team-button{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+@media(max-width:600px){
+  .community-team-section-heading h2{
+    gap:9px;
+  }
+  .community-team-heading-icon{
+    flex-basis:36px;
+    width:36px;
+    height:36px;
+    border-radius:10px;
+  }
+  .community-team-detail-header h2{
+    align-items:flex-start;
+    gap:9px;
+  }
+  .community-team-detail-mark{
+    flex-basis:38px;
+    width:38px;
+    height:38px;
+    border-radius:11px;
+  }
+  .community-team-invite-code-copy{
+    align-items:flex-start;
+    gap:10px;
+  }
+  .community-team-card-icon{
+    flex-basis:32px;
+    width:32px;
+    height:32px;
+  }
+  .community-notification-content{
+    grid-template-columns:34px minmax(0,1fr);
+    gap:9px;
+  }
+  .community-notification-icon{
+    width:34px;
+    height:34px;
+    border-radius:10px;
+  }
+}
