@@ -840,6 +840,15 @@ function IDE({ projectId }) {
   const [aiAutoApply, setAiAutoApply] = useState(() => localStorage.getItem('poligo-ai-auto-apply') === 'true')
   const [dialog, setDialog] = useState(null)
   const [dialogBusy, setDialogBusy] = useState(false)
+  const [communityPublication, setCommunityPublication] = useState(null)
+  const [communityPublicationChecked, setCommunityPublicationChecked] = useState(false)
+  const [communityShareOpen, setCommunityShareOpen] = useState(false)
+  const [communityShareName, setCommunityShareName] = useState('')
+  const [communityShareDescription, setCommunityShareDescription] = useState('')
+  const [communityShareLoading, setCommunityShareLoading] = useState(false)
+  const [communityShareBusy, setCommunityShareBusy] = useState(false)
+  const [communityShareError, setCommunityShareError] = useState('')
+  const [communityShareNotice, setCommunityShareNotice] = useState('')
   const terminalRef = useRef(null)
   const previewFrameRef = useRef(null)
   const terminalPanelRef = useRef(null)
@@ -873,6 +882,54 @@ function IDE({ projectId }) {
     activeFileRef.current = activeFile
   }, [activeFile])
   const currentProject = projects.find(project => project.id === currentProjectId)
+  const communitySecretFiles = useMemo(
+    () => Object.keys(files).filter(isSecretEnvFile),
+    [files]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadCommunityPublication() {
+      setCommunityPublicationChecked(false)
+
+      if (!workspaceReady || !currentProjectId) {
+        setCommunityPublication(null)
+        setCommunityPublicationChecked(true)
+        return
+      }
+
+      if (!session?.user?.id) {
+        setCommunityPublication(null)
+        setCommunityPublicationChecked(true)
+        return
+      }
+
+      try {
+        const result = await request(
+          '/api/community/projects?sourceProjectId=' + encodeURIComponent(currentProjectId)
+        )
+
+        if (!cancelled) {
+          setCommunityPublication(result.projects?.[0] || null)
+        }
+      } catch {
+        if (!cancelled) {
+          setCommunityPublication(null)
+        }
+      } finally {
+        if (!cancelled) {
+          setCommunityPublicationChecked(true)
+        }
+      }
+    }
+
+    void loadCommunityPublication()
+
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceReady, currentProjectId, session?.user?.id])
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -1797,6 +1854,107 @@ function IDE({ projectId }) {
       setSaveStatus('saved')
     } catch {
       setSaveStatus('storage error')
+    }
+  }
+
+  async function openCommunityShare() {
+    if (!session?.user?.id) {
+      window.location.href = '/signin'
+      return
+    }
+
+    setCommunityShareOpen(true)
+    setCommunityShareLoading(true)
+    setCommunityShareBusy(false)
+    setCommunityShareError('')
+    setCommunityShareNotice('')
+    setCommunityShareName(projectName)
+    setCommunityShareDescription('')
+
+    try {
+      const result = await request(
+        '/api/community/projects?sourceProjectId=' + encodeURIComponent(currentProjectId)
+      )
+      const publication = result.projects?.[0] || null
+
+      setCommunityPublication(publication)
+      setCommunityPublicationChecked(true)
+      setCommunityShareName(publication?.name || projectName)
+      setCommunityShareDescription(publication?.description || '')
+    } catch (error) {
+      setCommunityShareError(error instanceof Error ? error.message : '共有状態を確認できませんでした')
+    } finally {
+      setCommunityShareLoading(false)
+    }
+  }
+
+  async function publishCurrentProject(event) {
+    event.preventDefault()
+
+    if (!currentProjectId || !communityShareName.trim() || communitySecretFiles.length) {
+      return
+    }
+
+    setCommunityShareBusy(true)
+    setCommunityShareError('')
+    setCommunityShareNotice('')
+
+    try {
+      const timestamp = Date.now()
+
+      await saveProject({
+        id: currentProjectId,
+        name: projectName,
+        files,
+        createdAt: currentProject?.createdAt || timestamp,
+        updatedAt: timestamp
+      })
+
+      setSaveStatus('saved')
+      setProjects(current => current.map(project => (
+        project.id === currentProjectId
+          ? { ...project, name: projectName, files, updatedAt: timestamp }
+          : project
+      )))
+
+      const result = await request('/api/community/projects', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: currentProjectId,
+          name: communityShareName.trim(),
+          description: communityShareDescription.trim()
+        })
+      })
+
+      setCommunityPublication(result.project)
+      setCommunityPublicationChecked(true)
+      setCommunityShareNotice('コミュニティに公開しました。作品はコミュニティの検索から見つけられます。')
+    } catch (error) {
+      setCommunityShareError(error instanceof Error ? error.message : 'コミュニティへの共有に失敗しました')
+    } finally {
+      setCommunityShareBusy(false)
+    }
+  }
+
+  async function unpublishCurrentProject() {
+    if (!communityPublication?.id) return
+
+    setCommunityShareBusy(true)
+    setCommunityShareError('')
+    setCommunityShareNotice('')
+
+    try {
+      await request('/api/community/projects/' + encodeURIComponent(communityPublication.id), {
+        method: 'DELETE'
+      })
+
+      setCommunityPublication(null)
+      setCommunityPublicationChecked(true)
+      setCommunityShareNotice('コミュニティから非公開にしました。プロジェクト本体は削除されていません。')
+    } catch (error) {
+      setCommunityShareError(error instanceof Error ? error.message : '非公開にできませんでした')
+    } finally {
+      setCommunityShareBusy(false)
     }
   }
 
@@ -2859,7 +3017,122 @@ function IDE({ projectId }) {
         </div>
       )}
 
-      {quickOpenOpen && (
+      {communityShareOpen && (
+      <div
+        className="poligo-dialog-overlay community-share-overlay"
+        onMouseDown={event => {
+          if (event.target === event.currentTarget && !communityShareBusy) {
+            setCommunityShareOpen(false)
+          }
+        }}
+      >
+        <section
+          className="community-share-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="community-share-title"
+        >
+          <header className="community-share-dialog-header">
+            <div>
+              <span className="community-share-eyebrow">POLIGO COMMUNITY</span>
+              <h2 id="community-share-title">コミュニティへの共有</h2>
+              <p>共有した作品は検索結果に表示され、ほかのユーザーがソースを閲覧してフォークできます。</p>
+            </div>
+            <button
+              type="button"
+              className="poligo-dialog-close"
+              onClick={() => setCommunityShareOpen(false)}
+              disabled={communityShareBusy}
+              aria-label="共有設定を閉じる"
+            >
+              <InterfaceIcon src="/icons/ui-x.svg" size={13} />
+            </button>
+          </header>
+
+          {communityShareError && <p className="community-share-message is-error" role="alert">{communityShareError}</p>}
+          {communityShareNotice && <p className="community-share-message is-success" role="status">{communityShareNotice}</p>}
+
+          {communityShareLoading ? (
+            <div className="community-share-loading" role="status">共有状態を確認しています...</div>
+          ) : (
+            <form className="community-share-form" onSubmit={publishCurrentProject}>
+              <div className="community-share-project-summary">
+                <span className="community-share-summary-icon"><InterfaceIcon src="/icons/file-code.svg" size={18} /></span>
+                <div><small>現在のプロジェクト</small><strong>{projectName}</strong></div>
+                <span className={'community-share-status' + (communityPublication ? ' is-public' : '')}>
+                  {communityPublication ? '公開中' : '非公開'}
+                </span>
+              </div>
+
+              <label>
+                コミュニティでの表示名
+                <input
+                  value={communityShareName}
+                  onChange={event => setCommunityShareName(event.target.value)}
+                  maxLength={120}
+                  required
+                  placeholder="作品の名前"
+                  disabled={communityShareBusy}
+                />
+              </label>
+
+              <label>
+                説明 <span className="community-share-optional">任意・500文字まで</span>
+                <textarea
+                  value={communityShareDescription}
+                  onChange={event => setCommunityShareDescription(event.target.value)}
+                  maxLength={500}
+                  rows={4}
+                  placeholder="作品の概要や、工夫した点など"
+                  disabled={communityShareBusy}
+                />
+              </label>
+
+              {communitySecretFiles.length ? (
+                <div className="community-share-message is-warning" role="alert">
+                  <strong>秘密ファイルを削除してください</strong>
+                  <p>次のファイルが含まれているため、公開できません。</p>
+                  <ul>{communitySecretFiles.map(path => <li key={path}><code>{path}</code></li>)}</ul>
+                  <p>APIキーやパスワードなどを含むファイルをプロジェクトから取り除いてから共有してください。</p>
+                </div>
+              ) : (
+                <p className="community-share-guidance">公開すると、コミュニティの利用者がソースを閲覧・フォークできます。APIキー、パスワード、個人情報が含まれていないか確認してください。</p>
+              )}
+
+              <div className="community-share-actions">
+                <button
+                  type="button"
+                  className="community-share-cancel"
+                  onClick={() => setCommunityShareOpen(false)}
+                  disabled={communityShareBusy}
+                >
+                  閉じる
+                </button>
+                <button
+                  type="submit"
+                  className="community-share-submit"
+                  disabled={communityShareBusy || !communityShareName.trim() || communitySecretFiles.length > 0}
+                >
+                  {communityShareBusy ? '処理中...' : communityPublication ? '共有内容を更新' : 'コミュニティに公開'}
+                </button>
+                {communityPublication && (
+                  <button
+                    type="button"
+                    className="community-share-unpublish"
+                    onClick={() => void unpublishCurrentProject()}
+                    disabled={communityShareBusy}
+                  >
+                    非公開にする
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+        </section>
+      </div>
+    )}
+
+    {quickOpenOpen && (
       <div className="ide-overlay" onClick={() => setQuickOpenOpen(false)}>
         <div className="quick-open" onClick={event => event.stopPropagation()}>
           <input
@@ -2940,7 +3213,9 @@ function IDE({ projectId }) {
           >
             <span className="project-title">{projectName}</span>
             <span className="project-picker-arrow"><InterfaceIcon src="/icons/ui-chevron-down.svg" size={13} /></span>
-            <span className="project-visibility">非公開</span>
+            <span className={'project-visibility' + (communityPublication ? ' is-public' : '')}>
+              {!communityPublicationChecked ? '確認中' : communityPublication ? '公開中' : '非公開'}
+            </span>
             <span className={'save-status ' + saveStatus.replace(/\s/g, '-').replace(' ', '-')}>
               {saveStatus}
             </span>
@@ -2975,6 +3250,15 @@ function IDE({ projectId }) {
           </span>
           <button className="dashboard-button" onClick={() => navigate('/dashboard')}>
             ダッシュボード
+          </button>
+          <button
+            className="community-share-button"
+            type="button"
+            onClick={() => void openCommunityShare()}
+            aria-label="コミュニティへの共有設定"
+            title="コミュニティへの共有設定"
+          >
+            共有
           </button>
           <button className="signout-button" onClick={handleSignOut}>
             サインアウト

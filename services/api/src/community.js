@@ -140,6 +140,20 @@ async function handleCommunityRequest(request, response, { createProject } = {})
   }
 
   if (request.method === 'GET' && parts.length === 3 && parts[2] === 'projects') {
+    const sourceProjectId = (url.searchParams.get('sourceProjectId') || '').trim().slice(0, 80)
+
+    if (sourceProjectId) {
+      if (!requireUser()) return
+
+      const ownedProject = await pool.query(
+        'SELECT id, source_project_id, owner_id, name, description, language, published_at, featured, stars, forks FROM community_projects WHERE source_project_id = $1 AND owner_id = $2 LIMIT 1',
+        [sourceProjectId, userId]
+      )
+
+      send(response, 200, { projects: ownedProject.rows })
+      return
+    }
+
     const sort = url.searchParams.get('sort') === 'stars' ? 'stars DESC, published_at DESC' : 'featured DESC, published_at DESC'
     const search = (url.searchParams.get('q') || '').trim().slice(0, 80)
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
