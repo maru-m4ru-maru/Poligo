@@ -293,6 +293,7 @@ button img{pointer-events:none}
 .project-title{display:block;max-width:min(280px,25vw);overflow:hidden;color:#e9eff9;font-size:12px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
 .project-picker-arrow{display:grid;place-items:center}
 .project-visibility{padding:3px 7px;border:1px solid #35435a;border-radius:999px;color:#9baac0;background:#19263a;font-size:9px;white-space:nowrap}
+.project-visibility.is-public{border-color:#285b50;color:#8be0bb;background:#15352f}
 .save-status{color:#9aa9c0;font-size:10px;white-space:nowrap}
 .save-status.saving,.save-status.unsaved{color:#f0bd6d}
 .save-status.saved{color:#7bd4ad}
@@ -309,8 +310,10 @@ button img{pointer-events:none}
 .project-menu-actions button.danger{color:#f1a5ad;border-color:#5e3543}
 .topbar-right{justify-content:flex-end;gap:7px}
 .account-name{max-width:130px;overflow:hidden;color:#92a1b8;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
-.dashboard-button,.signout-button,.top-button{min-height:34px;padding:0 10px;border:1px solid #2b3a52;border-radius:8px;color:#aebdd1;background:#182439;font-size:10px;font-weight:650;white-space:nowrap}
-.dashboard-button:hover,.signout-button:hover,.top-button:hover{border-color:#45577a;color:#ecf2fb;background:#202f48}
+.dashboard-button,.signout-button,.top-button,.community-share-button{min-height:34px;padding:0 10px;border:1px solid #2b3a52;border-radius:8px;color:#aebdd1;background:#182439;font-size:10px;font-weight:650;white-space:nowrap}
+.dashboard-button:hover,.signout-button:hover,.top-button:hover,.community-share-button:hover{border-color:#45577a;color:#ecf2fb;background:#202f48}
+.community-share-button{border-color:#4850b6;color:#e2e4ff;background:#282f68}
+.community-share-button:hover{border-color:#777ff3;color:#fff;background:#353e89}
 .signout-button{color:#a6b0c2;background:transparent}
 .run-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 14px;border:1px solid #7c83ff;border-radius:9px;color:#fff;background:#5b61e8;box-shadow:0 5px 15px rgba(91,97,232,.2);font-size:11px;font-weight:800;white-space:nowrap}
 .run-button:hover{background:#6c72f0}
@@ -512,6 +515,42 @@ button img{pointer-events:none}
 .poligo-dialog-actions button{min-height:36px;padding:0 12px;border:1px solid #364660;border-radius:8px;color:#bbc9dc;background:#1b2a40;font-size:11px}
 .poligo-dialog-actions button.primary,.poligo-dialog-confirm{border-color:#757cf5;color:#fff;background:#555de4}
 .poligo-dialog-cancel{background:transparent!important}
+.community-share-overlay{z-index:120}
+.community-share-dialog{width:min(560px,100%);max-height:min(780px,calc(100dvh - 36px));padding:clamp(20px,4vw,30px);overflow:auto;border:1px solid #e0e6f0;border-radius:17px;color:#202b43;background:#fff;box-shadow:0 28px 90px rgba(6,12,28,.32)}
+.community-share-dialog-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:22px}
+.community-share-dialog-header>div{min-width:0}
+.community-share-eyebrow{color:#5356c9;font-size:9px;font-weight:800;letter-spacing:.14em}
+.community-share-dialog-header h2{margin:8px 0 9px;color:#1d2841;font-size:23px;letter-spacing:-.045em}
+.community-share-dialog-header p{max-width:440px;margin:0;color:#6f7b91;font-size:12px;line-height:1.8}
+.community-share-project-summary{display:flex;align-items:center;gap:11px;min-width:0;padding:12px;border:1px solid #e4e8f2;border-radius:11px;background:#fafbfe}
+.community-share-summary-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border:1px solid #e0e4f4;border-radius:9px;color:#5554cd;background:#f0f1ff}
+.community-share-project-summary>div{display:grid;gap:3px;flex:1;min-width:0}
+.community-share-project-summary small{color:#8994a6;font-size:10px}
+.community-share-project-summary strong{overflow:hidden;color:#28344e;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.community-share-status{padding:4px 7px;border:1px solid #dce1ea;border-radius:999px;color:#68758a;background:#f2f4f8;font-size:9px;font-weight:700;white-space:nowrap}
+.community-share-status.is-public{border-color:#c4ead9;color:#187750;background:#eaf8f1}
+.community-share-form{display:grid;gap:15px}
+.community-share-form>label{display:grid;gap:7px;color:#424e65;font-size:11px;font-weight:750}
+.community-share-form input,.community-share-form textarea{width:100%;min-width:0;padding:11px 12px;border:1px solid #dce3ef;border-radius:9px;outline:none;color:#202b43;background:#fff;font-size:12px;font-weight:450;resize:vertical}
+.community-share-form input:focus,.community-share-form textarea:focus{border-color:#8c8ef1;box-shadow:0 0 0 3px rgba(79,70,229,.1)}
+.community-share-form input:disabled,.community-share-form textarea:disabled{background:#f4f6fa}
+.community-share-optional{margin-left:6px;color:#929caf;font-size:10px;font-weight:500}
+.community-share-guidance{margin:0;padding:11px 12px;border:1px solid #e5e8f1;border-radius:9px;color:#66738a;background:#f8f9fc;font-size:11px;line-height:1.75}
+.community-share-message{margin:0 0 14px;padding:11px 12px;border:1px solid;border-radius:9px;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
+.community-share-message p{margin:5px 0 0;font-weight:450}
+.community-share-message ul{margin:7px 0;padding-left:22px}
+.community-share-message.is-error{border-color:#f1c7cc;color:#a92e3f;background:#fff4f4}
+.community-share-message.is-success{border-color:#bee9d5;color:#166e4a;background:#effaf4}
+.community-share-message.is-warning{border-color:#f0d59d;color:#8a5a08;background:#fff9e9}
+.community-share-loading{padding:28px 8px;color:#6d7b92;font-size:12px;text-align:center}
+.community-share-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;padding-top:4px}
+.community-share-actions button{min-height:38px;padding:0 13px;border:1px solid #dce3ef;border-radius:9px;color:#536078;background:#fff;font-size:11px;font-weight:700}
+.community-share-actions button:hover:not(:disabled){background:#f6f7fb}
+.community-share-actions button:disabled{cursor:not-allowed;opacity:.55}
+.community-share-actions .community-share-submit{border-color:#514de0;color:#fff;background:#514de0}
+.community-share-actions .community-share-submit:hover:not(:disabled){background:#403bc4}
+.community-share-actions .community-share-unpublish{border-color:#f0d0d4;color:#b33142;background:#fff7f7}
+.community-share-actions .community-share-unpublish:hover:not(:disabled){background:#ffeef0}
 .quick-open,.command-palette{position:fixed;z-index:110;top:12%;left:50%;width:min(620px,calc(100vw - 30px));max-height:70dvh;overflow:hidden;transform:translateX(-50%);border:1px solid #33445e;border-radius:14px;background:#111c2d;box-shadow:0 28px 90px rgba(0,0,0,.48)}
 .quick-open input,.command-palette input{width:100%;height:48px;padding:0 15px;border:0;border-bottom:1px solid #2b3b54;outline:none;color:#e4ebf6;background:#16243a;font-size:13px}
 .quick-open-list,.command-list{max-height:calc(70dvh - 48px);padding:6px;overflow:auto}
@@ -659,7 +698,7 @@ button img{pointer-events:none}
  .project-title{max-width:36vw;font-size:11px}
  .save-status{font-size:9px}
  .topbar-right{justify-content:flex-end;gap:4px;width:100%;height:auto;order:1}
- .dashboard-button,.signout-button,.top-button{min-height:32px;padding:0 8px;font-size:9px}
+ .dashboard-button,.signout-button,.top-button,.community-share-button{min-height:32px;padding:0 8px;font-size:9px}
  .run-button{min-height:34px;padding:0 10px;font-size:10px}
  .ide-body{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(780px,auto);height:auto;min-height:calc(100dvh - 100px);overflow:visible}
  .activity-bar{flex-direction:row;justify-content:flex-start;gap:5px;min-height:54px;padding:5px 8px;border-right:0;border-bottom:1px solid #243249}
@@ -676,6 +715,11 @@ button img{pointer-events:none}
  .ai-panel{min-height:460px}
  .project-menu{left:auto;right:0;transform:none}
  .poligo-dialog{padding:19px}
+ .community-share-dialog{max-height:calc(100dvh - 24px);padding:18px;border-radius:13px}
+ .community-share-dialog-header h2{font-size:20px}
+ .community-share-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+ .community-share-actions button{min-width:0;padding:0 8px;font-size:10px}
+ .community-share-actions .community-share-unpublish{grid-column:1/-1}
 }
 @media(max-width:430px){
  .home-nav,.terms-nav{gap:12px}
