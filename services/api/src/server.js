@@ -4502,7 +4502,10 @@ async function expireTerminalOwner(id, owner) {
         )
       }
     } catch (error) {
-      if (!(error instanceof Error) || error.message !== 'terminal session not found') {
+      const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+      const sessionAlreadyGone = error?.statusCode === 404 || message.includes('terminal session not found')
+
+      if (!sessionAlreadyGone) {
         owner.cleanupInProgress = false
         owner.cleanupPromise = null
         console.error('Terminal expiration cleanup failed', {
