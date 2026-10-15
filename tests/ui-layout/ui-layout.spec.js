@@ -115,6 +115,23 @@ async function mockAuthenticatedApi(page) {
       return method === 'DELETE' ? route.fulfill({ status: 204, body: '' }) : json(project)
     }
 
+    if (pathname === '/api/community/projects' && url.searchParams.has('sourceProjectId')) {
+      return json({ projects: [] })
+    }
+    if (pathname === '/api/community/projects' && method === 'POST') {
+      return json({
+        project: {
+          id: 'ui-layout-community-project',
+          source_project_id: 'ui-layout-project',
+          owner_id: user.id,
+          name: 'Published layout project',
+          description: 'Sharing from the IDE test.',
+          language: 'Python',
+          stars: 0,
+          forks: 0
+        }
+      })
+    }
     if (pathname === '/api/community/projects') return json({ projects: [communityProject] })
     if (pathname === '/api/community/featured') return json({ projects: [communityProject] })
 
@@ -260,6 +277,27 @@ test('IDE panels align at desktop and reflow into non-overlapping rows on mobile
   const mobileWorkspace = await page.locator('.main-workspace').boundingBox()
   expect(mobileExplorer.y).toBeGreaterThanOrEqual(mobileActivity.y + mobileActivity.height - 1)
   expect(mobileWorkspace.y).toBeGreaterThanOrEqual(mobileExplorer.y + mobileExplorer.height - 1)
+})
+
+
+test('IDE shares and unpublishes the current project without leaving the editor', async ({ page }) => {
+  await mockAuthenticatedApi(page)
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/#/ide/ui-layout-project')
+  await expect(page.locator('.app-shell')).toBeVisible({ timeout: 12_000 })
+
+  await page.getByRole('button', { name: 'コミュニティへの共有設定' }).click()
+  await expect(page.getByRole('dialog', { name: 'コミュニティへの共有' })).toBeVisible()
+  await expect(page.getByLabel('コミュニティでの表示名')).toHaveValue('Layout verification')
+  await page.getByLabel('コミュニティでの表示名').fill('Published layout project')
+  await page.getByLabel(/説明/).fill('Sharing from the IDE test.')
+  await page.getByRole('button', { name: 'コミュニティに公開' }).click()
+  await expect(page.getByRole('status')).toContainText('コミュニティに公開しました')
+  await expect(page.locator('.project-visibility')).toHaveText('公開中')
+
+  await page.getByRole('button', { name: '非公開にする' }).click()
+  await expect(page.getByRole('status')).toContainText('コミュニティから非公開にしました')
+  await expect(page.locator('.project-visibility')).toHaveText('非公開')
 })
 
 
