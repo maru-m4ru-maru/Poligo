@@ -375,6 +375,7 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
 
   async function openNotification(notification) {
     if (notification.resource_type === 'team' && notification.resource_id) {
+      await markNotification(notification, 'read')
       await openTeam(notification.resource_id)
       onNavigate?.('teams')
     } else {
