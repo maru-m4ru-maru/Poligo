@@ -263,41 +263,47 @@ test('IDE panels align at desktop and reflow into non-overlapping rows on mobile
 })
 
 
-test('community browsing stays simple and fits desktop and narrow mobile viewports', async ({ page }) => {
+test('community editorial index stays white and responsive', async ({ page }) => {
   await mockAuthenticatedApi(page)
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/#/community')
   await expect(page.locator('.community-page-heading')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'コミュニティ', exact: true })).toBeVisible()
   await expect(page.locator('.community-sidebar')).toBeVisible()
+  await expect(page.locator('.community-project-card')).toHaveCount(1)
+  await expect(page.locator('.community-card-index')).toHaveText('01')
   await expect(page.locator('.community-hero')).toHaveCount(0)
   await expect(page.locator('.community-spotlight')).toHaveCount(0)
   await expect(page.locator('.community-guide-strip')).toHaveCount(0)
   await expect(page.locator('.community-card-art')).toHaveCount(0)
   await expect(page.getByText('運営のセレクション')).toHaveCount(0)
-  await expect(page.getByText('PUBLIC WORKSPACE')).toHaveCount(0)
+  const background = await page.locator('.community-page').evaluate(element => getComputedStyle(element).backgroundColor)
+  expect(background).toBe('rgb(255, 255, 255)')
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
     '.community-header', '.community-page-heading', '.community-sidebar',
-    '.community-workspace-content', '.community-filters', '.community-project-grid'
+    '.community-workspace-content', '.community-filters', '.community-project-grid',
+    '.community-project-card'
   ])
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.reload()
-  await expect(page.locator('.community-page-heading')).toBeVisible()
+  await expect(page.locator('.community-project-card')).toHaveCount(1)
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
     '.community-header', '.community-page-heading', '.community-sidebar',
-    '.community-workspace-content', '.community-filters', '.community-project-grid'
+    '.community-workspace-content', '.community-filters', '.community-project-grid',
+    '.community-project-card'
   ])
 
   await page.setViewportSize({ width: 320, height: 740 })
   await page.reload()
-  await expect(page.locator('.community-page-heading')).toBeVisible()
+  await expect(page.locator('.community-project-card')).toHaveCount(1)
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
     '.community-header', '.community-page-heading', '.community-sidebar',
-    '.community-workspace-content', '.community-filters', '.community-project-grid'
+    '.community-workspace-content', '.community-filters', '.community-project-grid',
+    '.community-project-card'
   ])
 })
 
@@ -322,7 +328,7 @@ test('community guides guests to sign in before publishing', async ({ page }) =>
   await page.goto('/#/community')
   await expect(page.locator('.community-page-heading')).toBeVisible()
   await page.getByRole('button', { name: /プロジェクトを公開/ }).click()
-  await expect(page.getByRole('heading', { name: 'ログインして、作品を公開しよう。' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'ログインが必要です' })).toBeVisible()
   await expect(page.getByRole('button', { name: /ログインして続ける/ })).toBeVisible()
   await assertNoHorizontalOverflow(page)
 })

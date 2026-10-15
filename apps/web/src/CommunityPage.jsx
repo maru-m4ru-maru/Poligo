@@ -75,17 +75,19 @@ function Icon({ name, size = 16 }) {
 function ProjectCard({ project, index, onOpen, onToggle }) {
   return (
     <article className="community-project-card">
+      <span className="community-card-index" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+      <span className="community-card-symbol" aria-hidden="true">{languageMark(project.language)}</span>
       <button className="community-card-open" onClick={() => onOpen(project)} type="button" aria-label={project.name + ' の詳細を開く'}>
-        <div className="community-card-symbol" aria-hidden="true">{languageMark(project.language)}</div>
         <div className="community-card-content">
           <div className="community-card-meta">
             <span className="community-project-language">{project.language || 'Other'}</span>
-            {project.featured && <span className="community-featured-label"><span /> Poligoおすすめ</span>}
+            {project.featured && <span className="community-featured-label">おすすめ</span>}
           </div>
           <h3>{project.name}</h3>
-          <p>{project.description || '説明はまだありません。作品の中身を見てみましょう。'}</p>
+          <p>{project.description || '説明はまだありません。'}</p>
           <span className="community-card-date">{shortDate(project.published_at)}</span>
         </div>
+        <span className="community-card-open-mark"><Icon name="arrow-up-right" size={15} /></span>
       </button>
       <div className="community-card-footer">
         <button type="button" onClick={() => onToggle(project, 'star')} aria-pressed={Boolean(project.starred)} className={project.starred ? 'is-active' : ''} aria-label={'スター ' + Number(project.stars || 0)}>
@@ -95,7 +97,6 @@ function ProjectCard({ project, index, onOpen, onToggle }) {
           <Icon name="heart" size={14} /><span>{project.favorited ? '保存済み' : '保存'}</span>
         </button>
         <span className="community-card-forks"><Icon name="fork" size={14} /><span>{formatCount(project.forks)}</span></span>
-        <button type="button" className="community-card-arrow" onClick={() => onOpen(project)} aria-label={project.name + ' を開く'}><Icon name="arrow-up-right" size={15} /></button>
       </div>
     </article>
   )
@@ -288,7 +289,7 @@ export default function CommunityPage({ session }) {
       <div className="community-main">
         <section className="community-page-heading">
           <h1>コミュニティ</h1>
-          <p>公開されたプロジェクトを探したり、自分の作品を共有できます。</p>
+          <p>公開されたコードを閲覧し、気になる作品をフォークできます。</p>
         </section>
         {notice && <p className="community-notice" role="status"><span className="community-notice-mark">✓</span>{notice}</p>}
         {error && <p className="community-error" role="alert"><span className="community-error-mark">!</span>{error}</p>}
@@ -296,7 +297,7 @@ export default function CommunityPage({ session }) {
         <div className="community-workspace">
           <aside className="community-sidebar">
             <nav aria-label="コミュニティメニュー">
-              <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><Icon name="grid" size={16} /><span>作品を探す</span></button>
+              <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><Icon name="grid" size={16} /><span>作品一覧</span></button>
               <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}><Icon name="heart" size={16} /><span>お気に入り</span></button>
               <button type="button" className={view === 'publish' ? 'active' : ''} onClick={() => setView('publish')}><Icon name="plus" size={16} /><span>作品を公開</span></button>
             </nav>
@@ -307,9 +308,9 @@ export default function CommunityPage({ session }) {
               !session?.user ? (
                 <section className="community-signin-panel">
                   <div className="community-signin-mark"><Icon name="shield" size={23} /></div>
-                  <span className="community-section-kicker">作品を共有する</span>
-                  <h2>ログインして、作品を公開しよう。</h2>
-                  <p>ログインすると、自分のプロジェクトを公開したり、お気に入りを保存したり、作品に意見を投稿したりできます。</p>
+                  <span className="community-section-kicker">作品を公開</span>
+                  <h2>ログインが必要です</h2>
+                  <p>作品の公開、お気に入りの保存、コメントの投稿にはログインしてください。</p>
                   <div className="community-signin-actions">
                     <button type="button" className="community-primary-button" onClick={() => { window.location.href = '/signin' }}>ログインして続ける <Icon name="arrow-up-right" size={15} /></button>
                     <button type="button" className="community-secondary-button" onClick={() => setView('explore')}>作品を見てみる</button>
@@ -318,11 +319,11 @@ export default function CommunityPage({ session }) {
               ) : (
               <section className="community-publish-layout">
                 <div className="community-content-heading">
-                  <div><span className="community-section-kicker">自分の作品を共有</span><h2>作品を公開する</h2><p>あなたのアイデアを共有して、誰かの次の発見につなげましょう。</p></div>
+                  <div><h2>作品を公開</h2><p>公開するプロジェクトと、コミュニティでの表示内容を設定します。</p></div>
                 </div>
                 <div className="community-publish-grid">
                   <section className="community-publish-panel">
-                    <div className="community-panel-topline"><span>公開する作品</span><span>公開設定</span></div>
+                    <div className="community-panel-topline"><span>公開するプロジェクト</span><span>公開情報</span></div>
                     <form onSubmit={publishProject}>
                       <label>公開するプロジェクト
                         <select required value={publishId} onChange={event => {
@@ -352,7 +353,7 @@ export default function CommunityPage({ session }) {
               <>
                 <section className="community-explore" id="community-projects">
                   <div className="community-content-heading">
-                    <div><span className="community-section-kicker">{view === 'favorites' ? '保存した作品' : 'みんなの作品'}</span><h2>{view === 'favorites' ? 'お気に入り' : '作品を探す'}</h2><p>{view === 'favorites' ? 'あとで見返したい作品をまとめて確認できます。' : '言語やキーワードから、気になる作品を見つけましょう。'}</p></div>
+                    <div><h2>{view === 'favorites' ? 'お気に入り' : '公開プロジェクト'}</h2></div>
                     <span className="community-results-count"><strong>{visibleProjects.length}</strong> 件の作品</span>
                   </div>
 
@@ -379,7 +380,7 @@ export default function CommunityPage({ session }) {
                       <div className="community-empty-icon"><Icon name={view === 'favorites' ? 'heart' : 'search'} size={24} /></div>
                       <span className="community-section-kicker">{view === 'favorites' ? 'お気に入り' : '検索結果'}</span>
                       <h3>{view === 'favorites' ? 'お気に入りはまだありません。' : projects.length ? '条件に合う作品がありません。' : 'まだ公開プロジェクトがありません。'}</h3>
-                      <p>{view === 'favorites' ? '作品カードのハートを押すと、ここに保存されます。' : projects.length ? '検索語や言語フィルターを変えて、もう一度探してみてください。' : '最初の作品を公開して、コミュニティを始めましょう。'}</p>
+                      <p>{view === 'favorites' ? '作品の「保存」を押すと、ここに表示されます。' : projects.length ? '検索語や言語フィルターを変えて、もう一度探してみてください。' : 'プロジェクトを公開すると、ここに表示されます。'}</p>
                       <div className="community-empty-actions">
                         {(query || languageFilter !== 'all') && <button type="button" className="community-secondary-button" onClick={() => { setQuery(''); setLanguageFilter('all') }}>検索条件をクリア</button>}
                         {view !== 'favorites' && <button type="button" className="community-primary-button" onClick={() => setView('publish')}>作品を公開する <Icon name="arrow-up-right" size={15} /></button>}
@@ -422,7 +423,7 @@ export default function CommunityPage({ session }) {
               ) : (
                 <div className="community-comment-login"><p>ログインすると、作品への感想や改善案を投稿できます。</p><button type="button" onClick={() => { window.location.href = '/signin' }}>ログインして投稿</button></div>
               )}
-              <div className="community-comments">{comments.map(item => <article key={item.id}><p>{item.body}</p><time>{shortDate(item.createdAt)}</time></article>)}{!comments.length && <p className="community-muted">まだ意見はありません。建設的な最初のコメントをどうぞ。</p>}</div>
+              <div className="community-comments">{comments.map(item => <article key={item.id}><p>{item.body}</p><time>{shortDate(item.createdAt)}</time></article>)}{!comments.length && <p className="community-muted">コメントはまだありません。</p>}</div>
             </section>
             {session?.user?.id === selected.owner_id && (
               <div className="community-unpublish-wrap">
