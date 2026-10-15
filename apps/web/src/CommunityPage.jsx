@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import CommunityTeamHub from './CommunityTeamHub.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -109,6 +110,8 @@ export default function CommunityPage({ session }) {
   const [sort, setSort] = useState('featured')
   const [languageFilter, setLanguageFilter] = useState('all')
   const [view, setView] = useState('explore')
+  const [section, setSection] = useState('projects')
+  const [notificationCount, setNotificationCount] = useState(0)
   const [selected, setSelected] = useState(null)
   const [comments, setComments] = useState([])
   const [comment, setComment] = useState('')
@@ -137,6 +140,34 @@ export default function CommunityPage({ session }) {
     const timer = window.setTimeout(() => { void load() }, 180)
     return () => window.clearTimeout(timer)
   }, [load])
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setNotificationCount(0)
+      return
+    }
+
+    let cancelled = false
+    const refreshUnreadCount = () => {
+      api('/api/community/notifications?unreadOnly=true')
+        .then(result => {
+          if (!cancelled) setNotificationCount(Number(result.unreadCount || 0))
+        })
+        .catch(() => {
+          if (!cancelled) setNotificationCount(0)
+        })
+    }
+
+    refreshUnreadCount()
+    const interval = window.setInterval(refreshUnreadCount, 30_000)
+    window.addEventListener('focus', refreshUnreadCount)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refreshUnreadCount)
+    }
+  }, [session?.user?.id])
 
   async function toggle(project, kind) {
     if (!session?.user) {
@@ -229,12 +260,17 @@ export default function CommunityPage({ session }) {
           <span className="community-header-divider" />
           <span className="community-header-context">コミュニティ</span>
         </div>
-        <nav>
+        <nav className="community-header-nav">
+          <button type="button" className={section === 'projects' ? 'active' : ''} aria-current={section === 'projects' ? 'page' : undefined} onClick={() => setSection('projects')}>作品を探す</button>
+          <button type="button" className={section === 'teams' ? 'active' : ''} aria-current={section === 'teams' ? 'page' : undefined} onClick={() => setSection('teams')}>チーム</button>
+          <button type="button" className={'community-notification-nav' + (section === 'notifications' ? ' active' : '')} aria-current={section === 'notifications' ? 'page' : undefined} onClick={() => setSection('notifications')}>通知BOX{notificationCount > 0 && <span>{notificationCount > 99 ? '99+' : notificationCount}</span>}</button>
           <button type="button" className="community-dashboard-link" onClick={() => { window.location.href = session?.user ? '/#/dashboard' : '/signin' }}><Icon name="grid" size={15} /> {session?.user ? 'ダッシュボード' : 'ログイン'}</button>
         </nav>
       </header>
 
       <div className="community-main">
+        {section === 'projects' ? (
+        <>
         <section className="community-page-heading">
           <h1>コミュニティ</h1>
           <p>公開されたコードを閲覧し、気になる作品をフォークできます。</p>
@@ -290,6 +326,15 @@ export default function CommunityPage({ session }) {
             </>
           </div>
         </div>
+        </>
+        ) : (
+          <CommunityTeamHub
+            mode={section}
+            session={session}
+            onNavigate={setSection}
+            onUnreadCountChange={setNotificationCount}
+          />
+        )}
 
         <footer className="community-footer"><button type="button" onClick={() => { window.location.hash = '/dashboard' }}><img src="/poligo-logo.svg" alt="" /> <span>ダッシュボードへ</span></button><span>Poligo コミュニティ</span></footer>
       </div>
