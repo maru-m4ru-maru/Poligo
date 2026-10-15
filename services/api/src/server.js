@@ -5284,12 +5284,26 @@ async function handleTerminalReconnect(request, response, id) {
   try {
     runnerSnapshot = await runnerTerminalRequest('/v1/terminals')
   } catch (error) {
-    send(response, 502, {
-      error: error instanceof Error
-        ? error.message
-        : 'terminal session state could not be checked'
-    })
-    return
+    const legacyRunnerWithoutInventory =
+      error?.statusCode === 404 &&
+      error instanceof Error &&
+      error.message === 'terminal runner request failed (HTTP 404): not found'
+
+    if (legacyRunnerWithoutInventory) {
+      console.warn('Terminal Runner session inventory endpoint is unavailable; using the successful file probe', {
+        id
+      })
+      runnerSnapshot = {
+        terminals: [{ id, exited: false }]
+      }
+    } else {
+      send(response, 502, {
+        error: error instanceof Error
+          ? error.message
+          : 'terminal session state could not be checked'
+      })
+      return
+    }
   }
 
   const runnerSession = (Array.isArray(runnerSnapshot.terminals)
