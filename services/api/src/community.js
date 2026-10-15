@@ -801,6 +801,46 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     return
   }
 
+  if (parts[2] === 'teams' && parts.length === 6 && parts[4] === 'members' && request.method === 'PATCH') {
+    if (!requireUser()) return
+    const role = await getTeamRole(parts[3], userId)
+    if (role !== 'owner') {
+      send(response, 403, { error: 'only the team owner can change member roles' })
+      return
+    }
+    const payload = await readJsonBody(request, { maxBytes: 4_000 })
+    const newRole = payload.role
+    if (!['admin', 'member'].includes(newRole)) {
+      send(response, 400, { error: 'role must be admin or member' })
+      return
+    }
+    if (parts[5] === userId) {
+      send(response, 400, { error: 'the owner role cannot be changed here' })
+      return
+    }
+    const member = await pool.query(
+      'UPDATE community_team_members SET role = $1 WHERE team_id = $2 AND user_id = $3 AND role != $4 RETURNING user_id, display_name, role',
+      [newRole, parts[3], parts[5], 'owner']
+    )
+    if (!member.rows[0]) {
+      send(response, 404, { error: 'team member not found' })
+      return
+    }
+    const team = await pool.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
+    await createCommunityNotification(pool, {
+      userId: parts[5],
+      actorId: userId,
+      actorName: userDisplayName(session),
+      kind: 'team_activity',
+      title: newRole === 'admin' ? 'チーム管理者に任命されました' : 'チーム管理者の権限が変更されました',
+      body: '「' + (team.rows[0]?.name || 'チーム') + '」での役割が「' + (newRole === 'admin' ? '管理者' : 'メンバー') + '」に変更されました。',
+      resourceType: 'team',
+      resourceId: parts[3]
+    })
+    send(response, 200, { member: member.rows[0] })
+    return
+  }
+
   if (parts[2] === 'teams' && parts.length === 6 && parts[4] === 'members' && request.method === 'DELETE') {
     if (!requireUser()) return
     const role = await requireTeamManager(parts[3], userId, response)
