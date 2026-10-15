@@ -26,6 +26,7 @@ export function getCommunityDatabaseStatus() {
 
 export async function initializeCommunityDatabase() {
   if (!pool) return false
+  console.log('Poligo community schema initialization started')
   await pool.query(`
     CREATE TABLE IF NOT EXISTS community_projects (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -71,6 +72,7 @@ export async function initializeCommunityDatabase() {
     )
   `)
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_feed ON community_projects (featured DESC, published_at DESC)')
+  console.log('Poligo community schema core tables ready; initializing teams and notifications')
   await pool.query(`
     CREATE TABLE IF NOT EXISTS community_user_codes (
       user_id STRING PRIMARY KEY,
@@ -164,6 +166,7 @@ export async function initializeCommunityDatabase() {
       CONSTRAINT community_team_message_length CHECK (length(body) BETWEEN 1 AND 3000)
     )
   `)
+  console.log('Poligo community schema team tables ready; creating indexes')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_notifications_user_date ON community_notifications (user_id, created_at DESC)')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_members_user ON community_team_members (user_id, joined_at DESC)')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_teams_discovery ON community_teams (visibility, created_at DESC)')
@@ -173,6 +176,7 @@ export async function initializeCommunityDatabase() {
 
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_stars ON community_projects (stars DESC, published_at DESC)')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_comments_project ON community_comments (project_id, created_at DESC)')
+  console.log('Poligo community schema indexes ready')
   initialized = true
   return true
 }
