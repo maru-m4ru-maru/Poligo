@@ -332,6 +332,24 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
     }
   }
 
+  async function changeMemberRole(member, role) {
+    if (!activeTeam?.team?.id) return
+    setBusy(true)
+    setError('')
+    try {
+      await api('/api/community/teams/' + encodeURIComponent(activeTeam.team.id) + '/members/' + encodeURIComponent(member.user_id), {
+        method: 'PATCH',
+        body: JSON.stringify({ role })
+      })
+      setNotice(member.display_name + ' の役割を変更しました。')
+      await openTeam(activeTeam.team.id)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '役割を変更できませんでした')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function removeMember(member) {
     if (!activeTeam?.team?.id) return
     setBusy(true)
@@ -533,7 +551,8 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
                   {activeMembers.map(member => (
                     <article key={member.user_id}>
                       <div><strong>{member.display_name}</strong><small>{member.role === 'owner' ? 'オーナー' : member.role === 'admin' ? '管理者' : 'メンバー'}</small></div>
-                      {isManager && member.user_id !== session?.user?.id && member.role !== 'owner' && (member.role !== 'admin' || isOwner) && <button type="button" className="community-notification-hide" disabled={busy} onClick={() => void removeMember(member)}>外す</button>}
+                      {isOwner && member.user_id !== session?.user?.id && member.role !== 'owner' && <div className="community-team-member-actions"><button type="button" className="community-notification-hide" disabled={busy} onClick={() => void changeMemberRole(member, member.role === 'admin' ? 'member' : 'admin')}>{member.role === 'admin' ? '管理者を解除' : '管理者にする'}</button><button type="button" className="community-notification-hide" disabled={busy} onClick={() => void removeMember(member)}>外す</button></div>}
+                      {!isOwner && isManager && member.user_id !== session?.user?.id && member.role === 'member' && <button type="button" className="community-notification-hide" disabled={busy} onClick={() => void removeMember(member)}>外す</button>}
                     </article>
                   ))}
                 </div>
