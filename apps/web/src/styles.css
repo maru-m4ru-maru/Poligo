@@ -1303,6 +1303,7 @@ button img{pointer-events:none}
 
 /* Community: quiet white project index */
 .community-page{
+  min-height:100vh;
   --community-bg:#ffffff;
   --community-panel:#ffffff;
   --community-panel-raised:#ffffff;
