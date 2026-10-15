@@ -148,16 +148,24 @@ export default function CommunityPage({ session }) {
     }
 
     let cancelled = false
-    api('/api/community/notifications?unreadOnly=true')
-      .then(result => {
-        if (!cancelled) setNotificationCount(Number(result.unreadCount || 0))
-      })
-      .catch(() => {
-        if (!cancelled) setNotificationCount(0)
-      })
+    const refreshUnreadCount = () => {
+      api('/api/community/notifications?unreadOnly=true')
+        .then(result => {
+          if (!cancelled) setNotificationCount(Number(result.unreadCount || 0))
+        })
+        .catch(() => {
+          if (!cancelled) setNotificationCount(0)
+        })
+    }
+
+    refreshUnreadCount()
+    const interval = window.setInterval(refreshUnreadCount, 30_000)
+    window.addEventListener('focus', refreshUnreadCount)
 
     return () => {
       cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refreshUnreadCount)
     }
   }, [session?.user?.id])
 
