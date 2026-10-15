@@ -48,6 +48,22 @@ async function mockAuthenticatedApi(page) {
     }
   }
 
+  const communityProject = {
+    id: 'ui-layout-community-project',
+    name: 'Community card layout',
+    description: 'A sample shared project for responsive checks.',
+    language: 'Python',
+    published_at: now,
+    stars: 2,
+    forks: 1,
+    featured: true,
+    starred: false,
+    favorited: false,
+    files: {
+      'main.py': 'print("Community layout")'
+    }
+  }
+
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url())
     const pathname = url.pathname
@@ -98,6 +114,9 @@ async function mockAuthenticatedApi(page) {
       if (pathname.includes('/commits/')) return json({ commits: [], diff: [] })
       return method === 'DELETE' ? route.fulfill({ status: 204, body: '' }) : json(project)
     }
+
+    if (pathname === '/api/community/projects') return json({ projects: [communityProject] })
+    if (pathname === '/api/community/featured') return json({ projects: [communityProject] })
 
     if (pathname === '/api/announcements') return json([])
 
@@ -244,40 +263,41 @@ test('IDE panels align at desktop and reflow into non-overlapping rows on mobile
 })
 
 
-test('community discovery layout fits desktop and narrow mobile viewports', async ({ page }) => {
+test('community browsing stays simple and fits desktop and narrow mobile viewports', async ({ page }) => {
   await mockAuthenticatedApi(page)
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/#/community')
-  await expect(page.locator('.community-hero')).toBeVisible()
-  await expect(page.locator('.community-spotlight')).toBeVisible()
+  await expect(page.locator('.community-page-heading')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'コミュニティ', exact: true })).toBeVisible()
   await expect(page.locator('.community-sidebar')).toBeVisible()
-  await expect(page.locator('.community-guide-strip')).toBeVisible()
-  await expect(page.locator('.community-hero h1')).toContainText('つくる人と、')
-  await expect(page.locator('.community-hero h1 span')).toHaveText('つながる場所。')
+  await expect(page.locator('.community-hero')).toHaveCount(0)
+  await expect(page.locator('.community-spotlight')).toHaveCount(0)
+  await expect(page.locator('.community-guide-strip')).toHaveCount(0)
+  await expect(page.locator('.community-card-art')).toHaveCount(0)
   await expect(page.getByText('運営のセレクション')).toHaveCount(0)
   await expect(page.getByText('PUBLIC WORKSPACE')).toHaveCount(0)
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
-    '.community-header', '.community-hero', '.community-spotlight',
-    '.community-guide-strip', '.community-sidebar', '.community-workspace-content'
+    '.community-header', '.community-page-heading', '.community-sidebar',
+    '.community-workspace-content', '.community-filters', '.community-project-grid'
   ])
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.reload()
-  await expect(page.locator('.community-hero')).toBeVisible()
+  await expect(page.locator('.community-page-heading')).toBeVisible()
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
-    '.community-header', '.community-hero', '.community-spotlight',
-    '.community-guide-strip', '.community-sidebar', '.community-workspace-content'
+    '.community-header', '.community-page-heading', '.community-sidebar',
+    '.community-workspace-content', '.community-filters', '.community-project-grid'
   ])
 
   await page.setViewportSize({ width: 320, height: 740 })
   await page.reload()
-  await expect(page.locator('.community-hero')).toBeVisible()
+  await expect(page.locator('.community-page-heading')).toBeVisible()
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
-    '.community-header', '.community-hero', '.community-spotlight',
-    '.community-guide-strip', '.community-sidebar', '.community-workspace-content'
+    '.community-header', '.community-page-heading', '.community-sidebar',
+    '.community-workspace-content', '.community-filters', '.community-project-grid'
   ])
 })
 
@@ -300,7 +320,7 @@ test('community guides guests to sign in before publishing', async ({ page }) =>
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/#/community')
-  await expect(page.locator('.community-hero')).toBeVisible()
+  await expect(page.locator('.community-page-heading')).toBeVisible()
   await page.getByRole('button', { name: /プロジェクトを公開/ }).click()
   await expect(page.getByRole('heading', { name: 'ログインして、作品を公開しよう。' })).toBeVisible()
   await expect(page.getByRole('button', { name: /ログインして続ける/ })).toBeVisible()
