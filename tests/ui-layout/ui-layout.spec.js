@@ -48,6 +48,22 @@ async function mockAuthenticatedApi(page) {
     }
   }
 
+  const communityProject = {
+    id: 'ui-layout-community-project',
+    name: 'Community card layout',
+    description: 'A sample shared project for responsive checks.',
+    language: 'Python',
+    published_at: now,
+    stars: 2,
+    forks: 1,
+    featured: true,
+    starred: false,
+    favorited: false,
+    files: {
+      'main.py': 'print("Community layout")'
+    }
+  }
+
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url())
     const pathname = url.pathname
@@ -98,6 +114,9 @@ async function mockAuthenticatedApi(page) {
       if (pathname.includes('/commits/')) return json({ commits: [], diff: [] })
       return method === 'DELETE' ? route.fulfill({ status: 204, body: '' }) : json(project)
     }
+
+    if (pathname === '/api/community/projects') return json({ projects: [communityProject] })
+    if (pathname === '/api/community/featured') return json({ projects: [communityProject] })
 
     if (pathname === '/api/announcements') return json([])
 
