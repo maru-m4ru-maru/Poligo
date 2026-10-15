@@ -104,7 +104,6 @@ function ProjectCard({ project, index, onOpen, onToggle }) {
 
 export default function CommunityPage({ session }) {
   const [projects, setProjects] = useState([])
-  const [ownedProjects, setOwnedProjects] = useState([])
   const [featured, setFeatured] = useState([])
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
@@ -113,27 +112,20 @@ export default function CommunityPage({ session }) {
   const [selected, setSelected] = useState(null)
   const [comments, setComments] = useState([])
   const [comment, setComment] = useState('')
-  const [publishId, setPublishId] = useState('')
-  const [publishDescription, setPublishDescription] = useState('')
-  const [publishName, setPublishName] = useState('')
-  const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [confirmUnpublish, setConfirmUnpublish] = useState(false)
 
   const load = useCallback(async () => {
     setError('')
     setLoading(true)
     try {
-      const [feed, featuredFeed, own] = await Promise.all([
+      const [feed, featuredFeed] = await Promise.all([
         api('/api/community/projects?sort=' + encodeURIComponent(sort) + '&q=' + encodeURIComponent(query)),
-        api('/api/community/featured'),
-        session?.user ? api('/api/projects') : Promise.resolve({ projects: [] })
+        api('/api/community/featured')
       ])
       setProjects(feed.projects || [])
       setFeatured(featuredFeed.projects || [])
-      setOwnedProjects(own.projects || own || [])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'コミュニティを読み込めませんでした')
     } finally {
@@ -169,7 +161,6 @@ export default function CommunityPage({ session }) {
 
   async function openProject(project) {
     setSelected(project)
-    setConfirmUnpublish(false)
     setComments([])
     setError('')
     try {
@@ -217,48 +208,6 @@ export default function CommunityPage({ session }) {
     }
   }
 
-  async function publishProject(event) {
-    event.preventDefault()
-    if (!publishId) return
-    setBusy(true)
-    setError('')
-    setNotice('')
-    try {
-      const result = await api('/api/community/projects', {
-        method: 'POST',
-        body: JSON.stringify({ projectId: publishId, name: publishName, description: publishDescription })
-      })
-      setNotice('「' + result.project.name + '」をコミュニティに公開しました。')
-      setPublishId('')
-      setPublishName('')
-      setPublishDescription('')
-      setView('explore')
-      setQuery('')
-      await load()
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '公開に失敗しました')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function unpublish(project) {
-    setBusy(true)
-    setError('')
-    try {
-      await api('/api/community/projects/' + encodeURIComponent(project.id), { method: 'DELETE' })
-      setProjects(current => current.filter(item => item.id !== project.id))
-      setFeatured(current => current.filter(item => item.id !== project.id))
-      setSelected(null)
-      setConfirmUnpublish(false)
-      setNotice('コミュニティから非公開にしました。プロジェクト本体は削除されていません。')
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '非公開にできませんでした')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const languageOptions = useMemo(() => {
     return Array.from(new Set([...projects, ...featured].map(project => String(project.language || 'Other'))))
       .sort((a, b) => a.localeCompare(b, 'ja'))
@@ -282,7 +231,6 @@ export default function CommunityPage({ session }) {
         </div>
         <nav>
           <button type="button" className="community-dashboard-link" onClick={() => { window.location.href = session?.user ? '/#/dashboard' : '/signin' }}><Icon name="grid" size={15} /> {session?.user ? 'ダッシュボード' : 'ログイン'}</button>
-          <button type="button" className="community-publish-top" onClick={() => setView(view === 'publish' ? 'explore' : 'publish')}><Icon name="plus" size={16} /> プロジェクトを公開</button>
         </nav>
       </header>
 
@@ -291,7 +239,6 @@ export default function CommunityPage({ session }) {
           <h1>コミュニティ</h1>
           <p>公開されたコードを閲覧し、気になる作品をフォークできます。</p>
         </section>
-        {notice && <p className="community-notice" role="status"><span className="community-notice-mark">✓</span>{notice}</p>}
         {error && <p className="community-error" role="alert"><span className="community-error-mark">!</span>{error}</p>}
 
         <div className="community-workspace">
@@ -299,58 +246,11 @@ export default function CommunityPage({ session }) {
             <nav aria-label="コミュニティメニュー">
               <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><Icon name="grid" size={16} /><span>作品一覧</span></button>
               <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}><Icon name="heart" size={16} /><span>お気に入り</span></button>
-              <button type="button" className={view === 'publish' ? 'active' : ''} onClick={() => setView('publish')}><Icon name="plus" size={16} /><span>作品を公開</span></button>
             </nav>
           </aside>
 
           <div className="community-workspace-content">
-            {view === 'publish' ? (
-              !session?.user ? (
-                <section className="community-signin-panel">
-                  <div className="community-signin-mark"><Icon name="shield" size={23} /></div>
-                  <span className="community-section-kicker">作品を公開</span>
-                  <h2>ログインが必要です</h2>
-                  <p>作品の公開、お気に入りの保存、コメントの投稿にはログインしてください。</p>
-                  <div className="community-signin-actions">
-                    <button type="button" className="community-primary-button" onClick={() => { window.location.href = '/signin' }}>ログインして続ける <Icon name="arrow-up-right" size={15} /></button>
-                    <button type="button" className="community-secondary-button" onClick={() => setView('explore')}>作品を見てみる</button>
-                  </div>
-                </section>
-              ) : (
-              <section className="community-publish-layout">
-                <div className="community-content-heading">
-                  <div><h2>作品を公開</h2><p>公開するプロジェクトと、コミュニティでの表示内容を設定します。</p></div>
-                </div>
-                <div className="community-publish-grid">
-                  <section className="community-publish-panel">
-                    <div className="community-panel-topline"><span>公開するプロジェクト</span><span>公開情報</span></div>
-                    <form onSubmit={publishProject}>
-                      <label>公開するプロジェクト
-                        <select required value={publishId} onChange={event => {
-                          const project = ownedProjects.find(item => item.id === event.target.value)
-                          setPublishId(event.target.value)
-                          setPublishName(project?.name || '')
-                        }}>
-                          <option value="">プロジェクトを選択してください</option>
-                          {ownedProjects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-                        </select>
-                      </label>
-                      <label>コミュニティでの表示名
-                        <input maxLength={120} value={publishName} onChange={event => setPublishName(event.target.value)} placeholder="プロジェクト名" required />
-                      </label>
-                      <label>説明 <span className="community-label-optional">任意 / 500文字まで</span>
-                        <textarea maxLength={500} rows={5} value={publishDescription} onChange={event => setPublishDescription(event.target.value)} placeholder="何を作った？ 技術スタックや工夫した点など。" />
-                      </label>
-                      <div className="community-publish-warning"><Icon name="shield" size={17} /><p>公開後は誰でもソースを閲覧・フォークできます。APIキーやパスワードなどの秘密情報は公開前に必ず取り除いてください。.envなど一部の秘密ファイルを含むプロジェクトは公開できません。</p></div>
-                      <button className="community-primary-button community-publish-submit" type="submit" disabled={busy || !publishId}>{busy ? '公開処理中…' : 'コミュニティに公開する'} <Icon name="arrow-up-right" size={16} /></button>
-                    </form>
-                  </section>
-                  
-                </div>
-              </section>
-              )
-            ) : (
-              <>
+            <>
                 <section className="community-explore" id="community-projects">
                   <div className="community-content-heading">
                     <div><h2>{view === 'favorites' ? 'お気に入り' : '公開プロジェクト'}</h2></div>
@@ -380,16 +280,14 @@ export default function CommunityPage({ session }) {
                       <div className="community-empty-icon"><Icon name={view === 'favorites' ? 'heart' : 'search'} size={24} /></div>
                       <span className="community-section-kicker">{view === 'favorites' ? 'お気に入り' : '検索結果'}</span>
                       <h3>{view === 'favorites' ? 'お気に入りはまだありません。' : projects.length ? '条件に合う作品がありません。' : 'まだ公開プロジェクトがありません。'}</h3>
-                      <p>{view === 'favorites' ? '作品の「保存」を押すと、ここに表示されます。' : projects.length ? '検索語や言語フィルターを変えて、もう一度探してみてください。' : 'プロジェクトを公開すると、ここに表示されます。'}</p>
+                      <p>{view === 'favorites' ? '作品の「保存」を押すと、ここに表示されます。' : projects.length ? '検索語や言語フィルターを変えて、もう一度探してみてください。' : 'IDEからコミュニティに共有された作品が、ここに表示されます。'}</p>
                       <div className="community-empty-actions">
                         {(query || languageFilter !== 'all') && <button type="button" className="community-secondary-button" onClick={() => { setQuery(''); setLanguageFilter('all') }}>検索条件をクリア</button>}
-                        {view !== 'favorites' && <button type="button" className="community-primary-button" onClick={() => setView('publish')}>作品を公開する <Icon name="arrow-up-right" size={15} /></button>}
                       </div>
                     </div>
                   )}
                 </section>
-              </>
-            )}
+            </>
           </div>
         </div>
 
@@ -397,11 +295,11 @@ export default function CommunityPage({ session }) {
       </div>
 
       {selected && (
-        <div className="community-modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) { setSelected(null); setConfirmUnpublish(false) } }}>
+        <div className="community-modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) { setSelected(null);  } }}>
           <section className="community-modal" role="dialog" aria-modal="true" aria-labelledby="community-modal-title">
             <header className="community-modal-header">
               <div><span className="community-section-kicker">作品の詳細</span><h2 id="community-modal-title">{selected.name}</h2><span className="community-project-language">{selected.language || 'Other'}</span></div>
-              <button type="button" aria-label="閉じる" onClick={() => { setSelected(null); setConfirmUnpublish(false) }}><Icon name="close" size={17} /></button>
+              <button type="button" aria-label="閉じる" onClick={() => { setSelected(null);  }}><Icon name="close" size={17} /></button>
             </header>
             <p className="community-modal-description">{selected.description || '説明はまだありません。'}</p>
             <div className="community-modal-actions">
@@ -425,19 +323,7 @@ export default function CommunityPage({ session }) {
               )}
               <div className="community-comments">{comments.map(item => <article key={item.id}><p>{item.body}</p><time>{shortDate(item.createdAt)}</time></article>)}{!comments.length && <p className="community-muted">コメントはまだありません。</p>}</div>
             </section>
-            {session?.user?.id === selected.owner_id && (
-              <div className="community-unpublish-wrap">
-                {confirmUnpublish ? (
-                  <div className="community-unpublish-confirm" role="group" aria-label="非公開の確認">
-                    <div><strong>この作品を非公開にしますか？</strong><p>コミュニティからは消えますが、プロジェクト本体は削除されません。</p></div>
-                    <button type="button" className="community-danger-button" disabled={busy} onClick={() => void unpublish(selected)}>{busy ? '処理中…' : '非公開にする'}</button>
-                    <button type="button" className="community-secondary-button" onClick={() => setConfirmUnpublish(false)} disabled={busy}>キャンセル</button>
-                  </div>
-                ) : (
-                  <button className="community-unpublish" type="button" onClick={() => setConfirmUnpublish(true)}>コミュニティから非公開にする</button>
-                )}
-              </div>
-            )}
+
           </section>
         </div>
       )}
