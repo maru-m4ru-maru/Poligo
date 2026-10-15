@@ -326,22 +326,18 @@ async function getTeamManagerIds(teamId, db = pool) {
 }
 
 async function notifyTeamMembers(teamId, actorId, actorName, kind, title, body, resourceType = 'team') {
-  const members = await pool.query(
-    'SELECT user_id FROM community_team_members WHERE team_id = $1 AND user_id != $2',
-    [teamId, actorId]
-  )
-  for (const member of members.rows) {
-    await createCommunityNotification(pool, {
-      userId: member.user_id,
+  await pool.query(
+    'INSERT INTO community_notifications (user_id, actor_id, actor_name, kind, title, body, resource_type, resource_id) SELECT user_id, $2, $3, $4, $5, $6, $7, $1 FROM community_team_members WHERE team_id = $1 AND user_id != $2',
+    [
+      teamId,
       actorId,
-      actorName,
-      kind,
-      title,
-      body,
-      resourceType,
-      resourceId: teamId
-    })
-  }
+      String(actorName || 'Poligo').slice(0, 80),
+      String(kind || 'team_activity').slice(0, 40),
+      String(title || 'チームの活動').slice(0, 160),
+      String(body || '').slice(0, 3000),
+      String(resourceType || 'team').slice(0, 40)
+    ]
+  )
 }
 
 async function requireTeamManager(teamId, userId, response) {
