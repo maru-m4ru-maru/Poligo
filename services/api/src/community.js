@@ -223,6 +223,137 @@ async function getOwnedProject(projectId, ownerId) {
   return { ...project, files: decryptProjectSecrets(rawFiles) }
 }
 
+function userDisplayName(session) {
+  return String(session?.user?.name || session?.user?.username || 'Poligoユーザー').trim().slice(0, 80) || 'Poligoユーザー'
+}
+
+function createInvitationCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  return [...randomBytes(5)].map(value => alphabet[value % alphabet.length]).join('')
+}
+
+async function ensureInvitationCode(userId, displayName) {
+  const existing = await pool.query(
+    'SELECT invite_code FROM community_user_codes WHERE user_id = $1',
+    [userId]
+  )
+
+  if (existing.rows[0]) {
+    await pool.query(
+      'UPDATE community_user_codes SET display_name = $1, updated_at = now() WHERE user_id = $2',
+      [displayName, userId]
+    )
+    return existing.rows[0].invite_code
+  }
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const inviteCode = createInvitationCode()
+    const inserted = await pool.query(
+      'INSERT INTO community_user_codes (user_id, invite_code, display_name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING invite_code',
+      [userId, inviteCode, displayName]
+    )
+
+    if (inserted.rows[0]) return inserted.rows[0].invite_code
+
+    const raced = await pool.query(
+      'SELECT invite_code FROM community_user_codes WHERE user_id = $1',
+      [userId]
+    )
+    if (raced.rows[0]) return raced.rows[0].invite_code
+  }
+
+  throw new Error('invitation code could not be generated')
+}
+
+async function createCommunityNotification(db, notification) {
+  if (!notification.userId) return null
+  const result = await db.query(
+    'INSERT INTO community_notifications (user_id, actor_id, actor_name, kind, title, body, resource_type, resource_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, user_id, actor_id, actor_name, kind, title, body, resource_type, resource_id, is_read, is_hidden, created_at',
+    [
+      notification.userId,
+      notification.actorId || null,
+      String(notification.actorName || 'Poligo').slice(0, 80),
+      String(notification.kind || 'community_activity').slice(0, 40),
+      String(notification.title || 'Poligoからのお知らせ').slice(0, 160),
+      String(notification.body || '').slice(0, 3000),
+      String(notification.resourceType || '').slice(0, 40),
+      String(notification.resourceId || '').slice(0, 100)
+    ]
+  )
+  return result.rows[0] || null
+}
+
+async function withCommunityTransaction(action) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await action(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+async function getTeamRole(teamId, userId, db = pool) {
+  if (!userId) return ''
+  const result = await db.query(
+    'SELECT role FROM community_team_members WHERE team_id = $1 AND user_id = $2',
+    [teamId, userId]
+  )
+  return result.rows[0]?.role || ''
+}
+
+function canManageTeam(role) {
+  return role === 'owner' || role === 'admin'
+}
+
+async function addTeamMember(db, teamId, userId, displayName, role = 'member') {
+  await db.query(
+    'INSERT INTO community_team_members (team_id, user_id, display_name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (team_id, user_id) DO NOTHING',
+    [teamId, userId, displayName, role]
+  )
+}
+
+async function getTeamManagerIds(teamId, db = pool) {
+  const result = await db.query(
+    "SELECT user_id, display_name FROM community_team_members WHERE team_id = $1 AND role IN ('owner', 'admin')",
+    [teamId]
+  )
+  return result.rows
+}
+
+async function notifyTeamMembers(teamId, actorId, actorName, kind, title, body, resourceType = 'team') {
+  const members = await pool.query(
+    'SELECT user_id FROM community_team_members WHERE team_id = $1 AND user_id != $2',
+    [teamId, actorId]
+  )
+  for (const member of members.rows) {
+    await createCommunityNotification(pool, {
+      userId: member.user_id,
+      actorId,
+      actorName,
+      kind,
+      title,
+      body,
+      resourceType,
+      resourceId: teamId
+    })
+  }
+}
+
+async function requireTeamManager(teamId, userId, response) {
+  const role = await getTeamRole(teamId, userId)
+  if (!canManageTeam(role)) {
+    send(response, 403, { error: 'team owner or administrator access required' })
+    return ''
+  }
+  return role
+}
+
 async function handleCommunityRequest(request, response, { createProject } = {}) {
   const url = new URL(request.url || '/', 'http://localhost')
   const parts = url.pathname.split('/').filter(Boolean)
