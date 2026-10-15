@@ -328,7 +328,7 @@ test('community guides guests to sign in before publishing', async ({ page }) =>
   await page.goto('/#/community')
   await expect(page.locator('.community-page-heading')).toBeVisible()
   await page.getByRole('button', { name: /プロジェクトを公開/ }).click()
-  await expect(page.getByRole('heading', { name: 'ログインして、作品を公開しよう。' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'ログインが必要です' })).toBeVisible()
   await expect(page.getByRole('button', { name: /ログインして続ける/ })).toBeVisible()
   await assertNoHorizontalOverflow(page)
 })
