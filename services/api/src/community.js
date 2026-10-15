@@ -1,4 +1,5 @@
 import pg from 'pg'
+import { randomBytes } from 'node:crypto'
 import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { getDatabase } from './turso.js'
 import { decryptProjectSecrets } from './secretStore.js'
@@ -70,6 +71,107 @@ export async function initializeCommunityDatabase() {
     )
   `)
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_feed ON community_projects (featured DESC, published_at DESC)')
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_user_codes (
+      user_id STRING PRIMARY KEY,
+      invite_code STRING NOT NULL UNIQUE,
+      display_name STRING NOT NULL DEFAULT 'Poligoユーザー',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id STRING NOT NULL,
+      actor_id STRING,
+      actor_name STRING NOT NULL DEFAULT 'Poligo',
+      kind STRING NOT NULL,
+      title STRING NOT NULL,
+      body STRING NOT NULL DEFAULT '',
+      resource_type STRING NOT NULL DEFAULT '',
+      resource_id STRING NOT NULL DEFAULT '',
+      is_read BOOLEAN NOT NULL DEFAULT false,
+      is_hidden BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_teams (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name STRING NOT NULL,
+      description STRING NOT NULL DEFAULT '',
+      visibility STRING NOT NULL DEFAULT 'public',
+      join_policy STRING NOT NULL DEFAULT 'manual',
+      owner_id STRING NOT NULL,
+      owner_name STRING NOT NULL DEFAULT 'Poligoユーザー',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT community_teams_name_length CHECK (length(name) BETWEEN 1 AND 80),
+      CONSTRAINT community_teams_description_length CHECK (length(description) <= 500),
+      CONSTRAINT community_teams_visibility CHECK (visibility IN ('public', 'private')),
+      CONSTRAINT community_teams_join_policy CHECK (join_policy IN ('auto', 'manual'))
+    )
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_team_members (
+      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
+      user_id STRING NOT NULL,
+      display_name STRING NOT NULL DEFAULT 'Poligoユーザー',
+      role STRING NOT NULL DEFAULT 'member',
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (team_id, user_id),
+      CONSTRAINT community_team_member_role CHECK (role IN ('owner', 'admin', 'member'))
+    )
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_team_invites (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
+      inviter_id STRING NOT NULL,
+      inviter_name STRING NOT NULL,
+      invitee_id STRING NOT NULL,
+      invitee_name STRING NOT NULL,
+      status STRING NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      decided_at TIMESTAMPTZ,
+      CONSTRAINT community_team_invite_status CHECK (status IN ('pending', 'accepted', 'declined'))
+    )
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_team_join_requests (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
+      user_id STRING NOT NULL,
+      display_name STRING NOT NULL,
+      status STRING NOT NULL DEFAULT 'pending',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      decided_at TIMESTAMPTZ,
+      CONSTRAINT community_team_request_status CHECK (status IN ('pending', 'approved', 'rejected')),
+      UNIQUE (team_id, user_id, status)
+    )
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS community_team_messages (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
+      sender_id STRING NOT NULL,
+      sender_name STRING NOT NULL,
+      kind STRING NOT NULL DEFAULT 'message',
+      recipient_id STRING,
+      recipient_name STRING NOT NULL DEFAULT '',
+      body STRING NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT community_team_message_kind CHECK (kind IN ('message', 'announcement', 'dm')),
+      CONSTRAINT community_team_message_length CHECK (length(body) BETWEEN 1 AND 3000)
+    )
+  `)
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_notifications_user_date ON community_notifications (user_id, created_at DESC)')
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_members_user ON community_team_members (user_id, joined_at DESC)')
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_teams_discovery ON community_teams (visibility, created_at DESC)')
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_invites_user_status ON community_team_invites (invitee_id, status, created_at DESC)')
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_requests_team_status ON community_team_join_requests (team_id, status, created_at DESC)')
+  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_messages_feed ON community_team_messages (team_id, created_at DESC)')
+
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_stars ON community_projects (stars DESC, published_at DESC)')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_comments_project ON community_comments (project_id, created_at DESC)')
   initialized = true
