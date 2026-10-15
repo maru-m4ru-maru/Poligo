@@ -658,16 +658,6 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     if (team.join_policy === 'auto') {
       await withCommunityTransaction(async client => {
         await addTeamMember(client, team.id, userId, userDisplayName(session))
-        await createCommunityNotification(client, {
-          userId: team.owner_id,
-          actorId: userId,
-          actorName: userDisplayName(session),
-          kind: 'team_activity',
-          title: '新しいメンバーが参加しました',
-          body: userDisplayName(session) + ' が「' + team.name + '」に参加しました。',
-          resourceType: 'team',
-          resourceId: team.id
-        })
       })
       await notifyTeamMembers(team.id, userId, userDisplayName(session), 'team_activity', '新しいメンバーが参加しました', userDisplayName(session) + ' が「' + team.name + '」に参加しました。')
       send(response, 201, { joined: true, teamId: team.id })
@@ -920,8 +910,8 @@ async function handleCommunityRequest(request, response, { createProject } = {})
         kind: 'team_dm',
         title: 'チームメンバーから DM が届きました',
         body: body.slice(0, 500),
-        resourceType: 'team_message',
-        resourceId: message.id
+        resourceType: 'team',
+        resourceId: parts[3]
       })
     } else {
       const team = await pool.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
@@ -933,7 +923,7 @@ async function handleCommunityRequest(request, response, { createProject } = {})
         isAnnouncement ? 'team_announcement' : 'team_message',
         isAnnouncement ? 'チーム全体通知: ' + (team.rows[0]?.name || 'チーム') : 'チームに新しいメッセージがあります',
         body,
-        'team_message'
+        'team'
       )
     }
     send(response, 201, { message })
