@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import CommunityIcon from './CommunityIcon.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -27,8 +28,8 @@ function formatDate(value) {
   }).format(date)
 }
 
-function TeamTag({ children, tone = '' }) {
-  return <span className={'community-team-tag' + (tone ? ' ' + tone : '')}>{children}</span>
+function TeamTag({ children, tone = '', icon }) {
+  return <span className={'community-team-tag' + (tone ? ' ' + tone : '')}>{icon && <CommunityIcon name={icon} size={12} className="community-team-tag-icon" />}<span>{children}</span></span>
 }
 
 export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCountChange }) {
@@ -409,10 +410,10 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
       <div className="community-team-section-heading">
         <div>
           <span className="community-section-kicker">INBOX</span>
-          <h2>通知BOX</h2>
+          <h2><span className="community-team-heading-icon"><CommunityIcon name="inbox" size={21} /></span>通知BOX</h2>
           <p>招待、作品への反応、チームの活動がここに届きます。</p>
         </div>
-        <button type="button" className="community-team-button is-secondary" onClick={() => void loadNotifications()} disabled={loading}>更新</button>
+        <button type="button" className="community-team-button is-secondary" onClick={() => void loadNotifications()} disabled={loading}><CommunityIcon name="refresh" size={14} />更新</button>
       </div>
       {!isSignedIn ? (
         <div className="community-team-empty">
@@ -427,21 +428,26 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
           {notifications.map(notification => (
             <article key={notification.id} className={'community-notification' + (notification.is_read ? '' : ' is-unread')}>
               <button type="button" className="community-notification-content" onClick={() => void openNotification(notification)}>
-                <span className="community-notification-type">{notification.kind === 'team_invite' ? 'チーム招待' : notification.kind === 'project_star' ? 'スター' : notification.kind === 'project_comment' ? 'コメント' : notification.kind === 'team_dm' ? 'DM' : notification.kind === 'team_announcement' ? '全体通知' : 'チーム活動'}</span>
-                <strong>{notification.title}</strong>
-                <p>{notification.body}</p>
-                <small>{notification.actor_name} ・ {formatDate(notification.created_at)}</small>
+                <span className="community-notification-icon">
+                  <CommunityIcon name={notification.kind === 'team_invite' ? 'mail' : notification.kind === 'project_star' ? 'star' : notification.kind === 'project_comment' ? 'comment' : notification.kind === 'team_dm' ? 'message' : notification.kind === 'team_announcement' ? 'bell' : 'users'} size={18} />
+                </span>
+                <span className="community-notification-copy">
+                  <span className="community-notification-type">{notification.kind === 'team_invite' ? 'チーム招待' : notification.kind === 'project_star' ? 'スター' : notification.kind === 'project_comment' ? 'コメント' : notification.kind === 'team_dm' ? 'DM' : notification.kind === 'team_announcement' ? '全体通知' : 'チーム活動'}</span>
+                  <strong>{notification.title}</strong>
+                  <span className="community-notification-body">{notification.body}</span>
+                  <small>{notification.actor_name} ・ {formatDate(notification.created_at)}</small>
+                </span>
               </button>
               {notification.kind === 'team_invite' ? (
                 <div className="community-notification-actions">
-                  <button type="button" className="community-team-button" disabled={busy} onClick={() => void respondToInvite(notification, 'accept')}>承認する</button>
-                  <button type="button" className="community-team-button is-secondary" disabled={busy} onClick={() => void respondToInvite(notification, 'decline')}>辞退</button>
-                  <button type="button" className="community-notification-hide" onClick={() => void markNotification(notification, 'hide')}>非表示</button>
+                  <button type="button" className="community-team-button" disabled={busy} onClick={() => void respondToInvite(notification, 'accept')}><CommunityIcon name="check" size={13} />承認する</button>
+                  <button type="button" className="community-team-button is-secondary" disabled={busy} onClick={() => void respondToInvite(notification, 'decline')}><CommunityIcon name="close" size={13} />辞退</button>
+                  <button type="button" className="community-notification-hide" onClick={() => void markNotification(notification, 'hide')}><CommunityIcon name="close" size={12} />非表示</button>
                 </div>
               ) : (
                 <div className="community-notification-actions">
-                  {!notification.is_read && <button type="button" className="community-team-button is-secondary" onClick={() => void markNotification(notification, 'read')}>既読にする</button>}
-                  <button type="button" className="community-notification-hide" onClick={() => void markNotification(notification, 'hide')}>非表示</button>
+                  {!notification.is_read && <button type="button" className="community-team-button is-secondary" onClick={() => void markNotification(notification, 'read')}><CommunityIcon name="check" size={13} />既読にする</button>}
+                  <button type="button" className="community-notification-hide" onClick={() => void markNotification(notification, 'hide')}><CommunityIcon name="close" size={12} />非表示</button>
                 </div>
               )}
             </article>
@@ -464,14 +470,14 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
 
     return (
       <section className="community-team-detail">
-        <button type="button" className="community-team-back" onClick={() => { setActiveTeam(null); setMessages([]); void loadTeams('') }}>← チーム一覧に戻る</button>
+        <button type="button" className="community-team-back" onClick={() => { setActiveTeam(null); setMessages([]); void loadTeams('') }}><CommunityIcon name="chevron-right" size={14} className="community-icon-back" />チーム一覧に戻る</button>
         <header className="community-team-detail-header">
           <div>
             <div className="community-team-tags">
-              <TeamTag tone={team.visibility === 'private' ? 'is-private' : 'is-public'}>{team.visibility === 'private' ? '非公開チーム' : '公開チーム'}</TeamTag>
-              <TeamTag>{joined ? team.my_role === 'owner' ? 'オーナー' : team.my_role === 'admin' ? '管理者' : 'メンバー' : team.join_policy === 'auto' ? '自動承認' : '管理者承認'}</TeamTag>
+              <TeamTag tone={team.visibility === 'private' ? 'is-private' : 'is-public'} icon={team.visibility === 'private' ? 'lock' : 'globe'}>{team.visibility === 'private' ? '非公開チーム' : '公開チーム'}</TeamTag>
+              <TeamTag icon={joined ? team.my_role === 'owner' || team.my_role === 'admin' ? 'shield' : 'users' : 'user-check'}>{joined ? team.my_role === 'owner' ? 'オーナー' : team.my_role === 'admin' ? '管理者' : 'メンバー' : team.join_policy === 'auto' ? '自動承認' : '管理者承認'}</TeamTag>
             </div>
-            <h2>{team.name}</h2>
+            <h2><span className="community-team-detail-mark"><CommunityIcon name="team" size={24} /></span>{team.name}</h2>
             <p>{team.description || 'このチームにはまだ説明がありません。'}</p>
             <small>{Number(team.member_count || 0)} メンバー ・ 作成者 {team.owner_name}</small>
           </div>
@@ -486,11 +492,10 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
           <div className="community-team-detail-grid">
             <div className="community-team-column">
               <section className="community-team-panel">
-                <div className="community-team-panel-heading"><h3>チームメッセージ</h3><span>最大100件</span></div>
+                <div className="community-team-panel-heading"><h3><CommunityIcon name="message" size={16} />チームメッセージ</h3><span>最大100件</span></div>
                 <div className="community-team-channel-tabs">
-                  <button type="button" className={!dmRecipient ? 'active' : ''} onClick={() => setDmRecipient('')}>全体チャット</button>
-                  <label>
-                    DM
+                  <button type="button" className={!dmRecipient ? 'active' : ''} onClick={() => setDmRecipient('')}><CommunityIcon name="message" size={13} />全体チャット</button>
+                  <label><span className="community-team-dm-label"><CommunityIcon name="mail" size={13} />DM</span>
                     <select aria-label="DM の相手" value={dmRecipient} onChange={event => setDmRecipient(event.target.value)}>
                       <option value="">相手を選ぶ...</option>
                       {activeMembers.filter(member => member.user_id !== session?.user?.id).map(member => <option key={member.user_id} value={member.user_id}>{member.display_name}</option>)}
@@ -517,24 +522,24 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
                     </label>
                   )}
                   <textarea value={messageBody} onChange={event => setMessageBody(event.target.value)} maxLength={3000} rows={3} placeholder={dmRecipient ? 'このメンバーにDMを送る...' : messageKind === 'announcement' ? 'チーム全員に知らせる内容...' : 'チームにメッセージを送る...'} disabled={busy} />
-                  <div><small>{messageBody.length}/3000</small><button className="community-team-button" type="submit" disabled={busy || !messageBody.trim()}>{busy ? '送信中...' : '送信'}</button></div>
+                  <div><small>{messageBody.length}/3000</small><button className="community-team-button" type="submit" disabled={busy || !messageBody.trim()}>{busy ? '送信中...' : <><CommunityIcon name="send" size={13} />送信</>}</button></div>
                 </form>
               </section>
 
               {isManager && (
                 <section className="community-team-panel">
-                  <div className="community-team-panel-heading"><h3>招待を送信</h3><span>通知BOX経由</span></div>
+                  <div className="community-team-panel-heading"><h3><CommunityIcon name="mail" size={16} />招待を送信</h3><span>通知BOX経由</span></div>
                   <p className="community-team-muted">相手の招待 ID（#ABCDE）を入力してください。相手は通知BOXから承認します。</p>
                   <form className="community-team-invite-form" onSubmit={sendInvite}>
                     <input value={inviteeCode} onChange={event => setInviteeCode(event.target.value)} placeholder="#ABCDE" aria-label="招待 ID" maxLength={6} required />
-                    <button type="submit" className="community-team-button" disabled={busy || !inviteeCode.trim()}>招待する</button>
+                    <button type="submit" className="community-team-button" disabled={busy || !inviteeCode.trim()}><CommunityIcon name="send" size={13} />招待する</button>
                   </form>
                 </section>
               )}
 
               {isManager && requests.length > 0 && (
                 <section className="community-team-panel">
-                  <div className="community-team-panel-heading"><h3>参加申請</h3><span>{requests.length} 件</span></div>
+                  <div className="community-team-panel-heading"><h3><CommunityIcon name="user-check" size={16} />参加申請</h3><span>{requests.length} 件</span></div>
                   <div className="community-team-request-list">
                     {requests.map(request => (
                       <article key={request.id}>
@@ -549,7 +554,7 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
 
             <aside className="community-team-column">
               <section className="community-team-panel">
-                <div className="community-team-panel-heading"><h3>メンバー</h3><span>{activeMembers.length} 人</span></div>
+                <div className="community-team-panel-heading"><h3><CommunityIcon name="users" size={16} />メンバー</h3><span>{activeMembers.length} 人</span></div>
                 <div className="community-team-member-list">
                   {activeMembers.map(member => (
                     <article key={member.user_id}>
@@ -563,7 +568,7 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
 
               {isManager && (
                 <section className="community-team-panel">
-                  <div className="community-team-panel-heading"><h3>チーム設定</h3><span>{isOwner ? 'オーナー' : '管理者'}</span></div>
+                  <div className="community-team-panel-heading"><h3><CommunityIcon name="settings" size={16} />チーム設定</h3><span>{isOwner ? 'オーナー' : '管理者'}</span></div>
                   <form className="community-team-settings-form" onSubmit={saveTeamSettings}>
                     <label>チーム名<input value={teamSettings.name} onChange={event => setTeamSettings(current => ({ ...current, name: event.target.value }))} maxLength={80} required /></label>
                     <label>説明<textarea value={teamSettings.description} onChange={event => setTeamSettings(current => ({ ...current, description: event.target.value }))} maxLength={500} rows={3} /></label>
@@ -576,7 +581,7 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
               )}
 
               <section className="community-team-panel community-team-panel-danger">
-                <div className="community-team-panel-heading"><h3>チームから退出</h3></div>
+                <div className="community-team-panel-heading"><h3><CommunityIcon name="logout" size={16} />チームから退出</h3></div>
                 {isOwner ? <p className="community-team-muted">オーナーは退出できません。チームを削除するか、今後の更新でオーナーを引き継いでください。</p> : <button type="button" className="community-team-button is-secondary" disabled={busy} onClick={() => void leaveTeam()}>チームを退出</button>}
                 {isOwner && (confirmDeleteTeam ? (
                   <div className="community-team-delete-confirm">
@@ -613,24 +618,24 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
           <div className="community-team-section-heading">
             <div>
               <span className="community-section-kicker">COMMUNITY / TEAMS</span>
-              <h2>チームを探す</h2>
+              <h2><span className="community-team-heading-icon"><CommunityIcon name="users" size={21} /></span>チームを探す</h2>
               <p>公開チームに参加したり、招待 ID で仲間を招待して開発を進められます。</p>
             </div>
-            {isSignedIn && <button type="button" className="community-team-button" onClick={() => setCreateOpen(value => !value)}>{createOpen ? '作成を閉じる' : 'チームを作成'}</button>}
+            {isSignedIn && <button type="button" className="community-team-button" onClick={() => setCreateOpen(value => !value)}>{createOpen ? <><CommunityIcon name="close" size={14} />作成を閉じる</> : <><CommunityIcon name="plus" size={14} />チームを作成</>}</button>}
           </div>
 
           {isSignedIn && (
             <section className="community-team-invite-code">
-              <div><span className="community-section-kicker">YOUR INVITATION ID</span><strong>{inviteCode || '取得中...'}</strong><p>この ID を共有すると、チーム管理者があなたを招待できます。招待通知は通知BOXに届きます。</p></div>
+              <div className="community-team-invite-code-copy"><span className="community-invite-code-mark"><CommunityIcon name="mail" size={18} /></span><div><span className="community-section-kicker">YOUR INVITATION ID</span><strong>{inviteCode || '取得中...'}</strong><p>この ID を共有すると、チーム管理者があなたを招待できます。招待通知は通知BOXに届きます。</p></div></div>
               <button type="button" className="community-team-button is-secondary" disabled={!inviteCode} onClick={() => {
                 void navigator.clipboard?.writeText(inviteCode).then(() => setNotice('招待 ID をコピーしました。')).catch(() => setNotice('招待 ID を選択してコピーしてください。'))
-              }}>IDをコピー</button>
+              }}><CommunityIcon name="copy" size={14} />IDをコピー</button>
             </section>
           )}
 
           {createOpen && (
             <form className="community-team-create-form" onSubmit={createTeam}>
-              <div className="community-team-panel-heading"><h3>チームを作成</h3><span>新しい共同作業スペース</span></div>
+              <div className="community-team-panel-heading"><h3><CommunityIcon name="plus" size={16} />チームを作成</h3><span>新しい共同作業スペース</span></div>
               <label>チーム名<input value={createName} onChange={event => setCreateName(event.target.value)} maxLength={80} required placeholder="例: Web制作チーム" /></label>
               <label>説明<textarea value={createDescription} onChange={event => setCreateDescription(event.target.value)} maxLength={500} rows={3} placeholder="チームの目的や活動内容" /></label>
               <div className="community-team-create-grid">
@@ -643,8 +648,8 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
           )}
 
           <div className="community-team-list-header">
-            <label className="community-team-search">チーム検索<input value={teamQuery} onChange={event => setTeamQuery(event.target.value)} placeholder="チーム名や説明..." onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void loadTeams() } }} /></label>
-            <button type="button" className="community-team-button is-secondary" onClick={() => void loadTeams()} disabled={loading}>検索</button>
+            <label className="community-team-search"><span className="community-team-search-label"><CommunityIcon name="search" size={14} />チーム検索</span><input value={teamQuery} onChange={event => setTeamQuery(event.target.value)} placeholder="チーム名や説明..." onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void loadTeams() } }} /></label>
+            <button type="button" className="community-team-button is-secondary" onClick={() => void loadTeams()} disabled={loading}><CommunityIcon name="search" size={13} />検索</button>
             <span>{teamCountLabel}</span>
           </div>
 
@@ -658,20 +663,20 @@ export default function CommunityTeamHub({ mode, session, onNavigate, onUnreadCo
                     <TeamTag>{team.join_policy === 'auto' ? '自動承認' : '手動承認'}</TeamTag>
                   </div>
                   <button type="button" className="community-team-card-open" onClick={() => void openTeam(team.id)}>
-                    <h3>{team.name}</h3>
+                    <h3><span className="community-team-card-icon"><CommunityIcon name="team" size={18} /></span><span>{team.name}</span></h3>
                     <p>{team.description || '説明はまだありません。'}</p>
                   </button>
-                  <div className="community-team-card-meta"><span>{Number(team.member_count || 0)} メンバー</span><span>作成者 {team.owner_name}</span></div>
+                  <div className="community-team-card-meta"><span><CommunityIcon name="users" size={12} />{Number(team.member_count || 0)} メンバー</span><span>作成者 {team.owner_name}</span></div>
                   <div className="community-team-card-actions">
                     {team.my_role ? (
                       <>
                         <TeamTag tone="is-member">{team.my_role === 'owner' ? 'オーナー' : team.my_role === 'admin' ? '管理者' : '参加中'}</TeamTag>
-                        <button type="button" className="community-team-button is-secondary" onClick={() => void openTeam(team.id)}>チームを開く</button>
+                        <button type="button" className="community-team-button is-secondary" onClick={() => void openTeam(team.id)}><CommunityIcon name="arrow-up-right" size={13} />チームを開く</button>
                       </>
                     ) : team.my_request_status === 'pending' ? (
                       <TeamTag tone="is-pending">参加申請中</TeamTag>
                     ) : (
-                      <button type="button" className="community-team-button" disabled={busy} onClick={() => void joinTeam(team)}>{team.join_policy === 'auto' ? '参加する' : '参加を申請'}</button>
+                      <button type="button" className="community-team-button" disabled={busy} onClick={() => void joinTeam(team)}><CommunityIcon name="user-check" size={13} />{team.join_policy === 'auto' ? '参加する' : '参加を申請'}</button>
                     )}
                   </div>
                 </article>

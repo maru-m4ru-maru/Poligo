@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import CommunityIcon from './CommunityIcon.jsx'
 import CommunityTeamHub from './CommunityTeamHub.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -45,34 +46,6 @@ function languageMark(language) {
   return '</>'
 }
 
-function Icon({ name, size = 16 }) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.8,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    'aria-hidden': true
-  }
-
-  if (name === 'search') return <svg {...common}><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
-  if (name === 'grid') return <svg {...common}><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></svg>
-  if (name === 'star') return <svg {...common}><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z" /></svg>
-  if (name === 'heart') return <svg {...common}><path d="M20.8 8.8c0 5-8.8 10.2-8.8 10.2S3.2 13.8 3.2 8.8A4.6 4.6 0 0 1 12 6.5a4.6 4.6 0 0 1 8.8 2.3Z" /></svg>
-  if (name === 'fork') return <svg {...common}><circle cx="6" cy="5" r="2" /><circle cx="18" cy="19" r="2" /><circle cx="18" cy="5" r="2" /><path d="M6 7v4a4 4 0 0 0 4 4h6" /><path d="M18 7v10" /></svg>
-  if (name === 'arrow-up-right') return <svg {...common}><path d="M7 17 17 7" /><path d="M7 7h10v10" /></svg>
-  if (name === 'plus') return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>
-  if (name === 'chevron-right') return <svg {...common}><path d="m9 18 6-6-6-6" /></svg>
-  if (name === 'layers') return <svg {...common}><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" /></svg>
-  if (name === 'code') return <svg {...common}><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14" /></svg>
-  if (name === 'close') return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>
-  if (name === 'shield') return <svg {...common}><path d="M12 3 20 6v5c0 5-3.4 8.2-8 10-4.6-1.8-8-5-8-10V6l8-3Z" /><path d="m9 12 2 2 4-4" /></svg>
-  return <svg {...common}><circle cx="12" cy="12" r="8" /></svg>
-}
-
 function ProjectCard({ project, index, onOpen, onToggle }) {
   return (
     <article className="community-project-card">
@@ -88,16 +61,16 @@ function ProjectCard({ project, index, onOpen, onToggle }) {
           <p>{project.description || '説明はまだありません。'}</p>
           <span className="community-card-date">{shortDate(project.published_at)}</span>
         </div>
-        <span className="community-card-open-mark"><Icon name="arrow-up-right" size={15} /></span>
+        <span className="community-card-open-mark"><CommunityIcon name="arrow-up-right" size={15} /></span>
       </button>
       <div className="community-card-footer">
         <button type="button" onClick={() => onToggle(project, 'star')} aria-pressed={Boolean(project.starred)} className={project.starred ? 'is-active' : ''} aria-label={'スター ' + Number(project.stars || 0)}>
-          <Icon name="star" size={14} /><span>{formatCount(project.stars)}</span>
+          <CommunityIcon name="star" size={14} /><span>{formatCount(project.stars)}</span>
         </button>
         <button type="button" onClick={() => onToggle(project, 'favorite')} aria-pressed={Boolean(project.favorited)} className={project.favorited ? 'is-active' : ''} aria-label={project.favorited ? 'お気に入りを解除' : 'お気に入りに追加'}>
-          <Icon name="heart" size={14} /><span>{project.favorited ? '保存済み' : '保存'}</span>
+          <CommunityIcon name="heart" size={14} /><span>{project.favorited ? '保存済み' : '保存'}</span>
         </button>
-        <span className="community-card-forks"><Icon name="fork" size={14} /><span>{formatCount(project.forks)}</span></span>
+        <span className="community-card-forks"><CommunityIcon name="fork" size={14} /><span>{formatCount(project.forks)}</span></span>
       </div>
     </article>
   )
@@ -261,10 +234,10 @@ export default function CommunityPage({ session }) {
           <span className="community-header-context">コミュニティ</span>
         </div>
         <nav className="community-header-nav">
-          <button type="button" className={section === 'projects' ? 'active' : ''} aria-current={section === 'projects' ? 'page' : undefined} onClick={() => setSection('projects')}>作品を探す</button>
-          <button type="button" className={section === 'teams' ? 'active' : ''} aria-current={section === 'teams' ? 'page' : undefined} onClick={() => setSection('teams')}>チーム</button>
-          <button type="button" className={'community-notification-nav' + (section === 'notifications' ? ' active' : '')} aria-current={section === 'notifications' ? 'page' : undefined} onClick={() => setSection('notifications')}>通知BOX{notificationCount > 0 && <span>{notificationCount > 99 ? '99+' : notificationCount}</span>}</button>
-          <button type="button" className="community-dashboard-link" onClick={() => { window.location.href = session?.user ? '/#/dashboard' : '/signin' }}><Icon name="grid" size={15} /> {session?.user ? 'ダッシュボード' : 'ログイン'}</button>
+          <button type="button" className={section === 'projects' ? 'active' : ''} aria-current={section === 'projects' ? 'page' : undefined} onClick={() => setSection('projects')}><CommunityIcon name="code" size={15} /><span>作品を探す</span></button>
+          <button type="button" className={section === 'teams' ? 'active' : ''} aria-current={section === 'teams' ? 'page' : undefined} onClick={() => setSection('teams')}><CommunityIcon name="users" size={15} /><span>チーム</span></button>
+          <button type="button" className={'community-notification-nav' + (section === 'notifications' ? ' active' : '')} aria-current={section === 'notifications' ? 'page' : undefined} onClick={() => setSection('notifications')}><CommunityIcon name="bell" size={15} /><span>通知BOX</span>{notificationCount > 0 && <span className="community-notification-count">{notificationCount > 99 ? '99+' : notificationCount}</span>}</button>
+          <button type="button" className="community-dashboard-link" onClick={() => { window.location.href = session?.user ? '/#/dashboard' : '/signin' }}><CommunityIcon name="grid" size={15} /><span>{session?.user ? 'ダッシュボード' : 'ログイン'}</span></button>
         </nav>
       </header>
 
@@ -280,8 +253,8 @@ export default function CommunityPage({ session }) {
         <div className="community-workspace">
           <aside className="community-sidebar">
             <nav aria-label="コミュニティメニュー">
-              <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><Icon name="grid" size={16} /><span>作品一覧</span></button>
-              <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}><Icon name="heart" size={16} /><span>お気に入り</span></button>
+              <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><CommunityIcon name="grid" size={16} /><span>作品一覧</span></button>
+              <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}><CommunityIcon name="heart" size={16} /><span>お気に入り</span></button>
             </nav>
           </aside>
 
@@ -294,7 +267,7 @@ export default function CommunityPage({ session }) {
                   </div>
 
                   <div className="community-filters">
-                    <label className="community-search-box"><Icon name="search" size={17} /><input aria-label="プロジェクトを検索" value={query} onChange={event => setQuery(event.target.value)} placeholder="作品名、説明、言語で検索..." /><span>⌕</span></label>
+                    <label className="community-search-box"><CommunityIcon name="search" size={17} /><input aria-label="プロジェクトを検索" value={query} onChange={event => setQuery(event.target.value)} placeholder="作品名、説明、言語で検索..." /><span>⌕</span></label>
                     <label className="community-sort-select"><span>並び順</span><select aria-label="並び順" value={sort} onChange={event => setSort(event.target.value)}><option value="featured">おすすめ順</option><option value="stars">スター数順</option></select></label>
                   </div>
 
@@ -313,7 +286,7 @@ export default function CommunityPage({ session }) {
                     </div>
                   ) : (
                     <div className="community-empty">
-                      <div className="community-empty-icon"><Icon name={view === 'favorites' ? 'heart' : 'search'} size={24} /></div>
+                      <div className="community-empty-icon"><CommunityIcon name={view === 'favorites' ? 'heart' : 'search'} size={24} /></div>
                       <span className="community-section-kicker">{view === 'favorites' ? 'お気に入り' : '検索結果'}</span>
                       <h3>{view === 'favorites' ? 'お気に入りはまだありません。' : projects.length ? '条件に合う作品がありません。' : 'まだ公開プロジェクトがありません。'}</h3>
                       <p>{view === 'favorites' ? '作品の「保存」を押すと、ここに表示されます。' : projects.length ? '検索語や言語フィルターを変えて、もう一度探してみてください。' : 'IDEからコミュニティに共有された作品が、ここに表示されます。'}</p>
@@ -344,24 +317,24 @@ export default function CommunityPage({ session }) {
           <section className="community-modal" role="dialog" aria-modal="true" aria-labelledby="community-modal-title">
             <header className="community-modal-header">
               <div><span className="community-section-kicker">作品の詳細</span><h2 id="community-modal-title">{selected.name}</h2><span className="community-project-language">{selected.language || 'Other'}</span></div>
-              <button type="button" aria-label="閉じる" onClick={() => { setSelected(null);  }}><Icon name="close" size={17} /></button>
+              <button type="button" aria-label="閉じる" onClick={() => { setSelected(null);  }}><CommunityIcon name="close" size={17} /></button>
             </header>
             <p className="community-modal-description">{selected.description || '説明はまだありません。'}</p>
             <div className="community-modal-actions">
-              <button type="button" onClick={() => void toggle(selected, 'star')} className={selected.starred ? 'is-active' : ''}><Icon name="star" size={15} /> {selected.starred ? 'スター済み' : 'スター'} <strong>{formatCount(selected.stars)}</strong></button>
-              <button type="button" onClick={() => void toggle(selected, 'favorite')} className={selected.favorited ? 'is-active' : ''}><Icon name="heart" size={15} /> {selected.favorited ? '保存済み' : 'お気に入り'}</button>
-              <button type="button" className="community-primary-button" disabled={busy} onClick={() => void forkProject()}><Icon name="fork" size={15} /> フォークして編集</button>
+              <button type="button" onClick={() => void toggle(selected, 'star')} className={selected.starred ? 'is-active' : ''}><CommunityIcon name="star" size={15} /> {selected.starred ? 'スター済み' : 'スター'} <strong>{formatCount(selected.stars)}</strong></button>
+              <button type="button" onClick={() => void toggle(selected, 'favorite')} className={selected.favorited ? 'is-active' : ''}><CommunityIcon name="heart" size={15} /> {selected.favorited ? '保存済み' : 'お気に入り'}</button>
+              <button type="button" className="community-primary-button" disabled={busy} onClick={() => void forkProject()}><CommunityIcon name="fork" size={15} /> フォークして編集</button>
             </div>
             <section className="community-modal-section">
               <div className="community-modal-section-heading"><h3>ソースファイル</h3><span>{Object.keys(selected.files || {}).length.toString().padStart(2, '0')} FILES</span></div>
-              <div className="community-file-list">{Object.keys(selected.files || {}).sort().map(path => <div key={path}><code><Icon name="code" size={13} /> {path}</code><span>{String(selected.files[path]).split('\n').length} 行</span></div>)}</div>
+              <div className="community-file-list">{Object.keys(selected.files || {}).sort().map(path => <div key={path}><code><CommunityIcon name="code" size={13} /> {path}</code><span>{String(selected.files[path]).split('\n').length} 行</span></div>)}</div>
             </section>
             <section className="community-modal-section">
               <div className="community-modal-section-heading"><h3>意見・改善案</h3><span>{comments.length} 件</span></div>
               {session?.user ? (
                 <form className="community-comment-form" onSubmit={submitComment}>
                   <textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder="改善案やフィードバックを書く..." disabled={busy} />
-                  <button type="submit" disabled={busy || !comment.trim()}>{busy ? '投稿中…' : '意見を投稿'} <Icon name="arrow-up-right" size={14} /></button>
+                  <button type="submit" disabled={busy || !comment.trim()}>{busy ? '投稿中…' : '意見を投稿'} <CommunityIcon name="arrow-up-right" size={14} /></button>
                 </form>
               ) : (
                 <div className="community-comment-login"><p>ログインすると、作品への感想や改善案を投稿できます。</p><button type="button" onClick={() => { window.location.href = '/signin' }}>ログインして投稿</button></div>
