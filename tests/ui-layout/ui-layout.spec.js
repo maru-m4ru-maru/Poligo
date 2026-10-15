@@ -308,7 +308,7 @@ test('community editorial index stays white and responsive', async ({ page }) =>
 })
 
 
-test('community guides guests to sign in before publishing', async ({ page }) => {
+test('community stays focused on discovery instead of publishing', async ({ page }) => {
   await page.route('**/api/**', async route => {
     const pathname = new URL(route.request().url()).pathname
     const json = body => route.fulfill({
@@ -327,8 +327,15 @@ test('community guides guests to sign in before publishing', async ({ page }) =>
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/#/community')
   await expect(page.locator('.community-page-heading')).toBeVisible()
-  await page.getByRole('button', { name: /プロジェクトを公開/ }).click()
-  await expect(page.getByRole('heading', { name: 'ログインが必要です' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /ログインして続ける/ })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'プロジェクトを検索' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '作品一覧' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'お気に入り' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /公開/ })).toHaveCount(0)
+  await assertNoHorizontalOverflow(page)
+
+  await page.setViewportSize({ width: 320, height: 740 })
+  await page.reload()
+  await expect(page.getByRole('textbox', { name: 'プロジェクトを検索' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '作品一覧' })).toBeVisible()
   await assertNoHorizontalOverflow(page)
 })
