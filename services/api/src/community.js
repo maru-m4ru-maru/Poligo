@@ -251,11 +251,11 @@ async function handleCommunityRequest(request, response, { createProject } = {})
     if (!requireUser()) return
     const unreadOnly = url.searchParams.get('unreadOnly') === 'true'
     const result = await pool.query(
-      'SELECT id, actor_id, actor_name, kind, title, body, resource_type, resource_id, is_read, created_at FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND resource_type NOT IN ('team', 'team_invite') AND kind NOT LIKE 'team_%' AND ($2 = false OR is_read = false) ORDER BY created_at DESC LIMIT 100',
+      `SELECT id, actor_id, actor_name, kind, title, body, resource_type, resource_id, is_read, created_at FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND resource_type NOT IN ('team', 'team_invite') AND kind NOT LIKE 'team_%' AND ($2 = false OR is_read = false) ORDER BY created_at DESC LIMIT 100`,
       [userId, unreadOnly]
     )
     const count = await pool.query(
-      'SELECT count(*) AS unread_count FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND resource_type NOT IN ('team', 'team_invite') AND kind NOT LIKE 'team_%' AND is_read = false',
+      `SELECT count(*) AS unread_count FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND resource_type NOT IN ('team', 'team_invite') AND kind NOT LIKE 'team_%' AND is_read = false`,
       [userId]
     )
     send(response, 200, { notifications: result.rows, unreadCount: Number(count.rows[0]?.unread_count || 0) })
