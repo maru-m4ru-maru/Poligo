@@ -53,7 +53,7 @@ const LANGUAGE_ICONS = {
   php: '/icons/php.svg',
   rb: '/icons/ruby.svg',
   kt: '/icons/kotlin.svg',
-  cs: '/icons/csharp.svg',
+  cs: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
   c: '/icons/c.svg',
   h: '/icons/c.svg',
   cpp: '/icons/cplusplus.svg',
