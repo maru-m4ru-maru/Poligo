@@ -8,6 +8,8 @@ export default function AuthPage({ mode }) {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [privacyPolicyAccepted, setPrivacyPolicyAccepted] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -22,6 +24,11 @@ export default function AuthPage({ mode }) {
 
   async function submit(event) {
     event.preventDefault()
+    if (isSignUp && (!termsAccepted || !privacyPolicyAccepted)) {
+      setError('利用規約とプライバシーポリシーの両方に同意してください。')
+      return
+    }
+
     setBusy(true)
     setError('')
 
@@ -31,7 +38,9 @@ export default function AuthPage({ mode }) {
             name,
             username,
             email,
-            password
+            password,
+            termsAccepted,
+            privacyPolicyAccepted
           })
         : await authClient.signIn.email({
             email,
@@ -131,13 +140,42 @@ export default function AuthPage({ mode }) {
             />
           </label>
 
+          {isSignUp && (
+            <fieldset className="auth-page-consent-group">
+              <legend>利用前の確認</legend>
+              <div className="auth-page-consent-row">
+                <input
+                  id="auth-terms-accepted"
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={event => setTermsAccepted(event.target.checked)}
+                  required
+                />
+                <label htmlFor="auth-terms-accepted">利用規約に同意します。</label>
+                <a href="/terms" target="_blank" rel="noreferrer">読む</a>
+              </div>
+              <div className="auth-page-consent-row">
+                <input
+                  id="auth-privacy-accepted"
+                  type="checkbox"
+                  checked={privacyPolicyAccepted}
+                  onChange={event => setPrivacyPolicyAccepted(event.target.checked)}
+                  required
+                />
+                <label htmlFor="auth-privacy-accepted">プライバシーポリシーに同意します。</label>
+                <a href="/privacy" target="_blank" rel="noreferrer">読む</a>
+              </div>
+              <p>両方の項目にチェックするとアカウントを作成できます。</p>
+            </fieldset>
+          )}
+
           {error && (
-            <div className="auth-page-error">
+            <div className="auth-page-error" role="alert">
               {error}
             </div>
           )}
 
-          <button className="auth-page-submit" type="submit" disabled={busy}>
+          <button className="auth-page-submit" type="submit" disabled={busy || (isSignUp && (!termsAccepted || !privacyPolicyAccepted))}>
             {busy
               ? isSignUp ? 'アカウントを作成中...' : 'サインイン中...'
               : isSignUp ? 'アカウントを作成' : 'サインイン'}

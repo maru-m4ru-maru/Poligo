@@ -28,6 +28,7 @@ const AuthPage = lazy(() => import('./AuthPage'))
 const Dashboard = lazy(() => import('./Dashboard'))
 const HomePage = lazy(() => import('./HomePage'))
 const TermsPage = lazy(() => import('./TermsPage'))
+const PrivacyPolicyPage = lazy(() => import('./PrivacyPolicyPage'))
 const AccountPage = lazy(() => import('./AccountPage'))
 const AdminPage = lazy(() => import('./AdminPage'))
 const CommunityPage = lazy(() => import('./CommunityPage'))
@@ -3951,7 +3952,7 @@ function AppRouter() {
   const [authResolved, setAuthResolved] = useState(false)
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
-  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/community'
+  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community'
   const accountPath = pathname === '/account'
   const communityPath = pathname === '/community'
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
@@ -4005,6 +4006,10 @@ function AppRouter() {
 
   if (pathname === '/terms') {
     return <TermsPage />
+  }
+
+  if (pathname === '/privacy') {
+    return <PrivacyPolicyPage />
   }
 
   if (pathname === '/signin') {
