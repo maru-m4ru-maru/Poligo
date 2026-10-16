@@ -2480,3 +2480,7 @@ button img{pointer-events:none}
   .community-modal-header h2{font-size:19px}
   .community-modal-actions>button{font-size:9px}
 }
+
+
+/* Keep the ambient accent inside the community viewport. */
+.community-page::after{right:0}
