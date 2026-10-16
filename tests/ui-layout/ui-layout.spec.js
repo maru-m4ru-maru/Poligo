@@ -301,174 +301,70 @@ test('IDE shares and unpublishes the current project without leaving the editor'
 })
 
 
-test('community teams, invitation IDs, and inbox invitations work together', async ({ page }) => {
-  await mockAuthenticatedApi(page)
-
-  let inviteAccepted = false
-  const now = new Date().toISOString()
-  const team = {
-    id: 'ui-layout-team',
-    name: 'Poligo Builders',
-    description: 'A team fixture for sharing projects.',
-    visibility: 'public',
-    join_policy: 'manual',
-    owner_id: 'ui-layout-user',
-    owner_name: 'Layout Test',
-    member_count: 2,
-    my_role: 'owner',
-    my_request_status: ''
-  }
-  const teamDetail = {
-    team: { ...team, is_member: true, updated_at: now },
-    members: [
-      { user_id: 'ui-layout-user', display_name: 'Layout Test', role: 'owner', joined_at: now },
-      { user_id: 'ui-layout-teammate', display_name: 'Teammate', role: 'member', joined_at: now }
-    ],
-    requests: []
-  }
-  const invitationNotification = {
-    id: 'ui-layout-notification',
-    actor_id: 'ui-layout-teammate',
-    actor_name: 'Teammate',
-    kind: 'team_invite',
-    title: 'チームへの招待が届きました',
-    body: 'Teammate が「Poligo Builders」に招待しました。',
-    resource_type: 'team_invite',
-    resource_id: 'ui-layout-invite',
-    is_read: false,
-    created_at: now
-  }
-
-  await page.route('**/api/community/**', async route => {
-    const url = new URL(route.request().url())
-    const pathname = url.pathname
-    const method = route.request().method()
-    const json = body => route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(body)
-    })
-
-    if (pathname === '/api/community/invitation-code' && method === 'GET') {
-      return json({ inviteCode: '#M4RU5' })
-    }
-
-    if (pathname === '/api/community/teams' && method === 'GET') {
-      return json({ teams: [team] })
-    }
-
-    if (pathname === '/api/community/teams' && method === 'POST') {
-      return json({ team })
-    }
-
-    if (pathname === '/api/community/teams/ui-layout-team' && method === 'GET') {
-      return json(teamDetail)
-    }
-
-    if (pathname === '/api/community/teams/ui-layout-team/messages' && method === 'GET') {
-      return json({
-        messages: [{
-          id: 'ui-layout-message',
-          team_id: team.id,
-          sender_id: 'ui-layout-teammate',
-          sender_name: 'Teammate',
-          kind: 'message',
-          recipient_id: null,
-          recipient_name: '',
-          body: 'Welcome to the team.',
-          created_at: now
-        }]
-      })
-    }
-
-    if (pathname === '/api/community/notifications' && method === 'GET') {
-      return json({
-        notifications: inviteAccepted ? [] : [invitationNotification],
-        unreadCount: inviteAccepted ? 0 : 1
-      })
-    }
-
-    if (pathname === '/api/community/invites/ui-layout-invite/accept' && method === 'POST') {
-      inviteAccepted = true
-      return json({ ok: true, action: 'accept', teamId: team.id })
-    }
-
-    if (/^\/api\/community\/notifications\/[^/]+\/(read|hide)$/.test(pathname) && method === 'POST') {
-      return json({ ok: true })
-    }
-
-    return route.fallback()
-  })
-
+test('community notifications work without team navigation or team API calls', async ({ page }) => {
+  const fixture = await mockAuthenticatedApi(page)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/#/community')
-  await page.getByRole('button', { name: 'チーム', exact: true }).click()
 
-  await expect(page.getByRole('heading', { name: 'チームを探す' })).toBeVisible()
-  await expect(page.getByText('#M4RU5')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Poligo Builders' })).toBeVisible()
-  await page.getByRole('button', { name: 'チームを開く' }).click()
+  await expect(page.getByRole('heading', { name: '運営のおすすめ' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '見る', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '通知', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'お気に入り', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '共有した作品', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'チーム', exact: true })).toHaveCount(0)
 
-  await expect(page.getByRole('heading', { name: 'チームメッセージ' })).toBeVisible()
-  await expect(page.getByText('Welcome to the team.')).toBeVisible()
-  await expect(page.getByLabel('DM の相手')).toBeVisible()
-
-  await page.getByRole('button', { name: /通知BOX/ }).click()
-  await expect(page.getByRole('heading', { name: '通知BOX' })).toBeVisible()
-  await expect(page.getByText('チームへの招待が届きました')).toBeVisible()
-  await page.getByRole('button', { name: '承認する' }).click()
-  await expect(page.getByRole('status')).toContainText('チームへの招待を承認しました')
+  await page.getByRole('button', { name: '通知', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '通知', exact: true })).toBeVisible()
   await expect(page.getByText('新しい通知はありません')).toBeVisible()
+  expect(fixture.apiRequests.some(request => /\/api\/community\/(teams|invites|invitation-code)/.test(request.pathname))).toBe(false)
   await assertNoHorizontalOverflow(page)
 })
 
 
-test('community editorial index stays white and responsive', async ({ page }) => {
+test('community discovery index stays white and responsive', async ({ page }) => {
   await mockAuthenticatedApi(page)
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/#/community')
-  await expect(page.locator('.community-page-heading')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'コミュニティ', exact: true })).toBeVisible()
+
+  await expect(page.locator('.community-welcome')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '運営のおすすめ' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '最近のプロジェクト' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '人気のプロジェクト' })).toBeVisible()
   await expect(page.locator('.community-sidebar')).toBeVisible()
-  await expect(page.locator('.community-project-card')).toHaveCount(1)
-  await expect(page.locator('.community-card-index')).toHaveText('01')
+  await expect(page.locator('.community-project-card')).toHaveCount(3)
   await expect(page.locator('.community-hero')).toHaveCount(0)
   await expect(page.locator('.community-spotlight')).toHaveCount(0)
   await expect(page.locator('.community-guide-strip')).toHaveCount(0)
   await expect(page.locator('.community-card-art')).toHaveCount(0)
-  await expect(page.getByText('運営のセレクション')).toHaveCount(0)
   const background = await page.locator('.community-page').evaluate(element => getComputedStyle(element).backgroundColor)
   expect(background).toBe('rgb(255, 255, 255)')
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
-    '.community-header', '.community-page-heading', '.community-sidebar',
-    '.community-workspace-content', '.community-filters', '.community-project-grid',
-    '.community-project-card'
+    '.community-header', '.community-sidebar', '.community-main', '.community-toolbar',
+    '.community-project-grid', '.community-project-card'
   ])
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.reload()
-  await expect(page.locator('.community-project-card')).toHaveCount(1)
+  await expect(page.locator('.community-project-card')).toHaveCount(3)
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
-    '.community-header', '.community-page-heading', '.community-sidebar',
-    '.community-workspace-content', '.community-filters', '.community-project-grid',
-    '.community-project-card'
+    '.community-header', '.community-sidebar', '.community-main', '.community-toolbar',
+    '.community-project-grid', '.community-project-card'
   ])
 
   await page.setViewportSize({ width: 320, height: 740 })
   await page.reload()
-  await expect(page.locator('.community-project-card')).toHaveCount(1)
+  await expect(page.locator('.community-project-card')).toHaveCount(3)
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
-    '.community-header', '.community-page-heading', '.community-sidebar',
-    '.community-workspace-content', '.community-filters', '.community-project-grid',
-    '.community-project-card'
+    '.community-header', '.community-sidebar', '.community-main', '.community-toolbar',
+    '.community-project-grid', '.community-project-card'
   ])
 })
 
 
-test('community stays focused on discovery instead of publishing', async ({ page }) => {
+test('community stays focused on project discovery instead of publishing', async ({ page }) => {
   await page.route('**/api/**', async route => {
     const pathname = new URL(route.request().url()).pathname
     const json = body => route.fulfill({
@@ -481,21 +377,23 @@ test('community stays focused on discovery instead of publishing', async ({ page
     if (pathname === '/api/community/projects' || pathname === '/api/community/featured') {
       return json({ projects: [] })
     }
+    if (pathname === '/api/community/notifications') return json({ notifications: [], unreadCount: 0 })
     return json({})
   })
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/#/community')
-  await expect(page.locator('.community-page-heading')).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'プロジェクトを検索' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '作品一覧' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'お気に入り' })).toBeVisible()
+  await expect(page.locator('.community-welcome')).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'コミュニティを検索' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '見る', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'お気に入り', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'チーム', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /公開/ })).toHaveCount(0)
   await assertNoHorizontalOverflow(page)
 
   await page.setViewportSize({ width: 320, height: 740 })
   await page.reload()
-  await expect(page.getByRole('textbox', { name: 'プロジェクトを検索' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '作品一覧' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'コミュニティを検索' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '見る', exact: true })).toBeVisible()
   await assertNoHorizontalOverflow(page)
 })
