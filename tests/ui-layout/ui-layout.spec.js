@@ -398,6 +398,7 @@ test('community feed is fetched on demand and the footer stays fixed', async ({ 
 
   await page.getByRole('button', { name: '人気', exact: true }).click()
   await expect(page.getByRole('heading', { name: '人気', exact: true })).toBeVisible()
+  await expect(page.locator('.community-project-row')).toHaveCount(1)
   const afterPopular = fixture.apiRequests.filter(request => request.method === 'GET' && request.pathname === '/api/community/projects').length
   expect(afterPopular).toBe(2)
 
