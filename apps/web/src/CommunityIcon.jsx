@@ -7,6 +7,8 @@ const glyphs = {
   'arrow-up-right': <><path d="M7 17 17 7" /><path d="M7 7h10v10" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   'chevron-right': <path d="m9 18 6-6-6-6" />,
+  'arrow-left': <><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></>,
+  'file-code': <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M10 13l-2 2 2 2M14 13l2 2-2 2" /></>,
   layers: <><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" /></>,
   code: <><path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14" /></>,
   close: <path d="m6 6 12 12M18 6 6 18" />,

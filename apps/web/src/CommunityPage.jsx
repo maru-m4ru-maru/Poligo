@@ -65,11 +65,7 @@ export default function CommunityPage({ session }) {
   const [view, setView] = useState('explore')
   const [section, setSection] = useState('projects')
   const [notificationCount, setNotificationCount] = useState(0)
-  const [selected, setSelected] = useState(null)
-  const [comments, setComments] = useState([])
-  const [comment, setComment] = useState('')
   const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const feedCache = useRef(new Map())
   const requestSequence = useRef(0)
@@ -213,59 +209,13 @@ export default function CommunityPage({ session }) {
             : current.filter(item => item.id !== project.id))
         : current.map(item => item.id === project.id ? { ...item, ...changes } : item))
       feedCache.current.clear()
-      setSelected(current => current?.id === project.id ? { ...current, ...changes } : current)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作に失敗しました')
     }
   }
 
-  async function openProject(project) {
-    setSelected(project)
-    setComments([])
-    setError('')
-    try {
-      const result = await api('/api/community/projects/' + encodeURIComponent(project.id))
-      setSelected(result.project)
-      setComments(result.comments || [])
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'プロジェクトを開けませんでした')
-    }
-  }
-
-  async function submitComment(event) {
-    event.preventDefault()
-    if (!selected || !comment.trim()) return
-    setBusy(true)
-    try {
-      await api('/api/community/projects/' + encodeURIComponent(selected.id) + '/comments', {
-        method: 'POST',
-        body: JSON.stringify({ body: comment })
-      })
-      setComment('')
-      await openProject(selected)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'コメントを投稿できませんでした')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function forkProject() {
-    if (!selected) return
-    if (!session?.user) {
-      window.location.href = '/signin'
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      const result = await api('/api/community/projects/' + encodeURIComponent(selected.id) + '/fork', { method: 'POST' })
-      window.location.hash = '/ide/' + encodeURIComponent(result.project.id)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'フォークに失敗しました')
-    } finally {
-      setBusy(false)
-    }
+  function openProject(project) {
+    window.location.hash = '/community/project/' + encodeURIComponent(project.id)
   }
 
   const languageOptions = useMemo(() => {
@@ -391,39 +341,6 @@ export default function CommunityPage({ session }) {
         </footer>
       </div>
 
-      {selected && (
-        <div className="community-modal-backdrop" role="presentation" onClick={event => { if (event.target === event.currentTarget) { setSelected(null);  } }}>
-          <section className="community-modal" role="dialog" aria-modal="true" aria-labelledby="community-modal-title">
-            <header className="community-modal-header">
-              <div><span className="community-section-kicker">作品の詳細</span><h2 id="community-modal-title">{selected.name}</h2><span className="community-project-language">{selected.language || 'Other'}</span></div>
-              <button type="button" aria-label="閉じる" onClick={() => { setSelected(null);  }}><CommunityIcon name="close" size={17} /></button>
-            </header>
-            <p className="community-modal-description">{selected.description || '説明はまだありません。'}</p>
-            <div className="community-modal-actions">
-              <button type="button" onClick={() => void toggle(selected, 'star')} className={selected.starred ? 'is-active' : ''}><CommunityIcon name="star" size={15} /> {selected.starred ? 'スター済み' : 'スター'} <strong>{formatCount(selected.stars)}</strong></button>
-              <button type="button" onClick={() => void toggle(selected, 'favorite')} className={selected.favorited ? 'is-active' : ''}><CommunityIcon name="heart" size={15} /> {selected.favorited ? '保存済み' : 'お気に入り'}</button>
-              <button type="button" className="community-primary-button" disabled={busy} onClick={() => void forkProject()}><CommunityIcon name="fork" size={15} /> フォークして編集</button>
-            </div>
-            <section className="community-modal-section">
-              <div className="community-modal-section-heading"><h3>ソースファイル</h3><span>{Object.keys(selected.files || {}).length.toString().padStart(2, '0')} FILES</span></div>
-              <div className="community-file-list">{Object.keys(selected.files || {}).sort().map(path => <div key={path}><code><CommunityIcon name="code" size={13} /> {path}</code><span>{String(selected.files[path]).split('\n').length} 行</span></div>)}</div>
-            </section>
-            <section className="community-modal-section">
-              <div className="community-modal-section-heading"><h3>意見・改善案</h3><span>{comments.length} 件</span></div>
-              {session?.user ? (
-                <form className="community-comment-form" onSubmit={submitComment}>
-                  <textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder="改善案やフィードバックを書く..." disabled={busy} />
-                  <button type="submit" disabled={busy || !comment.trim()}>{busy ? '投稿中…' : '意見を投稿'} <CommunityIcon name="arrow-up-right" size={14} /></button>
-                </form>
-              ) : (
-                <div className="community-comment-login"><p>ログインすると、作品への感想や改善案を投稿できます。</p><button type="button" onClick={() => { window.location.href = '/signin' }}>ログインして投稿</button></div>
-              )}
-              <div className="community-comments">{comments.map(item => <article key={item.id}><p>{item.body}</p><time>{shortDate(item.createdAt)}</time></article>)}{!comments.length && <p className="community-muted">コメントはまだありません。</p>}</div>
-            </section>
-
-          </section>
-        </div>
-      )}
     </main>
   )
 }

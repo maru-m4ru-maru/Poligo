@@ -134,6 +134,35 @@ async function mockAuthenticatedApi(page) {
     }
     if (pathname === '/api/community/projects') return json({ projects: [communityProject] })
     if (pathname === '/api/community/featured') return json({ projects: [communityProject] })
+    if (pathname === '/api/community/projects/ui-layout-community-project' && method === 'GET') {
+      return json({
+        project: communityProject,
+        comments: [{
+          id: 'ui-layout-comment',
+          authorId: 'ui-layout-reviewer',
+          body: 'The project detail page is easy to read.',
+          createdAt: now,
+          own: false
+        }]
+      })
+    }
+    if (pathname === '/api/community/projects/ui-layout-community-project/comments' && method === 'POST') {
+      return json({
+        comment: {
+          id: 'ui-layout-comment-new',
+          authorId: user.id,
+          body: JSON.parse(route.request().postData() || '{}').body,
+          createdAt: now,
+          own: true
+        }
+      })
+    }
+    if (pathname === '/api/community/projects/ui-layout-community-project/star' && method === 'POST') {
+      return json({ active: true })
+    }
+    if (pathname === '/api/community/projects/ui-layout-community-project/favorite' && method === 'POST') {
+      return json({ active: true })
+    }
 
     if (pathname === '/api/announcements') return json([])
 
@@ -423,6 +452,59 @@ test('community feed is fetched on demand and the footer stays fixed', async ({ 
   await assertFitsHorizontally(page, [
     '.community-header', '.community-header-search', '.community-nav',
     '.community-main', '.community-projects-toolbar', '.community-project-row', '.community-footer'
+  ])
+})
+
+
+test('opening a community project uses its own route and page', async ({ page }) => {
+  await mockAuthenticatedApi(page)
+  await page.setViewportSize({ width: 1440, height: 960 })
+  await page.goto('/#/community')
+
+  await expect(page.getByRole('heading', { name: 'おすすめ', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: /Community card layout/ }).click()
+
+  await expect(page).toHaveURL(/#\/community\/project\/ui-layout-community-project$/)
+  await expect(page.getByRole('heading', { name: 'Community card layout', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'ソースファイル', exact: true })).toBeVisible()
+  await expect(page.getByText('main.py', { exact: false })).toBeVisible()
+  await expect(page.getByText('The project detail page is easy to read.')).toBeVisible()
+  await expect(page.locator('.community-modal')).toHaveCount(0)
+  await expect(page.locator('.community-detail-project')).toBeVisible()
+  await expect(page.locator('.community-footer')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, [
+    '.community-header', '.community-detail-main', '.community-detail-project',
+    '.community-detail-actions', '.community-detail-files', '.community-detail-comments',
+    '.community-footer'
+  ])
+
+  await page.locator('.community-project-detail-page .community-back-button').click()
+  await expect(page).toHaveURL(/#\/community$/)
+  await expect(page.getByRole('heading', { name: 'おすすめ', exact: true })).toBeVisible()
+
+  await page.goto('/#/community/project/ui-layout-community-project')
+  await expect(page.getByRole('heading', { name: 'Community card layout', exact: true })).toBeVisible()
+  await expect(page.locator('.community-modal')).toHaveCount(0)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.reload()
+  await expect(page.locator('.community-detail-project')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, [
+    '.community-header', '.community-detail-main', '.community-detail-project',
+    '.community-detail-actions', '.community-detail-files', '.community-detail-comments',
+    '.community-footer'
+  ])
+
+  await page.setViewportSize({ width: 320, height: 740 })
+  await page.reload()
+  await expect(page.locator('.community-detail-project')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, [
+    '.community-header', '.community-detail-main', '.community-detail-project',
+    '.community-detail-actions', '.community-detail-files', '.community-detail-comments',
+    '.community-footer'
   ])
 })
 

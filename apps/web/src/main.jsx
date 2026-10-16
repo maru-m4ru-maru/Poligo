@@ -32,6 +32,7 @@ const PrivacyPolicyPage = lazy(() => import('./PrivacyPolicyPage'))
 const AccountPage = lazy(() => import('./AccountPage'))
 const AdminPage = lazy(() => import('./AdminPage'))
 const CommunityPage = lazy(() => import('./CommunityPage'))
+const CommunityProjectPage = lazy(() => import('./CommunityProjectPage'))
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -3920,6 +3921,7 @@ function getRoutePath() {
     hashPath === '/account' ||
     hashPath === '/admin' ||
     hashPath === '/community' ||
+    /^\/community\/project\/[^/]+$/.test(hashPath) ||
     hashPath === '/ide' ||
     /^\/ide\/[^/]+$/.test(hashPath)
   ) {
@@ -3935,6 +3937,7 @@ function navigate(path) {
     path === '/account' ||
     path === '/admin' ||
     path === '/community' ||
+    /^\/community\/project\/[^/]+$/.test(path) ||
     path === '/ide' ||
     path.startsWith('/ide/')
   ) {
@@ -3952,9 +3955,10 @@ function AppRouter() {
   const [authResolved, setAuthResolved] = useState(false)
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
-  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community'
   const accountPath = pathname === '/account'
   const communityPath = pathname === '/community'
+  const communityProjectPath = /^\/community\/project\/[^/]+$/.test(pathname)
+  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community' || communityProjectPath
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
@@ -4026,6 +4030,11 @@ function AppRouter() {
 
   if (accountPath) {
     return <AccountPage session={session} />
+  }
+
+  if (communityProjectPath) {
+    const projectId = decodeURIComponent(pathname.slice('/community/project/'.length))
+    return <CommunityProjectPage session={session} projectId={projectId} />
   }
 
   if (communityPath) {

@@ -4305,3 +4305,240 @@ button img{pointer-events:none}
     font-size:9px;
   }
 }
+
+
+
+.community-project-detail-page .community-header-inner{width:min(1100px,calc(100% - 32px))}
+.community-project-detail-page .community-back-button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  margin-left:auto;
+}
+.community-detail-main{
+  width:min(880px,calc(100% - 32px));
+  padding-top:22px;
+}
+.community-detail-back{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:30px;
+  margin:0 0 20px;
+  padding:0 7px;
+  border:0;
+  color:#555;
+  background:transparent;
+  font-size:11px;
+}
+.community-detail-back:hover{color:#185eab;background:#f5f5f5}
+.community-detail-project{
+  padding:0 0 20px;
+  border-bottom:1px solid #dedede;
+}
+.community-detail-project-meta{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px 14px;
+  color:#777;
+  font-size:11px;
+}
+.community-detail-project-meta span:first-child{
+  color:#285f9f;
+  font-weight:650;
+}
+.community-detail-project h1{
+  margin:13px 0 9px;
+  color:#222;
+  font-size:clamp(23px,4vw,32px);
+  font-weight:650;
+  letter-spacing:-.035em;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+.community-detail-description{
+  max-width:760px;
+  margin:0;
+  color:#555;
+  font-size:13px;
+  line-height:1.85;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.community-detail-actions{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:19px;
+}
+.community-detail-actions button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  min-height:34px;
+  padding:0 10px;
+  border:1px solid #cfcfcf;
+  border-radius:3px;
+  color:#333;
+  background:#fff;
+  font-size:11px;
+  font-weight:500;
+}
+.community-detail-actions button:hover{background:#f5f5f5}
+.community-detail-actions button.is-active{
+  border-color:#a9c7ee;
+  color:#205fae;
+  background:#f0f6ff;
+}
+.community-detail-actions button span{
+  color:#777;
+  font-size:10px;
+}
+.community-detail-actions .community-detail-fork{
+  border-color:#226bc3;
+  color:#fff;
+  background:#226bc3;
+}
+.community-detail-actions .community-detail-fork:hover{background:#1858a8}
+.community-detail-actions .community-detail-fork:disabled{opacity:.55;cursor:wait}
+.community-detail-section{
+  margin-top:25px;
+}
+.community-detail-section-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:9px;
+  padding-bottom:9px;
+  border-bottom:1px solid #dedede;
+}
+.community-detail-section-heading h2{
+  margin:0;
+  color:#222;
+  font-size:15px;
+  font-weight:650;
+}
+.community-detail-section-heading>span{
+  color:#777;
+  font-size:11px;
+}
+.community-detail-files{
+  border-top:1px solid #e4e4e4;
+}
+.community-detail-files>div{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:37px;
+  padding:6px 8px;
+  border-bottom:1px solid #e4e4e4;
+}
+.community-detail-files>div:hover{background:#fafafa}
+.community-detail-files code{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  color:#333;
+  font-size:11px;
+  overflow-wrap:anywhere;
+}
+.community-detail-files code svg{flex:0 0 auto;color:#777}
+.community-detail-files>div>span{
+  flex:0 0 auto;
+  color:#888;
+  font-size:10px;
+}
+.community-detail-empty{
+  margin:0;
+  padding:14px 3px;
+  color:#777;
+  font-size:11px;
+}
+.community-detail-comments{margin-bottom:10px}
+.community-detail-comments .community-comment-form{
+  display:grid;
+  gap:8px;
+  margin-bottom:15px;
+}
+.community-detail-comments .community-comment-form textarea{
+  width:100%;
+  min-height:78px;
+  padding:9px 10px;
+  border:1px solid #cfcfcf;
+  border-radius:3px;
+  color:#222;
+  background:#fff;
+  font:inherit;
+  font-size:12px;
+  resize:vertical;
+}
+.community-detail-comments .community-comment-form textarea:focus{
+  border-color:#6d9bd4;
+  outline:2px solid rgba(50,111,185,.12);
+}
+.community-detail-comments .community-comment-form>button,
+.community-detail-comments .community-comment-login button{
+  justify-self:start;
+  min-height:32px;
+  padding:0 11px;
+  border:1px solid #cfcfcf;
+  border-radius:3px;
+  color:#333;
+  background:#fff;
+  font-size:11px;
+}
+.community-detail-comments .community-comment-form>button:not(:disabled):hover,
+.community-detail-comments .community-comment-login button:hover{background:#f5f5f5}
+.community-detail-comments .community-comment-form>button:disabled{opacity:.5;cursor:not-allowed}
+.community-detail-comments .community-comment-login p{
+  margin:0 0 8px;
+  color:#666;
+  font-size:11px;
+  line-height:1.7;
+}
+.community-detail-comment-list{
+  border-top:1px solid #dedede;
+}
+.community-detail-comment-list article{
+  padding:12px 4px;
+  border-bottom:1px solid #dedede;
+}
+.community-detail-comment-list article p{
+  margin:0 0 7px;
+  color:#333;
+  font-size:12px;
+  line-height:1.75;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.community-detail-comment-list article time{
+  color:#888;
+  font-size:10px;
+}
+@media(max-width:640px){
+  .community-project-detail-page .community-header-inner{width:calc(100% - 20px)}
+  .community-project-detail-page .community-brand img{width:78px}
+  .community-project-detail-page .community-header-title{font-size:12px}
+  .community-project-detail-page .community-back-button{min-height:29px;padding:0 7px;font-size:10px}
+  .community-detail-main{width:calc(100% - 24px);padding-top:15px}
+  .community-detail-back{margin-bottom:14px}
+  .community-detail-project h1{font-size:24px}
+  .community-detail-description{font-size:12px}
+  .community-detail-actions{gap:5px}
+  .community-detail-actions button{min-height:32px;padding:0 8px;font-size:10px}
+  .community-detail-section{margin-top:21px}
+  .community-detail-section-heading h2{font-size:14px}
+  .community-detail-files>div{padding:6px 4px}
+}
+@media(max-width:360px){
+  .community-project-detail-page .community-brand img{width:66px}
+  .community-project-detail-page .community-header-title{font-size:11px}
+  .community-project-detail-page .community-back-button{gap:4px;padding:0 5px;font-size:9px}
+}
