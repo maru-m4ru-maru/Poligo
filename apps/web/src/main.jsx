@@ -2436,7 +2436,6 @@ function IDE({ projectId }) {
         method: 'POST',
         body: JSON.stringify({
           prompt,
-          mode: aiMode,
           action: 'assist',
           projectName,
           currentFile: activeFile,
@@ -2451,7 +2450,6 @@ function IDE({ projectId }) {
         role: 'assistant',
         text: result.reply || 'AIから応答がありませんでした。',
         edits: Array.isArray(result.edits) ? result.edits : [],
-        model: result.model || '',
         applied: false,
         applyError: ''
       }
@@ -2478,7 +2476,6 @@ function IDE({ projectId }) {
           role: 'assistant',
           text: error instanceof Error ? error.message : 'AIリクエストに失敗しました。',
           edits: [],
-          model: '',
           applied: false,
           applyError: ''
         }
@@ -2845,7 +2842,6 @@ function IDE({ projectId }) {
                           <div key={index} className={'ai-message ai-message-' + message.role}>
                             <div className="ai-message-role">
                               {message.role === 'user' ? 'あなた' : 'Poligo AI'}
-                              {message.model && <span>{message.model}</span>}
                             </div>
                             <div className="ai-message-text">{message.text}</div>
 
