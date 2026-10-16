@@ -41,6 +41,9 @@ export default function HomePage({ session }) {
           <button onClick={() => navigate('/terms')}>
             利用規約
           </button>
+          <button onClick={() => navigate('/privacy')}>
+            プライバシー
+          </button>
           {session?.user ? (
             <>
               <button onClick={() => navigate('/dashboard')}>ダッシュボード</button>
@@ -152,6 +155,8 @@ export default function HomePage({ session }) {
       <footer className="home-footer">
         <span>© Poligo</span>
         <div>
+          <button onClick={() => navigate('/terms')}>利用規約</button>
+          <button onClick={() => navigate('/privacy')}>プライバシー</button>
           <button onClick={() => navigate('/signin')}>サインイン</button>
         </div>
       </footer>
