@@ -3955,10 +3955,10 @@ function AppRouter() {
   const [authResolved, setAuthResolved] = useState(false)
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
-  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community' || communityProjectPath
   const accountPath = pathname === '/account'
   const communityPath = pathname === '/community'
   const communityProjectPath = /^\/community\/project\/[^/]+$/.test(pathname)
+  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community' || communityProjectPath
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
