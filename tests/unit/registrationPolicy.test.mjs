@@ -73,3 +73,17 @@ test('rejects common disposable email domains', () => {
     )
   }
 })
+
+test('accepts common Outlook and Proton Mail domains despite disposable-list false positives', () => {
+  for (const email of [
+    'person@outlook.com',
+    'person@outlook.jp',
+    'person@hotmail.com',
+    'person@live.com',
+    'person@proton.me',
+    'person@protonmail.com',
+    'person@pm.me'
+  ]) {
+    assert.equal(normalizeEmailAddress(email), email)
+  }
+})
