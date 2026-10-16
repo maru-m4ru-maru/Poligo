@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CommunityIcon from './CommunityIcon.jsx'
 import CommunityNotifications from './CommunityNotifications.jsx'
 
@@ -59,8 +59,8 @@ export default function CommunityPage({ session }) {
   const [recent, setRecent] = useState([])
   const [popular, setPopular] = useState([])
   const [shared, setShared] = useState([])
+  const [favorites, setFavorites] = useState([])
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState('featured')
   const [languageFilter, setLanguageFilter] = useState('all')
   const [view, setView] = useState('explore')
   const [section, setSection] = useState('projects')
@@ -71,36 +71,95 @@ export default function CommunityPage({ session }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
+  const feedCache = useRef(new Map())
+  const requestSequence = useRef(0)
 
   const load = useCallback(async () => {
+    if (section === 'notifications') return
     setError('')
-    setLoading(true)
-    try {
-      const [feed, featuredFeed, recentFeed, popularFeed, sharedFeed] = await Promise.all([
-        api('/api/community/projects?sort=' + encodeURIComponent(sort) + '&q=' + encodeURIComponent(query)),
-        api('/api/community/featured'),
-        api('/api/community/projects?sort=recent&limit=6'),
-        api('/api/community/projects?sort=stars&limit=6'),
-        session?.user?.id
-          ? api('/api/community/projects?mine=true&limit=50')
-          : Promise.resolve({ projects: [] })
-      ])
-      setProjects(feed.projects || [])
-      setFeatured(featuredFeed.projects || [])
-      setRecent(recentFeed.projects || [])
-      setPopular(popularFeed.projects || [])
-      setShared(sharedFeed.projects || [])
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'コミュニティを読み込めませんでした')
-    } finally {
-      setLoading(false)
+
+    const normalizedQuery = query.trim()
+    let cacheKey
+    let endpoint
+    let updateFeed
+
+    if (normalizedQuery) {
+      cacheKey = 'search:' + normalizedQuery.toLocaleLowerCase('ja')
+      endpoint = '/api/community/projects?sort=recent&limit=50&q=' + encodeURIComponent(normalizedQuery)
+      updateFeed = setProjects
+    } else if (view === 'recent') {
+      cacheKey = 'recent'
+      endpoint = '/api/community/projects?sort=recent&limit=30'
+      updateFeed = setRecent
+    } else if (view === 'popular') {
+      cacheKey = 'popular'
+      endpoint = '/api/community/projects?sort=stars&limit=30'
+      updateFeed = setPopular
+    } else if (view === 'favorites') {
+      cacheKey = 'favorites:' + (session?.user?.id || 'signed-out')
+      endpoint = '/api/community/favorites'
+      updateFeed = setFavorites
+    } else if (view === 'shared') {
+      cacheKey = 'shared:' + (session?.user?.id || 'signed-out')
+      endpoint = '/api/community/projects?mine=true&limit=50'
+      updateFeed = setShared
+    } else if (view === 'all') {
+      cacheKey = 'all'
+      endpoint = '/api/community/projects?sort=featured&limit=50'
+      updateFeed = setProjects
+    } else {
+      cacheKey = 'featured'
+      endpoint = '/api/community/featured'
+      updateFeed = setFeatured
     }
-  }, [query, sort, session?.user?.id])
+
+    if ((view === 'favorites' || view === 'shared') && !session?.user?.id) {
+      updateFeed([])
+      setLoading(false)
+      return
+    }
+
+    const cached = feedCache.current.get(cacheKey)
+    const cacheIsFresh = cached && Date.now() - cached.savedAt < 30_000
+
+    if (cached) {
+      updateFeed(cached.projects)
+      setLoading(false)
+      if (cacheIsFresh) return
+    } else {
+      setLoading(true)
+    }
+
+    const requestId = ++requestSequence.current
+
+    try {
+      const response = await api(endpoint)
+      if (requestId !== requestSequence.current) return
+
+      const nextProjects = response.projects || []
+      updateFeed(nextProjects)
+      feedCache.current.set(cacheKey, {
+        projects: nextProjects,
+        savedAt: Date.now()
+      })
+    } catch (reason) {
+      if (requestId === requestSequence.current) {
+        setError(reason instanceof Error ? reason.message : 'コミュニティを読み込めませんでした')
+      }
+    } finally {
+      if (requestId === requestSequence.current) setLoading(false)
+    }
+  }, [query, section, session?.user?.id, view])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load() }, 180)
-    return () => window.clearTimeout(timer)
-  }, [load])
+    if (section === 'notifications') return undefined
+
+    const timer = window.setTimeout(() => { void load() }, 140)
+    return () => {
+      window.clearTimeout(timer)
+      requestSequence.current += 1
+    }
+  }, [load, section])
 
   useEffect(() => {
     if (!session?.user?.id) {
@@ -148,6 +207,12 @@ export default function CommunityPage({ session }) {
       setRecent(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
       setPopular(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
       setShared(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      setFavorites(current => kind === 'favorite'
+        ? (result.active
+            ? [{ ...project, ...changes }, ...current.filter(item => item.id !== project.id)]
+            : current.filter(item => item.id !== project.id))
+        : current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      feedCache.current.clear()
       setSelected(current => current?.id === project.id ? { ...current, ...changes } : current)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作に失敗しました')
@@ -204,12 +269,12 @@ export default function CommunityPage({ session }) {
   }
 
   const languageOptions = useMemo(() => {
-    return Array.from(new Set([...projects, ...featured, ...recent, ...popular, ...shared].map(project => String(project.language || 'Other'))))
+    return Array.from(new Set([...projects, ...featured, ...recent, ...popular, ...shared, ...favorites].map(project => String(project.language || 'Other'))))
       .sort((a, b) => a.localeCompare(b, 'ja'))
-  }, [projects, featured, recent, popular, shared])
+  }, [projects, featured, recent, popular, shared, favorites])
 
   const visibleProjects = useMemo(() => {
-    const combined = [...projects, ...featured, ...recent, ...popular, ...shared]
+    const combined = [...projects, ...featured, ...recent, ...popular, ...shared, ...favorites]
     const unique = Array.from(new Map(combined.map(project => [project.id, project])).values())
     const normalizedQuery = query.trim().toLocaleLowerCase('ja')
     const source = normalizedQuery
@@ -219,7 +284,7 @@ export default function CommunityPage({ session }) {
         : view === 'popular'
           ? popular
           : view === 'favorites'
-            ? unique.filter(project => project.favorited)
+            ? favorites
             : view === 'shared'
               ? shared
               : view === 'all'
@@ -233,7 +298,7 @@ export default function CommunityPage({ session }) {
         return searchable.includes(normalizedQuery)
       })
       .filter(project => languageFilter === 'all' || String(project.language || 'Other') === languageFilter)
-  }, [projects, featured, recent, popular, shared, view, languageFilter, query])
+  }, [projects, featured, recent, popular, shared, favorites, view, languageFilter, query])
 
   function navigateTo(path) {
     window.history.pushState({}, '', path)
@@ -272,10 +337,10 @@ export default function CommunityPage({ session }) {
       </header>
 
       <nav className="community-nav" aria-label="コミュニティ">
-        <button type="button" className={section === 'projects' && view === 'explore' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('explore'); setSort('featured') }}>おすすめ</button>
-        <button type="button" className={section === 'projects' && view === 'recent' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('recent'); setSort('recent') }}>新着</button>
-        <button type="button" className={section === 'projects' && view === 'popular' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('popular'); setSort('stars') }}>人気</button>
-        <button type="button" className={section === 'projects' && view === 'all' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('all'); setSort('featured') }}>すべて</button>
+        <button type="button" className={section === 'projects' && view === 'explore' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('explore') }}>おすすめ</button>
+        <button type="button" className={section === 'projects' && view === 'recent' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('recent') }}>新着</button>
+        <button type="button" className={section === 'projects' && view === 'popular' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('popular') }}>人気</button>
+        <button type="button" className={section === 'projects' && view === 'all' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('all') }}>すべて</button>
         <button type="button" className={section === 'projects' && view === 'favorites' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('favorites') }}>お気に入り</button>
         <button type="button" className={section === 'projects' && view === 'shared' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('shared') }}>共有した作品</button>
         <button type="button" className={section === 'notifications' ? 'active' : ''} onClick={() => setSection('notifications')}>通知{notificationCount > 0 ? ' (' + (notificationCount > 99 ? '99+' : notificationCount) + ')' : ''}</button>
