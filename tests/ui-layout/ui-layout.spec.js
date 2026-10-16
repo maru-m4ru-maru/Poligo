@@ -174,7 +174,17 @@ test('home, terms, and sign-in pages fit common mobile and narrow viewports', as
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, ['.terms-nav', '.terms-heading', '.terms-grid', '.terms-footer'])
 
+  await page.locator('.terms-nav').getByRole('button', { name: 'プライバシーポリシー' }).click()
+  await expect(page.getByRole('heading', { name: 'プライバシーポリシー' })).toBeVisible()
+  await expect(page.locator('.legal-grid')).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, ['.terms-nav', '.terms-heading', '.legal-grid', '.terms-footer'])
+
   await page.setViewportSize({ width: 320, height: 740 })
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'プライバシーポリシー' })).toBeVisible()
+  await assertNoHorizontalOverflow(page)
+  await assertFitsHorizontally(page, ['.terms-nav', '.terms-heading', '.legal-grid', '.terms-footer'])
   await page.goto('/signin')
   await expect(page.locator('.auth-page-card')).toBeVisible()
   await assertNoHorizontalOverflow(page)
