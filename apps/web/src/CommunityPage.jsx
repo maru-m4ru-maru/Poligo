@@ -30,22 +30,6 @@ function formatCount(value) {
   return count >= 1000 ? (count / 1000).toFixed(count >= 10000 ? 0 : 1) + 'k' : String(count)
 }
 
-function languageMark(language) {
-  const normalized = String(language || '').toLowerCase()
-  if (normalized.includes('python')) return 'Py'
-  if (normalized.includes('typescript')) return 'TS'
-  if (normalized.includes('javascript') || normalized === 'js' || normalized.includes('node')) return 'JS'
-  if (normalized.includes('html')) return '</>'
-  if (normalized.includes('css')) return '#'
-  if (normalized.includes('rust')) return 'Rs'
-  if (normalized.includes('go')) return 'Go'
-  if (normalized.includes('java')) return 'J'
-  if (normalized.includes('c++')) return 'C++'
-  if (normalized.includes('php')) return 'php'
-  if (normalized.includes('ruby')) return 'rb'
-  return '</>'
-}
-
 function ProjectRow({ project, onOpen, onToggle }) {
   return (
     <article className="community-project-row">
@@ -288,12 +272,12 @@ export default function CommunityPage({ session }) {
       </header>
 
       <nav className="community-nav" aria-label="コミュニティ">
-        <button type="button" className={section === 'projects' && view === 'explore' && !query ? 'active' : ''} onClick={() => { setSection('projects'); setView('explore'); setSort('featured') }}>おすすめ</button>
-        <button type="button" className={section === 'projects' && view === 'recent' && !query ? 'active' : ''} onClick={() => { setSection('projects'); setView('recent'); setSort('recent') }}>新着</button>
-        <button type="button" className={section === 'projects' && view === 'popular' && !query ? 'active' : ''} onClick={() => { setSection('projects'); setView('popular'); setSort('stars') }}>人気</button>
-        <button type="button" className={section === 'projects' && view === 'all' && !query ? 'active' : ''} onClick={() => { setSection('projects'); setView('all'); setSort('featured') }}>すべて</button>
-        <button type="button" className={section === 'projects' && view === 'favorites' && !query ? 'active' : ''} onClick={() => { setSection('projects'); setView('favorites') }}>お気に入り</button>
-        <button type="button" className={section === 'projects' && view === 'shared' && !query ? 'active' : ''} onClick={() => { setSection('projects'); setView('shared') }}>共有した作品</button>
+        <button type="button" className={section === 'projects' && view === 'explore' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('explore'); setSort('featured') }}>おすすめ</button>
+        <button type="button" className={section === 'projects' && view === 'recent' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('recent'); setSort('recent') }}>新着</button>
+        <button type="button" className={section === 'projects' && view === 'popular' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('popular'); setSort('stars') }}>人気</button>
+        <button type="button" className={section === 'projects' && view === 'all' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('all'); setSort('featured') }}>すべて</button>
+        <button type="button" className={section === 'projects' && view === 'favorites' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('favorites') }}>お気に入り</button>
+        <button type="button" className={section === 'projects' && view === 'shared' && !query.trim() ? 'active' : ''} onClick={() => { setSection('projects'); setView('shared') }}>共有した作品</button>
         <button type="button" className={section === 'notifications' ? 'active' : ''} onClick={() => setSection('notifications')}>通知{notificationCount > 0 ? ' (' + (notificationCount > 99 ? '99+' : notificationCount) + ')' : ''}</button>
       </nav>
 
