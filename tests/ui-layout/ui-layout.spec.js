@@ -66,6 +66,8 @@ async function mockAuthenticatedApi(page) {
     favorited: false,
     files: {
       'main.py': 'print("Community layout")',
+      'app.js': 'const greeting = "Community";\nconsole.log(greeting)',
+      'style.css': 'body { color: #222; }',
       'src/utils.py': 'def greet():\n    return "Nested source test"'
     }
   }
@@ -489,13 +491,24 @@ test('opening a community project uses its own route and page', async ({ page })
   await expect(page).toHaveURL(/#\/community\/project\/ui-layout-community-project\/source\/main\.py$/)
   await expect(page.getByRole('heading', { name: 'main.py', exact: true })).toBeVisible()
   await expect(page.getByText('print("Community layout")', { exact: true })).toBeVisible()
-  await expect(page.locator('.community-source-code')).toBeVisible()
+  await expect(page.locator('.community-source-editor .monaco-editor')).toBeVisible()
+  await expect(page.locator('.community-source-editor .line-numbers').first()).toHaveText('1')
   await expect(page.locator('.community-modal')).toHaveCount(0)
+
+  const sourceSearch = page.getByRole('searchbox', { name: 'ソースコード内を検索' })
+  await sourceSearch.fill('Community')
+  await expect(page.getByText('1 / 1', { exact: true })).toBeVisible()
+  await expect(page.locator('.community-search-match-current')).toHaveCount(1)
+  await sourceSearch.fill('missing_token')
+  await expect(page.getByText('一致なし', { exact: true })).toBeVisible()
+  await sourceSearch.fill('Community')
+  await page.getByRole('button', { name: '折り返し OFF' }).click()
+  await expect(page.getByRole('button', { name: '折り返し ON' })).toHaveAttribute('aria-pressed', 'true')
 
   await page.goto('/#/community/project/ui-layout-community-project/source/src%2Futils.py')
   await expect(page).toHaveURL(/source\/src%2Futils\.py$/)
   await expect(page.getByRole('heading', { name: 'utils.py', exact: true })).toBeVisible()
-  await expect(page.getByText('return "Nested source test"', { exact: true })).toBeVisible()
+  await expect(page.locator('.community-source-editor')).toContainText('Nested source test')
 
   await page.locator('.community-source-page .community-back-button').click()
   await expect(page).toHaveURL(/#\/community\/project\/ui-layout-community-project$/)
