@@ -1,66 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import CommunityIcon from './CommunityIcon.jsx'
+import { getCommunityFileMetadata } from './communityFileMetadata.js'
 
+const Editor = lazy(() => import('@monaco-editor/react'))
 const API_URL = import.meta.env.VITE_API_URL || ''
-
-const LANGUAGE_NAMES = {
-  html: 'HTML',
-  css: 'CSS',
-  js: 'JavaScript',
-  jsx: 'JavaScript JSX',
-  mjs: 'JavaScript',
-  cjs: 'JavaScript',
-  ts: 'TypeScript',
-  tsx: 'TypeScript JSX',
-  py: 'Python',
-  java: 'Java',
-  go: 'Go',
-  rs: 'Rust',
-  php: 'PHP',
-  rb: 'Ruby',
-  kt: 'Kotlin',
-  cs: 'C#',
-  c: 'C',
-  h: 'C',
-  cpp: 'C++',
-  cc: 'C++',
-  cxx: 'C++',
-  hpp: 'C++',
-  json: 'JSON',
-  md: 'Markdown',
-  xml: 'XML',
-  svg: 'SVG',
-  yaml: 'YAML',
-  yml: 'YAML',
-  toml: 'TOML',
-  sh: 'Shell',
-  bash: 'Shell'
-}
-
-const LANGUAGE_ICONS = {
-  html: '/icons/html5.svg',
-  css: '/icons/css.svg',
-  js: '/icons/javascript.svg',
-  jsx: '/icons/javascript.svg',
-  mjs: '/icons/javascript.svg',
-  cjs: '/icons/javascript.svg',
-  ts: '/icons/typescript.svg',
-  tsx: '/icons/typescript.svg',
-  py: '/icons/python.svg',
-  java: '/icons/java.svg',
-  go: '/icons/go.svg',
-  rs: '/icons/rust.svg',
-  php: '/icons/php.svg',
-  rb: '/icons/ruby.svg',
-  kt: '/icons/kotlin.svg',
-  cs: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
-  c: '/icons/c.svg',
-  h: '/icons/c.svg',
-  cpp: '/icons/cplusplus.svg',
-  cc: '/icons/cplusplus.svg',
-  cxx: '/icons/cplusplus.svg',
-  hpp: '/icons/cplusplus.svg'
-}
 
 async function api(path) {
   const response = await fetch(API_URL + path, {
@@ -72,23 +15,32 @@ async function api(path) {
   return body
 }
 
-function getFileExtension(path) {
-  const name = path.split('/').pop() || path
-  const dot = name.lastIndexOf('.')
-  return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
-}
-
 export default function CommunityProjectSourcePage({ projectId, filePath }) {
   const [project, setProject] = useState(null)
   const [source, setSource] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0)
+  const [matchCount, setMatchCount] = useState(0)
+  const [wordWrap, setWordWrap] = useState(false)
+  const [copyStatus, setCopyStatus] = useState('')
+  const [editorReady, setEditorReady] = useState(false)
+  const editorRef = useRef(null)
+  const searchMatchesRef = useRef([])
+  const decorationIdsRef = useRef([])
+
+  const fileMetadata = getCommunityFileMetadata(filePath)
+  const sourceLineCount = source === null ? 0 : source.split(/\r?\n/).length
 
   const loadSource = useCallback(async () => {
     setLoading(true)
     setError('')
     setProject(null)
     setSource(null)
+    setSearchQuery('')
+    setSearchMatchIndex(0)
+    setMatchCount(0)
 
     try {
       const result = await api('/api/community/projects/' + encodeURIComponent(projectId))
@@ -110,10 +62,70 @@ export default function CommunityProjectSourcePage({ projectId, filePath }) {
     void loadSource()
   }, [loadSource])
 
-  const extension = getFileExtension(filePath)
-  const languageName = LANGUAGE_NAMES[extension] || (filePath.startsWith('.env') ? 'Environment' : 'テキスト')
-  const iconPath = LANGUAGE_ICONS[extension] || '/icons/file-code.svg'
-  const lines = source === null ? [] : source.split(/\r?\n/)
+  const handleEditorMount = useCallback(editor => {
+    editorRef.current = editor
+    setEditorReady(true)
+  }, [])
+
+  useEffect(() => {
+    const editor = editorRef.current
+    const model = editor?.getModel()
+
+    if (!editorReady || !editor || !model || source === null) return
+
+    const term = searchQuery.trim()
+    if (!term) {
+      searchMatchesRef.current = []
+      setMatchCount(0)
+      decorationIdsRef.current = editor.deltaDecorations(decorationIdsRef.current, [])
+      return
+    }
+
+    const matches = model.findMatches(term, false, false, false, null, false, 5000)
+    searchMatchesRef.current = matches
+    setMatchCount(matches.length)
+
+    const activeIndex = matches.length
+      ? Math.min(searchMatchIndex, matches.length - 1)
+      : 0
+
+    if (activeIndex !== searchMatchIndex) {
+      setSearchMatchIndex(activeIndex)
+    }
+
+    decorationIdsRef.current = editor.deltaDecorations(
+      decorationIdsRef.current,
+      matches.map((match, index) => ({
+        range: match.range,
+        options: {
+          inlineClassName: index === activeIndex
+            ? 'community-search-match-current'
+            : 'community-search-match'
+        }
+      }))
+    )
+
+    const activeMatch = matches[activeIndex]
+    if (activeMatch) {
+      editor.revealRangeInCenter(activeMatch.range)
+      editor.setSelection(activeMatch.range)
+    }
+  }, [editorReady, searchMatchIndex, searchQuery, source])
+
+  function moveSearchMatch(direction) {
+    const count = searchMatchesRef.current.length
+    if (!count) return
+    setSearchMatchIndex(current => (current + direction + count) % count)
+  }
+
+  async function copySource() {
+    try {
+      await navigator.clipboard.writeText(source || '')
+      setCopyStatus('コピーしました')
+    } catch {
+      setCopyStatus('コピーできませんでした')
+    }
+  }
 
   return (
     <main className="community-page community-source-page">
@@ -145,21 +157,91 @@ export default function CommunityProjectSourcePage({ projectId, filePath }) {
           <section className="community-source-viewer">
             <header className="community-source-heading">
               <div className="community-source-heading-file">
-                <img src={iconPath} alt="" aria-hidden="true" />
+                <img src={fileMetadata.icon} alt="" aria-hidden="true" />
                 <div>
                   <h1>{filePath.split('/').pop() || filePath}</h1>
-                  <p>{project?.name || 'プロジェクト'} <span>·</span> {languageName}</p>
+                  <p>{project?.name || 'プロジェクト'} <span>·</span> {fileMetadata.name}</p>
                 </div>
               </div>
-              <span className="community-source-line-count">{lines.length} 行</span>
+              <span className="community-source-line-count">{sourceLineCount} 行</span>
             </header>
+
             <div className="community-source-path">{filePath}</div>
-            <div className="community-source-code" role="region" aria-label="ソースコード" tabIndex={0}>
-              <ol className="community-source-lines">
-                {lines.map((line, index) => (
-                  <li key={index}><code>{line || ' '}</code></li>
-                ))}
-              </ol>
+
+            <div className="community-source-toolbar">
+              <label className="community-source-search">
+                <CommunityIcon name="search" size={15} />
+                <input
+                  type="search"
+                  aria-label="ソースコード内を検索"
+                  placeholder="コード内を検索"
+                  value={searchQuery}
+                  onChange={event => {
+                    setSearchQuery(event.target.value)
+                    setSearchMatchIndex(0)
+                  }}
+                />
+                {searchQuery && (
+                  <button type="button" aria-label="検索をクリア" onClick={() => {
+                    setSearchQuery('')
+                    setSearchMatchIndex(0)
+                  }}>
+                    <CommunityIcon name="close" size={13} />
+                  </button>
+                )}
+              </label>
+              <span className="community-source-match-count" aria-live="polite">
+                {searchQuery.trim()
+                  ? matchCount ? (searchMatchIndex + 1) + ' / ' + matchCount : '一致なし'
+                  : '検索'}
+              </span>
+              <button type="button" className="community-source-tool-button" disabled={!matchCount} onClick={() => moveSearchMatch(-1)} aria-label="前の検索結果">
+                <CommunityIcon name="chevron-up" size={14} /> 前へ
+              </button>
+              <button type="button" className="community-source-tool-button" disabled={!matchCount} onClick={() => moveSearchMatch(1)} aria-label="次の検索結果">
+                <CommunityIcon name="chevron-down" size={14} /> 次へ
+              </button>
+              <button type="button" className="community-source-tool-button" aria-pressed={wordWrap} onClick={() => setWordWrap(current => !current)}>
+                折り返し {wordWrap ? 'ON' : 'OFF'}
+              </button>
+              <button type="button" className="community-source-tool-button" onClick={() => void copySource()}>
+                {copyStatus || 'コードをコピー'}
+              </button>
+            </div>
+
+            <div className="community-source-editor" role="region" aria-label="読み取り専用ソースコード">
+              <Suspense fallback={<p className="community-source-editor-loading">コードエディターを読み込んでいます...</p>}>
+                <Editor
+                  height="100%"
+                  width="100%"
+                  language={fileMetadata.language}
+                  theme="vs"
+                  value={source || ''}
+                  onMount={handleEditorMount}
+                  options={{
+                    readOnly: true,
+                    domReadOnly: true,
+                    lineNumbers: 'on',
+                    lineNumbersMinChars: 4,
+                    glyphMargin: false,
+                    folding: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    wordWrap: wordWrap ? 'on' : 'off',
+                    renderLineHighlight: 'line',
+                    selectionHighlight: true,
+                    occurrencesHighlight: 'off',
+                    contextmenu: true,
+                    fontSize: 13,
+                    lineHeight: 22,
+                    tabSize: 2,
+                    padding: { top: 12, bottom: 12 },
+                    stickyScroll: { enabled: false },
+                    guides: { indentation: true, bracketPairs: true }
+                  }}
+                />
+              </Suspense>
             </div>
           </section>
         )}
