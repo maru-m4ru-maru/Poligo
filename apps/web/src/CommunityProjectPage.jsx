@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import CommunityIcon from './CommunityIcon.jsx'
+import { getCommunityFileMetadata } from './communityFileMetadata.js'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -189,7 +190,10 @@ export default function CommunityProjectPage({ session, projectId }) {
                       }}
                       aria-label={path + ' のソースコードを表示'}
                     >
-                      <code><CommunityIcon name="file-code" size={14} /> {path}</code>
+                      <code>
+                        <img className="community-detail-file-icon" src={getCommunityFileMetadata(path).icon} alt="" aria-hidden="true" />
+                        <span>{path}</span>
+                      </code>
                       <span>{String(project.files[path]).split('\n').length} 行</span>
                     </button>
                   ))}
