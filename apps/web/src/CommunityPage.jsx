@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import CommunityIcon from './CommunityIcon.jsx'
-import CommunityTeamHub from './CommunityTeamHub.jsx'
+import CommunityNotifications from './CommunityNotifications.jsx'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -79,6 +79,9 @@ function ProjectCard({ project, index, onOpen, onToggle }) {
 export default function CommunityPage({ session }) {
   const [projects, setProjects] = useState([])
   const [featured, setFeatured] = useState([])
+  const [recent, setRecent] = useState([])
+  const [popular, setPopular] = useState([])
+  const [shared, setShared] = useState([])
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState('featured')
   const [languageFilter, setLanguageFilter] = useState('all')
@@ -96,12 +99,20 @@ export default function CommunityPage({ session }) {
     setError('')
     setLoading(true)
     try {
-      const [feed, featuredFeed] = await Promise.all([
+      const [feed, featuredFeed, recentFeed, popularFeed, sharedFeed] = await Promise.all([
         api('/api/community/projects?sort=' + encodeURIComponent(sort) + '&q=' + encodeURIComponent(query)),
-        api('/api/community/featured')
+        api('/api/community/featured'),
+        api('/api/community/projects?sort=recent&limit=6'),
+        api('/api/community/projects?sort=stars&limit=6'),
+        session?.user?.id
+          ? api('/api/community/projects?mine=true&limit=50')
+          : Promise.resolve({ projects: [] })
       ])
       setProjects(feed.projects || [])
       setFeatured(featuredFeed.projects || [])
+      setRecent(recentFeed.projects || [])
+      setPopular(popularFeed.projects || [])
+      setShared(sharedFeed.projects || [])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'コミュニティを読み込めませんでした')
     } finally {
@@ -157,6 +168,9 @@ export default function CommunityPage({ session }) {
       }
       setProjects(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
       setFeatured(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      setRecent(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      setPopular(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
+      setShared(current => current.map(item => item.id === project.id ? { ...item, ...changes } : item))
       setSelected(current => current?.id === project.id ? { ...current, ...changes } : current)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作に失敗しました')
@@ -213,14 +227,27 @@ export default function CommunityPage({ session }) {
   }
 
   const languageOptions = useMemo(() => {
-    return Array.from(new Set([...projects, ...featured].map(project => String(project.language || 'Other'))))
+    return Array.from(new Set([...projects, ...featured, ...recent, ...popular, ...shared].map(project => String(project.language || 'Other'))))
       .sort((a, b) => a.localeCompare(b, 'ja'))
-  }, [projects, featured])
+  }, [projects, featured, recent, popular, shared])
 
   const visibleProjects = useMemo(() => {
-    return (view === 'favorites' ? projects.filter(project => project.favorited) : projects)
+    const combined = [...projects, ...featured, ...recent, ...popular, ...shared]
+    const unique = Array.from(new Map(combined.map(project => [project.id, project])).values())
+    const source = view === 'favorites'
+      ? unique.filter(project => project.favorited)
+      : view === 'shared'
+        ? shared
+        : projects
+    const normalizedQuery = query.trim().toLocaleLowerCase('ja')
+    return source
+      .filter(project => {
+        if (!normalizedQuery || view === 'all') return true
+        const searchable = [project.name, project.description, project.language].join(' ').toLocaleLowerCase('ja')
+        return searchable.includes(normalizedQuery)
+      })
       .filter(project => languageFilter === 'all' || String(project.language || 'Other') === languageFilter)
-  }, [projects, view, languageFilter])
+  }, [projects, featured, recent, popular, shared, view, languageFilter, query])
 
 
   return (
@@ -231,85 +258,127 @@ export default function CommunityPage({ session }) {
             <img src="/poligo-logo.svg" alt="Poligo" />
           </button>
           <span className="community-header-divider" />
-          <span className="community-header-context">コミュニティ</span>
+          <div className="community-header-context"><strong>コミュニティ</strong><small>PROJECT DISCOVERY</small></div>
         </div>
-        <nav className="community-header-nav">
-          <button type="button" className={section === 'projects' ? 'active' : ''} aria-current={section === 'projects' ? 'page' : undefined} onClick={() => setSection('projects')}><CommunityIcon name="code" size={15} /><span>作品を探す</span></button>
-          <button type="button" className={section === 'teams' ? 'active' : ''} aria-current={section === 'teams' ? 'page' : undefined} onClick={() => setSection('teams')}><CommunityIcon name="users" size={15} /><span>チーム</span></button>
-          <button type="button" className={'community-notification-nav' + (section === 'notifications' ? ' active' : '')} aria-current={section === 'notifications' ? 'page' : undefined} onClick={() => setSection('notifications')}><CommunityIcon name="bell" size={15} /><span>通知BOX</span>{notificationCount > 0 && <span className="community-notification-count">{notificationCount > 99 ? '99+' : notificationCount}</span>}</button>
-          <button type="button" className="community-dashboard-link" onClick={() => { window.location.href = session?.user ? '/#/dashboard' : '/signin' }}><CommunityIcon name="grid" size={15} /><span>{session?.user ? 'ダッシュボード' : 'ログイン'}</span></button>
-        </nav>
       </header>
 
-      <div className="community-main">
-        {section === 'projects' ? (
-        <>
-        <section className="community-page-heading">
-          <h1>コミュニティ</h1>
-          <p>公開されたコードを閲覧し、気になる作品をフォークできます。</p>
-        </section>
-        {error && <p className="community-error" role="alert"><span className="community-error-mark">!</span>{error}</p>}
-
-        <div className="community-workspace">
-          <aside className="community-sidebar">
-            <nav aria-label="コミュニティメニュー">
-              <button type="button" className={view === 'explore' ? 'active' : ''} onClick={() => setView('explore')}><CommunityIcon name="grid" size={16} /><span>作品一覧</span></button>
-              <button type="button" className={view === 'favorites' ? 'active' : ''} onClick={() => setView('favorites')}><CommunityIcon name="heart" size={16} /><span>お気に入り</span></button>
-            </nav>
-          </aside>
-
-          <div className="community-workspace-content">
-            <>
-                <section className="community-explore" id="community-projects">
-                  <div className="community-content-heading">
-                    <div><h2>{view === 'favorites' ? 'お気に入り' : '公開プロジェクト'}</h2></div>
-                    <span className="community-results-count"><strong>{visibleProjects.length}</strong> 件の作品</span>
-                  </div>
-
-                  <div className="community-filters">
-                    <label className="community-search-box"><CommunityIcon name="search" size={17} /><input aria-label="プロジェクトを検索" value={query} onChange={event => setQuery(event.target.value)} placeholder="作品名、説明、言語で検索..." /><span>⌕</span></label>
-                    <label className="community-sort-select"><span>並び順</span><select aria-label="並び順" value={sort} onChange={event => setSort(event.target.value)}><option value="featured">おすすめ順</option><option value="stars">スター数順</option></select></label>
-                  </div>
-
-                  <div className="community-language-filter" aria-label="言語フィルター">
-                    <button type="button" className={languageFilter === 'all' ? 'active' : ''} onClick={() => setLanguageFilter('all')}>すべて <span>{projects.length}</span></button>
-                    {languageOptions.map(language => (
-                      <button type="button" key={language} className={languageFilter === language ? 'active' : ''} onClick={() => setLanguageFilter(language)}>{language}</button>
-                    ))}
-                  </div>
-
-                  {loading ? (
-                    <div className="community-loading" role="status"><span className="community-loading-indicator" /><span>作品を読み込んでいます</span><small>まもなく表示されます</small></div>
-                  ) : visibleProjects.length ? (
-                    <div className="community-project-grid">
-                      {visibleProjects.map((project, index) => <ProjectCard key={project.id} project={project} index={index} onOpen={openProject} onToggle={toggle} />)}
-                    </div>
-                  ) : (
-                    <div className="community-empty">
-                      <div className="community-empty-icon"><CommunityIcon name={view === 'favorites' ? 'heart' : 'search'} size={24} /></div>
-                      <span className="community-section-kicker">{view === 'favorites' ? 'お気に入り' : '検索結果'}</span>
-                      <h3>{view === 'favorites' ? 'お気に入りはまだありません。' : projects.length ? '条件に合う作品がありません。' : 'まだ公開プロジェクトがありません。'}</h3>
-                      <p>{view === 'favorites' ? '作品の「保存」を押すと、ここに表示されます。' : projects.length ? '検索語や言語フィルターを変えて、もう一度探してみてください。' : 'IDEからコミュニティに共有された作品が、ここに表示されます。'}</p>
-                      <div className="community-empty-actions">
-                        {(query || languageFilter !== 'all') && <button type="button" className="community-secondary-button" onClick={() => { setQuery(''); setLanguageFilter('all') }}>検索条件をクリア</button>}
-                      </div>
-                    </div>
-                  )}
-                </section>
-            </>
+      <div className="community-shell">
+        <aside className="community-sidebar" aria-label="コミュニティメニュー">
+          <span className="community-sidebar-caption">EXPLORE</span>
+          <nav>
+            <button type="button" className={section === 'projects' && view === 'explore' ? 'active' : ''} onClick={() => { setSection('projects'); setView('explore') }} aria-current={section === 'projects' && view === 'explore' ? 'page' : undefined}>
+              <CommunityIcon name="grid" size={18} /><span>見る</span>
+            </button>
+            <button type="button" className={section === 'notifications' ? 'active' : ''} onClick={() => setSection('notifications')} aria-current={section === 'notifications' ? 'page' : undefined}>
+              <CommunityIcon name="bell" size={18} /><span>通知</span>{notificationCount > 0 && <b className="community-notification-count">{notificationCount > 99 ? '99+' : notificationCount}</b>}
+            </button>
+            <button type="button" className={section === 'projects' && view === 'favorites' ? 'active' : ''} onClick={() => { setSection('projects'); setView('favorites') }} aria-current={section === 'projects' && view === 'favorites' ? 'page' : undefined}>
+              <CommunityIcon name="heart" size={18} /><span>お気に入り</span>
+            </button>
+            <button type="button" className={section === 'projects' && view === 'shared' ? 'active' : ''} onClick={() => { setSection('projects'); setView('shared') }} aria-current={section === 'projects' && view === 'shared' ? 'page' : undefined}>
+              <CommunityIcon name="fork" size={18} /><span>共有した作品</span>
+            </button>
+          </nav>
+          <div className="community-sidebar-bottom">
+            <button type="button" onClick={() => { window.location.hash = '/dashboard' }}><CommunityIcon name="grid" size={17} /><span>ダッシュボード</span></button>
           </div>
-        </div>
-        </>
-        ) : (
-          <CommunityTeamHub
-            mode={section}
-            session={session}
-            onNavigate={setSection}
-            onUnreadCountChange={setNotificationCount}
-          />
-        )}
+        </aside>
 
-        <footer className="community-footer"><button type="button" onClick={() => { window.location.hash = '/dashboard' }}><img src="/poligo-logo.svg" alt="" /> <span>ダッシュボードへ</span></button><span>Poligo コミュニティ</span></footer>
+        <div className="community-main">
+          <div className="community-toolbar">
+            <label className="community-search-box">
+              <CommunityIcon name="search" size={18} />
+              <input aria-label="コミュニティを検索" value={query} onChange={event => setQuery(event.target.value)} placeholder="作品名、説明、言語で検索..." />
+              {query ? <button type="button" aria-label="検索をクリア" onClick={() => setQuery('')}><CommunityIcon name="close" size={15} /></button> : <span className="community-search-hint">PROJECT SEARCH</span>}
+            </label>
+            {session?.user && <span className="community-signed-in-label">{session.user.name || session.user.username || 'ログイン中'}</span>}
+          </div>
+
+          {error && <p className="community-error" role="alert"><span className="community-error-mark">!</span>{error}</p>}
+
+          {section === 'notifications' ? (
+            <CommunityNotifications session={session} onUnreadCountChange={setNotificationCount} />
+          ) : view === 'explore' && !query.trim() ? (
+            <>
+              <section className="community-welcome">
+                <span className="community-eyebrow"><span /> POLIGO COMMUNITY <span className="community-eyebrow-divider">/</span> DISCOVER</span>
+                <h1>次のお気に入りを、<span>見つけよう。</span></h1>
+                <p>みんなのプロジェクトを見て、気になった作品を保存したり、自分のプロジェクトにフォークしたりできます。</p>
+              </section>
+
+              <section className="community-feed-section">
+                <div className="community-feed-heading"><div><span className="community-section-kicker">CURATED BY POLIGO</span><h2>運営のおすすめ</h2><p>Poligo 運営が選んだ、ぜひ見てほしいプロジェクト。</p></div></div>
+                {loading ? (
+                  <div className="community-loading" role="status"><span className="community-loading-indicator" /><span>おすすめを読み込んでいます</span></div>
+                ) : featured.length ? (
+                  <div className="community-project-grid">{featured.slice(0, 3).map((project, index) => <ProjectCard key={project.id} project={project} index={index} onOpen={openProject} onToggle={toggle} />)}</div>
+                ) : (
+                  <div className="community-empty-inline"><span className="community-empty-inline-mark"><CommunityIcon name="star" size={18} /></span><div><strong>おすすめを準備中です</strong><p>運営がピックアップした作品は、ここに表示されます。</p></div></div>
+                )}
+              </section>
+
+              <section className="community-feed-section">
+                <div className="community-feed-heading">
+                  <div><span className="community-section-kicker">FRESH PROJECTS</span><h2>最近のプロジェクト</h2><p>新しくコミュニティに公開された作品。</p></div>
+                  <button type="button" className="community-view-all" onClick={() => setView('all')}>すべて見る <CommunityIcon name="arrow-up-right" size={14} /></button>
+                </div>
+                {loading ? (
+                  <div className="community-loading" role="status"><span className="community-loading-indicator" /><span>最近の作品を読み込んでいます</span></div>
+                ) : recent.length ? (
+                  <div className="community-project-grid">{recent.slice(0, 6).map((project, index) => <ProjectCard key={project.id} project={project} index={index} onOpen={openProject} onToggle={toggle} />)}</div>
+                ) : (
+                  <div className="community-empty-inline"><span className="community-empty-inline-mark"><CommunityIcon name="code" size={18} /></span><div><strong>まだ公開作品がありません</strong><p>最初のプロジェクトが共有されると、ここに表示されます。</p></div></div>
+                )}
+              </section>
+
+              <section className="community-feed-section">
+                <div className="community-feed-heading"><div><span className="community-section-kicker">COMMUNITY FAVORITES</span><h2>人気のプロジェクト</h2><p>スターが多い作品からチェック。</p></div></div>
+                {loading ? (
+                  <div className="community-loading" role="status"><span className="community-loading-indicator" /><span>人気の作品を読み込んでいます</span></div>
+                ) : popular.length ? (
+                  <div className="community-project-grid">{popular.slice(0, 6).map((project, index) => <ProjectCard key={project.id} project={project} index={index} onOpen={openProject} onToggle={toggle} />)}</div>
+                ) : (
+                  <div className="community-empty-inline"><span className="community-empty-inline-mark"><CommunityIcon name="star" size={18} /></span><div><strong>人気ランキングは集計中です</strong><p>公開作品にスターが付くと、ここに並びます。</p></div></div>
+                )}
+              </section>
+            </>
+          ) : (
+            <section className="community-explore" id="community-projects">
+              <div className="community-feed-heading community-results-heading">
+                <div>
+                  <span className="community-section-kicker">{view === 'favorites' ? 'SAVED PROJECTS' : view === 'shared' ? 'YOUR PUBLICATIONS' : 'PROJECT LIBRARY'}</span>
+                  <h1>{view === 'favorites' ? 'お気に入り' : view === 'shared' ? '共有した作品' : query.trim() ? '検索結果' : 'すべてのプロジェクト'}</h1>
+                  <p>{view === 'favorites' ? '保存した作品を、いつでもここから開けます。' : view === 'shared' ? 'あなたがコミュニティに共有したプロジェクト。' : query.trim() ? 'タイトル・説明・プログラミング言語から検索しています。' : 'コミュニティで公開されているプロジェクト一覧。'}</p>
+                </div>
+                <span className="community-results-count"><strong>{visibleProjects.length}</strong> 件</span>
+              </div>
+
+              <div className="community-list-controls">
+                <label className="community-sort-select"><span>並び順</span><select aria-label="並び順" value={sort} onChange={event => setSort(event.target.value)}><option value="featured">おすすめ順</option><option value="recent">新着順</option><option value="stars">スター数順</option></select></label>
+                <div className="community-language-filter" aria-label="言語フィルター">
+                  <button type="button" className={languageFilter === 'all' ? 'active' : ''} onClick={() => setLanguageFilter('all')}>すべて</button>
+                  {languageOptions.map(language => <button type="button" key={language} className={languageFilter === language ? 'active' : ''} onClick={() => setLanguageFilter(language)}>{language}</button>)}
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="community-loading" role="status"><span className="community-loading-indicator" /><span>作品を読み込んでいます</span></div>
+              ) : visibleProjects.length ? (
+                <div className="community-project-grid">{visibleProjects.map((project, index) => <ProjectCard key={project.id} project={project} index={index} onOpen={openProject} onToggle={toggle} />)}</div>
+              ) : (
+                <div className="community-empty">
+                  <div className="community-empty-icon"><CommunityIcon name={view === 'favorites' ? 'heart' : view === 'shared' ? 'fork' : 'search'} size={24} /></div>
+                  <span className="community-section-kicker">{view === 'favorites' ? 'SAVED PROJECTS' : view === 'shared' ? 'YOUR PUBLICATIONS' : 'SEARCH RESULTS'}</span>
+                  <h3>{view === 'favorites' ? 'お気に入りはまだありません。' : view === 'shared' ? '共有した作品はまだありません。' : query.trim() ? '条件に合う作品がありません。' : '作品が見つかりませんでした。'}</h3>
+                  <p>{view === 'favorites' ? 'カードの「保存」を押すと、ここに表示されます。' : view === 'shared' ? 'IDE の共有設定からプロジェクトを公開してください。' : '検索語や言語フィルターを変えて、もう一度探してみてください。'}</p>
+                  <div className="community-empty-actions">{(query || languageFilter !== 'all') && <button type="button" className="community-secondary-button" onClick={() => { setQuery(''); setLanguageFilter('all') }}>検索条件をクリア</button>}</div>
+                </div>
+              )}
+            </section>
+          )}
+
+          <footer className="community-footer"><button type="button" onClick={() => { window.location.hash = '/dashboard' }}><img src="/poligo-logo.svg" alt="" /> <span>ダッシュボードへ</span></button><span>Poligo コミュニティ</span></footer>
+        </div>
       </div>
 
       {selected && (

@@ -1,5 +1,4 @@
 import pg from 'pg'
-import { randomBytes } from 'node:crypto'
 import { readJsonBody } from '../../../packages/protocol/src/requestBody.js'
 import { getDatabase } from './turso.js'
 import { decryptProjectSecrets } from './secretStore.js'
@@ -72,15 +71,7 @@ export async function initializeCommunityDatabase() {
     )
   `)
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_feed ON community_projects (featured DESC, published_at DESC)')
-  console.log('Poligo community schema core tables ready; initializing teams and notifications')
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS community_user_codes (
-      user_id STRING PRIMARY KEY,
-      invite_code STRING NOT NULL UNIQUE,
-      display_name STRING NOT NULL DEFAULT 'Poligoユーザー',
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    )
-  `)
+  console.log('Poligo community schema core tables ready; initializing notifications')
   await pool.query(`
     CREATE TABLE IF NOT EXISTS community_notifications (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -97,82 +88,7 @@ export async function initializeCommunityDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `)
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS community_teams (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      name STRING NOT NULL,
-      description STRING NOT NULL DEFAULT '',
-      visibility STRING NOT NULL DEFAULT 'public',
-      join_policy STRING NOT NULL DEFAULT 'manual',
-      owner_id STRING NOT NULL,
-      owner_name STRING NOT NULL DEFAULT 'Poligoユーザー',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      CONSTRAINT community_teams_name_length CHECK (length(name) BETWEEN 1 AND 80),
-      CONSTRAINT community_teams_description_length CHECK (length(description) <= 500),
-      CONSTRAINT community_teams_visibility CHECK (visibility IN ('public', 'private')),
-      CONSTRAINT community_teams_join_policy CHECK (join_policy IN ('auto', 'manual'))
-    )
-  `)
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS community_team_members (
-      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
-      user_id STRING NOT NULL,
-      display_name STRING NOT NULL DEFAULT 'Poligoユーザー',
-      role STRING NOT NULL DEFAULT 'member',
-      joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      PRIMARY KEY (team_id, user_id),
-      CONSTRAINT community_team_member_role CHECK (role IN ('owner', 'admin', 'member'))
-    )
-  `)
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS community_team_invites (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
-      inviter_id STRING NOT NULL,
-      inviter_name STRING NOT NULL,
-      invitee_id STRING NOT NULL,
-      invitee_name STRING NOT NULL,
-      status STRING NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      decided_at TIMESTAMPTZ,
-      CONSTRAINT community_team_invite_status CHECK (status IN ('pending', 'accepted', 'declined'))
-    )
-  `)
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS community_team_join_requests (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
-      user_id STRING NOT NULL,
-      display_name STRING NOT NULL,
-      status STRING NOT NULL DEFAULT 'pending',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      decided_at TIMESTAMPTZ,
-      CONSTRAINT community_team_request_status CHECK (status IN ('pending', 'approved', 'rejected'))
-    )
-  `)
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS community_team_messages (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      team_id UUID NOT NULL REFERENCES community_teams(id) ON DELETE CASCADE,
-      sender_id STRING NOT NULL,
-      sender_name STRING NOT NULL,
-      kind STRING NOT NULL DEFAULT 'message',
-      recipient_id STRING,
-      recipient_name STRING NOT NULL DEFAULT '',
-      body STRING NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      CONSTRAINT community_team_message_kind CHECK (kind IN ('message', 'announcement', 'dm')),
-      CONSTRAINT community_team_message_length CHECK (length(body) BETWEEN 1 AND 3000)
-    )
-  `)
-  console.log('Poligo community schema team tables ready; creating indexes')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_notifications_user_date ON community_notifications (user_id, created_at DESC)')
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_members_user ON community_team_members (user_id, joined_at DESC)')
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_teams_discovery ON community_teams (visibility, created_at DESC)')
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_invites_user_status ON community_team_invites (invitee_id, status, created_at DESC)')
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_requests_team_status ON community_team_join_requests (team_id, status, created_at DESC)')
-  await pool.query('CREATE INDEX IF NOT EXISTS idx_community_team_messages_feed ON community_team_messages (team_id, created_at DESC)')
 
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_projects_stars ON community_projects (stars DESC, published_at DESC)')
   await pool.query('CREATE INDEX IF NOT EXISTS idx_community_comments_project ON community_comments (project_id, created_at DESC)')
@@ -230,44 +146,6 @@ function userDisplayName(session) {
   return String(session?.user?.name || session?.user?.username || 'Poligoユーザー').trim().slice(0, 80) || 'Poligoユーザー'
 }
 
-function createInvitationCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  return [...randomBytes(5)].map(value => alphabet[value % alphabet.length]).join('')
-}
-
-async function ensureInvitationCode(userId, displayName) {
-  const existing = await pool.query(
-    'SELECT invite_code FROM community_user_codes WHERE user_id = $1',
-    [userId]
-  )
-
-  if (existing.rows[0]) {
-    await pool.query(
-      'UPDATE community_user_codes SET display_name = $1, updated_at = now() WHERE user_id = $2',
-      [displayName, userId]
-    )
-    return existing.rows[0].invite_code
-  }
-
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const inviteCode = createInvitationCode()
-    const inserted = await pool.query(
-      'INSERT INTO community_user_codes (user_id, invite_code, display_name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING invite_code',
-      [userId, inviteCode, displayName]
-    )
-
-    if (inserted.rows[0]) return inserted.rows[0].invite_code
-
-    const raced = await pool.query(
-      'SELECT invite_code FROM community_user_codes WHERE user_id = $1',
-      [userId]
-    )
-    if (raced.rows[0]) return raced.rows[0].invite_code
-  }
-
-  throw new Error('invitation code could not be generated')
-}
-
 async function createCommunityNotification(db, notification) {
   if (!notification.userId) return null
   const result = await db.query(
@@ -286,76 +164,17 @@ async function createCommunityNotification(db, notification) {
   return result.rows[0] || null
 }
 
-async function withCommunityTransaction(action) {
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const result = await action(client)
-    await client.query('COMMIT')
-    return result
-  } catch (error) {
-    await client.query('ROLLBACK').catch(() => {})
-    throw error
-  } finally {
-    client.release()
-  }
-}
-
-async function getTeamRole(teamId, userId, db = pool) {
-  if (!userId) return ''
-  const result = await db.query(
-    'SELECT role FROM community_team_members WHERE team_id = $1 AND user_id = $2',
-    [teamId, userId]
-  )
-  return result.rows[0]?.role || ''
-}
-
-function canManageTeam(role) {
-  return role === 'owner' || role === 'admin'
-}
-
-async function addTeamMember(db, teamId, userId, displayName, role = 'member') {
-  await db.query(
-    'INSERT INTO community_team_members (team_id, user_id, display_name, role) VALUES ($1, $2, $3, $4) ON CONFLICT (team_id, user_id) DO NOTHING',
-    [teamId, userId, displayName, role]
-  )
-}
-
-async function getTeamManagerIds(teamId, db = pool) {
-  const result = await db.query(
-    "SELECT user_id, display_name FROM community_team_members WHERE team_id = $1 AND role IN ('owner', 'admin')",
-    [teamId]
-  )
-  return result.rows
-}
-
-async function notifyTeamMembers(teamId, actorId, actorName, kind, title, body, resourceType = 'team') {
-  await pool.query(
-    'INSERT INTO community_notifications (user_id, actor_id, actor_name, kind, title, body, resource_type, resource_id) SELECT user_id, $2, $3, $4, $5, $6, $7, $1 FROM community_team_members WHERE team_id = $1 AND user_id != $2',
-    [
-      teamId,
-      actorId,
-      String(actorName || 'Poligo').slice(0, 80),
-      String(kind || 'team_activity').slice(0, 40),
-      String(title || 'チームの活動').slice(0, 160),
-      String(body || '').slice(0, 3000),
-      String(resourceType || 'team').slice(0, 40)
-    ]
-  )
-}
-
-async function requireTeamManager(teamId, userId, response) {
-  const role = await getTeamRole(teamId, userId)
-  if (!canManageTeam(role)) {
-    send(response, 403, { error: 'team owner or administrator access required' })
-    return ''
-  }
-  return role
-}
-
 async function handleCommunityRequest(request, response, { createProject } = {}) {
   const url = new URL(request.url || '/', 'http://localhost')
   const parts = url.pathname.split('/').filter(Boolean)
+  if (
+    parts[0] === 'api' &&
+    parts[1] === 'community' &&
+    ['teams', 'invites', 'invitation-code'].includes(parts[2])
+  ) {
+    send(response, 410, { error: 'The team feature has been removed.' })
+    return
+  }
   const session = await sessionFor(request)
   const userId = session?.user?.id || ''
   const requireUser = () => {
@@ -386,7 +205,22 @@ async function handleCommunityRequest(request, response, { createProject } = {})
       return
     }
 
-    const sort = url.searchParams.get('sort') === 'stars' ? 'stars DESC, published_at DESC' : 'featured DESC, published_at DESC'
+    if (url.searchParams.get('mine') === 'true') {
+      if (!requireUser()) return
+      const result = await pool.query(
+        'SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language, p.published_at, p.featured, p.stars, p.forks, (s.user_id IS NOT NULL) AS starred, (f.user_id IS NOT NULL) AS favorited, (SELECT count(*) FROM community_comments c WHERE c.project_id = p.id) AS comment_count FROM community_projects p LEFT JOIN community_stars s ON s.project_id = p.id AND s.user_id = $1 LEFT JOIN community_favorites f ON f.project_id = p.id AND f.user_id = $1 WHERE p.owner_id = $1 ORDER BY p.published_at DESC LIMIT 50',
+        [userId]
+      )
+      send(response, 200, { projects: result.rows })
+      return
+    }
+
+    const sortMode = url.searchParams.get('sort')
+    const sort = sortMode === 'stars'
+      ? 'p.stars DESC, p.published_at DESC'
+      : sortMode === 'recent'
+        ? 'p.published_at DESC'
+        : 'p.featured DESC, p.published_at DESC'
     const search = (url.searchParams.get('q') || '').trim().slice(0, 80)
     const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
     const result = await pool.query(
@@ -413,22 +247,15 @@ async function handleCommunityRequest(request, response, { createProject } = {})
 
   const validUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-  if (parts[2] === 'invitation-code' && parts.length === 3 && request.method === 'GET') {
-    if (!requireUser()) return
-    const inviteCode = await ensureInvitationCode(userId, userDisplayName(session))
-    send(response, 200, { inviteCode: '#' + inviteCode })
-    return
-  }
-
   if (parts[2] === 'notifications' && parts.length === 3 && request.method === 'GET') {
     if (!requireUser()) return
     const unreadOnly = url.searchParams.get('unreadOnly') === 'true'
     const result = await pool.query(
-      'SELECT id, actor_id, actor_name, kind, title, body, resource_type, resource_id, is_read, created_at FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND ($2 = false OR is_read = false) ORDER BY created_at DESC LIMIT 100',
+      `SELECT id, actor_id, actor_name, kind, title, body, resource_type, resource_id, is_read, created_at FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND resource_type NOT IN ('team', 'team_invite') AND kind NOT LIKE 'team_%' AND ($2 = false OR is_read = false) ORDER BY created_at DESC LIMIT 100`,
       [userId, unreadOnly]
     )
     const count = await pool.query(
-      'SELECT count(*) AS unread_count FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND is_read = false',
+      `SELECT count(*) AS unread_count FROM community_notifications WHERE user_id = $1 AND is_hidden = false AND resource_type NOT IN ('team', 'team_invite') AND kind NOT LIKE 'team_%' AND is_read = false`,
       [userId]
     )
     send(response, 200, { notifications: result.rows, unreadCount: Number(count.rows[0]?.unread_count || 0) })
@@ -444,529 +271,6 @@ async function handleCommunityRequest(request, response, { createProject } = {})
       [parts[3], userId]
     )
     send(response, result.rowCount ? 200 : 404, result.rowCount ? { ok: true } : { error: 'notification not found' })
-    return
-  }
-
-  if (parts[2] === 'invites' && parts.length === 5 && validUuid.test(parts[3]) && ['accept', 'decline'].includes(parts[4]) && request.method === 'POST') {
-    if (!requireUser()) return
-    const action = parts[4]
-    const result = await withCommunityTransaction(async client => {
-      const inviteResult = await client.query(
-        "SELECT i.id, i.team_id, i.inviter_id, i.inviter_name, i.invitee_id, i.status, t.name AS team_name FROM community_team_invites i JOIN community_teams t ON t.id = i.team_id WHERE i.id = $1 AND i.invitee_id = $2 AND i.status = 'pending'",
-        [parts[3], userId]
-      )
-      const invite = inviteResult.rows[0]
-      if (!invite) return { status: 404, error: 'pending team invite not found' }
-
-      if (action === 'accept') {
-        await addTeamMember(client, invite.team_id, userId, userDisplayName(session))
-      }
-      await client.query(
-        'UPDATE community_team_invites SET status = $1, decided_at = now() WHERE id = $2 AND invitee_id = $3',
-        [action === 'accept' ? 'accepted' : 'declined', invite.id, userId]
-      )
-      await client.query(
-        'UPDATE community_notifications SET is_read = true WHERE user_id = $1 AND resource_type = $2 AND resource_id = $3',
-        [userId, 'team_invite', invite.id]
-      )
-
-      const title = action === 'accept' ? 'チーム招待が承認されました' : 'チーム招待が辞退されました'
-      const body = action === 'accept'
-        ? userDisplayName(session) + ' が「' + invite.team_name + '」に参加しました。'
-        : userDisplayName(session) + ' が「' + invite.team_name + '」への招待を辞退しました。'
-      await createCommunityNotification(client, {
-        userId: invite.inviter_id,
-        actorId: userId,
-        actorName: userDisplayName(session),
-        kind: 'team_activity',
-        title,
-        body,
-        resourceType: 'team',
-        resourceId: invite.team_id
-      })
-      if (action === 'accept') {
-        const members = await client.query(
-          'SELECT user_id FROM community_team_members WHERE team_id = $1 AND user_id != $2',
-          [invite.team_id, userId]
-        )
-        for (const member of members.rows) {
-          if (member.user_id === invite.inviter_id) continue
-          await createCommunityNotification(client, {
-            userId: member.user_id,
-            actorId: userId,
-            actorName: userDisplayName(session),
-            kind: 'team_activity',
-            title: '新しいメンバーが参加しました',
-            body: userDisplayName(session) + ' が「' + invite.team_name + '」に参加しました。',
-            resourceType: 'team',
-            resourceId: invite.team_id
-          })
-        }
-      }
-      return { status: 200, ok: true, action, teamId: invite.team_id }
-    })
-    send(response, result.status || 200, result)
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 3 && request.method === 'GET') {
-    const search = (url.searchParams.get('q') || '').trim().slice(0, 80)
-    const result = await pool.query(
-      "SELECT t.id, t.name, t.description, t.visibility, t.join_policy, t.owner_id, t.owner_name, t.created_at, (SELECT count(*) FROM community_team_members m WHERE m.team_id = t.id) AS member_count, mine.role AS my_role, (SELECT r.status FROM community_team_join_requests r WHERE r.team_id = t.id AND r.user_id = $1 ORDER BY r.created_at DESC LIMIT 1) AS my_request_status FROM community_teams t LEFT JOIN community_team_members mine ON mine.team_id = t.id AND mine.user_id = $1 WHERE (t.visibility = 'public' OR mine.user_id IS NOT NULL) AND ($2 = '' OR t.name ILIKE '%' || $2 || '%' OR t.description ILIKE '%' || $2 || '%') ORDER BY t.created_at DESC LIMIT 60",
-      [userId || null, search]
-    )
-    send(response, 200, { teams: result.rows })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 3 && request.method === 'POST') {
-    if (!requireUser()) return
-    const payload = await readJsonBody(request, { maxBytes: 20_000 })
-    const name = String(payload.name || '').trim().slice(0, 80)
-    const description = normalizeDescription(payload.description)
-    const visibility = payload.visibility === 'private' ? 'private' : 'public'
-    const joinPolicy = visibility === 'private' ? 'manual' : payload.joinPolicy === 'auto' ? 'auto' : 'manual'
-    if (!name) {
-      send(response, 400, { error: 'team name is required' })
-      return
-    }
-    const team = await withCommunityTransaction(async client => {
-      const created = await client.query(
-        'INSERT INTO community_teams (name, description, visibility, join_policy, owner_id, owner_name) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, description, visibility, join_policy, owner_id, owner_name, created_at',
-        [name, description, visibility, joinPolicy, userId, userDisplayName(session)]
-      )
-      const row = created.rows[0]
-      await addTeamMember(client, row.id, userId, userDisplayName(session), 'owner')
-      return row
-    })
-    send(response, 201, { team: { ...team, my_role: 'owner', member_count: 1 } })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length >= 4 && !validUuid.test(parts[3])) {
-    send(response, 400, { error: 'invalid team id' })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 4 && request.method === 'GET') {
-    const result = await pool.query(
-      'SELECT id, name, description, visibility, join_policy, owner_id, owner_name, created_at, updated_at, (SELECT count(*) FROM community_team_members m WHERE m.team_id = community_teams.id) AS member_count FROM community_teams WHERE id = $1',
-      [parts[3]]
-    )
-    const team = result.rows[0]
-    if (!team) {
-      send(response, 404, { error: 'team not found' })
-      return
-    }
-    const role = await getTeamRole(team.id, userId)
-    if (team.visibility === 'private' && !role) {
-      send(response, 404, { error: 'team not found' })
-      return
-    }
-    const pending = userId
-      ? await pool.query("SELECT status FROM community_team_join_requests WHERE team_id = $1 AND user_id = $2 ORDER BY created_at DESC LIMIT 1", [team.id, userId])
-      : { rows: [] }
-    const members = await pool.query(
-      'SELECT user_id, display_name, role, joined_at FROM community_team_members WHERE team_id = $1 ORDER BY CASE role WHEN \'owner\' THEN 0 WHEN \'admin\' THEN 1 ELSE 2 END, joined_at ASC',
-      [team.id]
-    )
-    const responseBody = {
-      team: { ...team, my_role: role, is_member: Boolean(role), my_request_status: pending.rows[0]?.status || '' },
-      members: members.rows
-    }
-    if (canManageTeam(role)) {
-      const requests = await pool.query(
-        "SELECT id, user_id, display_name, status, created_at FROM community_team_join_requests WHERE team_id = $1 AND status = 'pending' ORDER BY created_at ASC LIMIT 100",
-        [team.id]
-      )
-      responseBody.requests = requests.rows
-    } else {
-      responseBody.requests = []
-    }
-    send(response, 200, responseBody)
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 4 && request.method === 'PATCH') {
-    if (!requireUser()) return
-    const role = await requireTeamManager(parts[3], userId, response)
-    if (!role) return
-    const payload = await readJsonBody(request, { maxBytes: 20_000 })
-    const name = String(payload.name || '').trim().slice(0, 80)
-    const description = normalizeDescription(payload.description)
-    const visibility = payload.visibility === 'private' ? 'private' : 'public'
-    const joinPolicy = visibility === 'private' ? 'manual' : payload.joinPolicy === 'auto' ? 'auto' : 'manual'
-    if (!name) {
-      send(response, 400, { error: 'team name is required' })
-      return
-    }
-    const updated = await pool.query(
-      'UPDATE community_teams SET name = $1, description = $2, visibility = $3, join_policy = $4, updated_at = now() WHERE id = $5 RETURNING id, name, description, visibility, join_policy, owner_id, owner_name, created_at, updated_at',
-      [name, description, visibility, joinPolicy, parts[3]]
-    )
-    send(response, updated.rowCount ? 200 : 404, updated.rowCount ? { team: updated.rows[0] } : { error: 'team not found' })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 4 && request.method === 'DELETE') {
-    if (!requireUser()) return
-    const role = await getTeamRole(parts[3], userId)
-    if (role !== 'owner') {
-      send(response, 403, { error: 'only the team owner can delete a team' })
-      return
-    }
-    const team = await pool.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
-    const members = await pool.query('SELECT user_id FROM community_team_members WHERE team_id = $1 AND user_id != $2', [parts[3], userId])
-    for (const member of members.rows) {
-      await createCommunityNotification(pool, {
-        userId: member.user_id,
-        actorId: userId,
-        actorName: userDisplayName(session),
-        kind: 'team_activity',
-        title: 'チームが削除されました',
-        body: '「' + (team.rows[0]?.name || 'チーム') + '」はオーナーによって削除されました。',
-        resourceType: 'team',
-        resourceId: parts[3]
-      })
-    }
-    await pool.query('DELETE FROM community_teams WHERE id = $1', [parts[3]])
-    send(response, 200, { ok: true })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 5 && parts[4] === 'join' && request.method === 'POST') {
-    if (!requireUser()) return
-    const result = await pool.query('SELECT id, name, description, visibility, join_policy, owner_id FROM community_teams WHERE id = $1', [parts[3]])
-    const team = result.rows[0]
-    if (!team || team.visibility !== 'public') {
-      send(response, 404, { error: 'public team not found' })
-      return
-    }
-    const role = await getTeamRole(team.id, userId)
-    if (role) {
-      send(response, 200, { joined: true, teamId: team.id })
-      return
-    }
-    const previous = await pool.query(
-      "SELECT id FROM community_team_join_requests WHERE team_id = $1 AND user_id = $2 AND status = 'pending' LIMIT 1",
-      [team.id, userId]
-    )
-    if (previous.rows[0]) {
-      send(response, 200, { pending: true, teamId: team.id })
-      return
-    }
-    if (team.join_policy === 'auto') {
-      await withCommunityTransaction(async client => {
-        await addTeamMember(client, team.id, userId, userDisplayName(session))
-      })
-      await notifyTeamMembers(team.id, userId, userDisplayName(session), 'team_activity', '新しいメンバーが参加しました', userDisplayName(session) + ' が「' + team.name + '」に参加しました。')
-      send(response, 201, { joined: true, teamId: team.id })
-      return
-    }
-    await withCommunityTransaction(async client => {
-      await client.query(
-        "INSERT INTO community_team_join_requests (team_id, user_id, display_name, status) VALUES ($1, $2, $3, 'pending')",
-        [team.id, userId, userDisplayName(session)]
-      )
-      const managers = await getTeamManagerIds(team.id, client)
-      for (const manager of managers) {
-        await createCommunityNotification(client, {
-          userId: manager.user_id,
-          actorId: userId,
-          actorName: userDisplayName(session),
-          kind: 'team_join_request',
-          title: 'チームへの参加申請',
-          body: userDisplayName(session) + ' が「' + team.name + '」への参加を申請しました。',
-          resourceType: 'team',
-          resourceId: team.id
-        })
-      }
-    })
-    send(response, 201, { pending: true, teamId: team.id })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 5 && parts[4] === 'invites' && request.method === 'POST') {
-    if (!requireUser()) return
-    const role = await requireTeamManager(parts[3], userId, response)
-    if (!role) return
-    const payload = await readJsonBody(request, { maxBytes: 8_000 })
-    const inviteCode = String(payload.inviteCode || '').trim().replace(/^#/, '').toUpperCase().slice(0, 5)
-    if (!inviteCode) {
-      send(response, 400, { error: 'invitation ID is required' })
-      return
-    }
-    const targetResult = await pool.query('SELECT user_id, display_name FROM community_user_codes WHERE invite_code = $1', [inviteCode])
-    const target = targetResult.rows[0]
-    if (!target) {
-      send(response, 404, { error: 'invitation ID not found' })
-      return
-    }
-    if (target.user_id === userId) {
-      send(response, 400, { error: 'you cannot invite yourself' })
-      return
-    }
-    if (await getTeamRole(parts[3], target.user_id)) {
-      send(response, 409, { error: 'that user is already a team member' })
-      return
-    }
-    const pendingInvite = await pool.query(
-      "SELECT id FROM community_team_invites WHERE team_id = $1 AND invitee_id = $2 AND status = 'pending' LIMIT 1",
-      [parts[3], target.user_id]
-    )
-    if (pendingInvite.rows[0]) {
-      send(response, 409, { error: 'a pending invite already exists for that user' })
-      return
-    }
-    const teamResult = await pool.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
-    if (!teamResult.rows[0]) {
-      send(response, 404, { error: 'team not found' })
-      return
-    }
-    const invite = await withCommunityTransaction(async client => {
-      const created = await client.query(
-        "INSERT INTO community_team_invites (team_id, inviter_id, inviter_name, invitee_id, invitee_name, status) VALUES ($1, $2, $3, $4, $5, 'pending') RETURNING id, team_id, invitee_id, status, created_at",
-        [parts[3], userId, userDisplayName(session), target.user_id, target.display_name]
-      )
-      const row = created.rows[0]
-      await createCommunityNotification(client, {
-        userId: target.user_id,
-        actorId: userId,
-        actorName: userDisplayName(session),
-        kind: 'team_invite',
-        title: 'チームへの招待が届きました',
-        body: userDisplayName(session) + ' が「' + teamResult.rows[0].name + '」に招待しました。',
-        resourceType: 'team_invite',
-        resourceId: row.id
-      })
-      return row
-    })
-    send(response, 201, { invite })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 6 && parts[4] === 'requests' && validUuid.test(parts[5]) && request.method === 'PATCH') {
-    if (!requireUser()) return
-    const role = await requireTeamManager(parts[3], userId, response)
-    if (!role) return
-    const payload = await readJsonBody(request, { maxBytes: 4_000 })
-    const action = payload.action
-    if (!['approve', 'reject'].includes(action)) {
-      send(response, 400, { error: 'action must be approve or reject' })
-      return
-    }
-    const outcome = await withCommunityTransaction(async client => {
-      const requestResult = await client.query(
-        "SELECT id, user_id, display_name FROM community_team_join_requests WHERE id = $1 AND team_id = $2 AND status = 'pending'",
-        [parts[5], parts[3]]
-      )
-      const joinRequest = requestResult.rows[0]
-      if (!joinRequest) return { status: 404, error: 'pending join request not found' }
-      const updated = await client.query(
-        'UPDATE community_team_join_requests SET status = $1, decided_at = now() WHERE id = $2 RETURNING id',
-        [action === 'approve' ? 'approved' : 'rejected', joinRequest.id]
-      )
-      if (!updated.rowCount) return { status: 404, error: 'pending join request not found' }
-      let teamName = 'チーム'
-      const teamResult = await client.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
-      if (teamResult.rows[0]) teamName = teamResult.rows[0].name
-      if (action === 'approve') await addTeamMember(client, parts[3], joinRequest.user_id, joinRequest.display_name)
-      await createCommunityNotification(client, {
-        userId: joinRequest.user_id,
-        actorId: userId,
-        actorName: userDisplayName(session),
-        kind: 'team_activity',
-        title: action === 'approve' ? 'チームへの参加が承認されました' : 'チームへの参加申請が拒否されました',
-        body: action === 'approve' ? '「' + teamName + '」への参加が承認されました。' : '「' + teamName + '」への参加申請は承認されませんでした。',
-        resourceType: 'team',
-        resourceId: parts[3]
-      })
-      return { status: 200, ok: true, action, userId: joinRequest.user_id }
-    })
-    send(response, outcome.status || 200, outcome)
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 5 && parts[4] === 'leave' && request.method === 'POST') {
-    if (!requireUser()) return
-    const role = await getTeamRole(parts[3], userId)
-    if (!role) {
-      send(response, 404, { error: 'team membership not found' })
-      return
-    }
-    if (role === 'owner') {
-      send(response, 409, { error: 'the owner must transfer ownership or delete the team before leaving' })
-      return
-    }
-    const team = await pool.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
-    await pool.query('DELETE FROM community_team_members WHERE team_id = $1 AND user_id = $2', [parts[3], userId])
-    await notifyTeamMembers(parts[3], userId, userDisplayName(session), 'team_activity', 'メンバーがチームを退出しました', userDisplayName(session) + ' が「' + (team.rows[0]?.name || 'チーム') + '」を退出しました。')
-    send(response, 200, { ok: true })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 6 && parts[4] === 'members' && request.method === 'PATCH') {
-    if (!requireUser()) return
-    const role = await getTeamRole(parts[3], userId)
-    if (role !== 'owner') {
-      send(response, 403, { error: 'only the team owner can change member roles' })
-      return
-    }
-    const payload = await readJsonBody(request, { maxBytes: 4_000 })
-    const newRole = payload.role
-    if (!['admin', 'member'].includes(newRole)) {
-      send(response, 400, { error: 'role must be admin or member' })
-      return
-    }
-    if (parts[5] === userId) {
-      send(response, 400, { error: 'the owner role cannot be changed here' })
-      return
-    }
-    const member = await pool.query(
-      'UPDATE community_team_members SET role = $1 WHERE team_id = $2 AND user_id = $3 AND role != $4 RETURNING user_id, display_name, role',
-      [newRole, parts[3], parts[5], 'owner']
-    )
-    if (!member.rows[0]) {
-      send(response, 404, { error: 'team member not found' })
-      return
-    }
-    const team = await pool.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
-    await createCommunityNotification(pool, {
-      userId: parts[5],
-      actorId: userId,
-      actorName: userDisplayName(session),
-      kind: 'team_activity',
-      title: newRole === 'admin' ? 'チーム管理者に任命されました' : 'チーム管理者の権限が変更されました',
-      body: '「' + (team.rows[0]?.name || 'チーム') + '」での役割が「' + (newRole === 'admin' ? '管理者' : 'メンバー') + '」に変更されました。',
-      resourceType: 'team',
-      resourceId: parts[3]
-    })
-    send(response, 200, { member: member.rows[0] })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 6 && parts[4] === 'members' && request.method === 'DELETE') {
-    if (!requireUser()) return
-    const role = await requireTeamManager(parts[3], userId, response)
-    if (!role) return
-    if (parts[5] === userId) {
-      send(response, 400, { error: 'use the leave action to remove yourself' })
-      return
-    }
-    const targetRole = await getTeamRole(parts[3], parts[5])
-    if (!targetRole || targetRole === 'owner' || (targetRole === 'admin' && role !== 'owner')) {
-      send(response, 403, { error: 'that member cannot be removed by your role' })
-      return
-    }
-    await pool.query('DELETE FROM community_team_members WHERE team_id = $1 AND user_id = $2', [parts[3], parts[5]])
-    await createCommunityNotification(pool, {
-      userId: parts[5],
-      actorId: userId,
-      actorName: userDisplayName(session),
-      kind: 'team_activity',
-      title: 'チームメンバーから外されました',
-      body: '管理者によってチームから外されました。',
-      resourceType: 'team',
-      resourceId: parts[3]
-    })
-    send(response, 200, { ok: true })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 5 && parts[4] === 'messages' && request.method === 'GET') {
-    if (!requireUser()) return
-    const role = await getTeamRole(parts[3], userId)
-    if (!role) {
-      send(response, 403, { error: 'team membership required' })
-      return
-    }
-    const recipientId = (url.searchParams.get('recipientId') || '').trim().slice(0, 128)
-    let result
-    if (recipientId) {
-      if (!(await getTeamRole(parts[3], recipientId))) {
-        send(response, 404, { error: 'team member not found' })
-        return
-      }
-      result = await pool.query(
-        'SELECT id, team_id, sender_id, sender_name, kind, recipient_id, recipient_name, body, created_at FROM (SELECT id, team_id, sender_id, sender_name, kind, recipient_id, recipient_name, body, created_at FROM community_team_messages WHERE team_id = $1 AND kind = \'dm\' AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2)) ORDER BY created_at DESC LIMIT 100) recent_messages ORDER BY created_at ASC',
-        [parts[3], userId, recipientId]
-      )
-    } else {
-      result = await pool.query(
-        "SELECT id, team_id, sender_id, sender_name, kind, recipient_id, recipient_name, body, created_at FROM (SELECT id, team_id, sender_id, sender_name, kind, recipient_id, recipient_name, body, created_at FROM community_team_messages WHERE team_id = $1 AND kind IN ('message', 'announcement') ORDER BY created_at DESC LIMIT 100) recent_messages ORDER BY created_at ASC",
-        [parts[3]]
-      )
-    }
-    send(response, 200, { messages: result.rows })
-    return
-  }
-
-  if (parts[2] === 'teams' && parts.length === 5 && parts[4] === 'messages' && request.method === 'POST') {
-    if (!requireUser()) return
-    const role = await getTeamRole(parts[3], userId)
-    if (!role) {
-      send(response, 403, { error: 'team membership required' })
-      return
-    }
-    const payload = await readJsonBody(request, { maxBytes: 8_000 })
-    const body = typeof payload.body === 'string' ? payload.body.trim().slice(0, 3000) : ''
-    if (!body) {
-      send(response, 400, { error: 'message body is required' })
-      return
-    }
-    let kind = payload.kind === 'announcement' ? 'announcement' : 'message'
-    const recipientId = typeof payload.recipientId === 'string' ? payload.recipientId.trim().slice(0, 128) : ''
-    if (recipientId) kind = 'dm'
-    if (kind === 'announcement' && !canManageTeam(role)) {
-      send(response, 403, { error: 'team owner or administrator access required to send an announcement' })
-      return
-    }
-    let recipientName = ''
-    if (kind === 'dm') {
-      if (!recipientId || recipientId === userId) {
-        send(response, 400, { error: 'a different team member is required for direct messages' })
-        return
-      }
-      const target = await pool.query(
-        'SELECT display_name FROM community_team_members WHERE team_id = $1 AND user_id = $2',
-        [parts[3], recipientId]
-      )
-      if (!target.rows[0]) {
-        send(response, 404, { error: 'team member not found' })
-        return
-      }
-      recipientName = target.rows[0].display_name
-    }
-    const inserted = await pool.query(
-      'INSERT INTO community_team_messages (team_id, sender_id, sender_name, kind, recipient_id, recipient_name, body) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, team_id, sender_id, sender_name, kind, recipient_id, recipient_name, body, created_at',
-      [parts[3], userId, userDisplayName(session), kind, kind === 'dm' ? recipientId : null, recipientName, body]
-    )
-    const message = inserted.rows[0]
-    if (kind === 'dm') {
-      await createCommunityNotification(pool, {
-        userId: recipientId,
-        actorId: userId,
-        actorName: userDisplayName(session),
-        kind: 'team_dm',
-        title: 'チームメンバーから DM が届きました',
-        body: body.slice(0, 500),
-        resourceType: 'team',
-        resourceId: parts[3]
-      })
-    } else {
-      const team = await pool.query('SELECT name FROM community_teams WHERE id = $1', [parts[3]])
-      const isAnnouncement = kind === 'announcement'
-      await notifyTeamMembers(
-        parts[3],
-        userId,
-        userDisplayName(session),
-        isAnnouncement ? 'team_announcement' : 'team_message',
-        isAnnouncement ? 'チーム全体通知: ' + (team.rows[0]?.name || 'チーム') : 'チームに新しいメッセージがあります',
-        body,
-        'team'
-      )
-    }
-    send(response, 201, { message })
     return
   }
 
@@ -1180,8 +484,14 @@ async function handleCommunityRequest(request, response, { createProject } = {})
 
   if (parts[2] === 'featured' && parts.length === 3 && request.method === 'GET') {
     const result = await pool.query(
-      `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language, p.published_at, p.stars, p.forks
-       FROM community_projects p WHERE p.featured = true ORDER BY p.featured_at DESC NULLS LAST LIMIT 12`
+      `SELECT p.id, p.source_project_id, p.owner_id, p.name, p.description, p.language, p.published_at, p.stars, p.forks,
+              (s.user_id IS NOT NULL) AS starred,
+              (f.user_id IS NOT NULL) AS favorited
+       FROM community_projects p
+       LEFT JOIN community_stars s ON s.project_id = p.id AND s.user_id = $1
+       LEFT JOIN community_favorites f ON f.project_id = p.id AND f.user_id = $1
+       WHERE p.featured = true ORDER BY p.featured_at DESC NULLS LAST LIMIT 12`,
+      [userId || null]
     )
     send(response, 200, { projects: result.rows })
     return
