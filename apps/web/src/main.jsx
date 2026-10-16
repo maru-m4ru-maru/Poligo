@@ -851,7 +851,6 @@ function IDE({ projectId }) {
   const [sourceError, setSourceError] = useState('')
   const [aiMessages, setAiMessages] = useState([])
   const [aiPrompt, setAiPrompt] = useState('')
-  const [aiMode, setAiMode] = useState('auto')
   const [aiBusy, setAiBusy] = useState(false)
   const [aiAutoApply, setAiAutoApply] = useState(() => localStorage.getItem('poligo-ai-auto-apply') === 'true')
   const [dialog, setDialog] = useState(null)
