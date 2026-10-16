@@ -351,8 +351,8 @@ test('community navigation uses plain buttons and notifications work', async ({ 
 })
 
 
-test('community plain list stays usable at desktop and mobile widths', async ({ page }) => {
-  await mockAuthenticatedApi(page)
+test('community feed is fetched on demand and the footer stays fixed', async ({ page }) => {
+  const fixture = await mockAuthenticatedApi(page)
   await page.setViewportSize({ width: 1440, height: 960 })
   await page.goto('/#/community')
 
@@ -367,25 +367,62 @@ test('community plain list stays usable at desktop and mobile widths', async ({ 
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
     '.community-header', '.community-header-search', '.community-nav',
-    '.community-main', '.community-projects-toolbar', '.community-project-row'
+    '.community-main', '.community-projects-toolbar', '.community-project-row', '.community-footer'
   ])
+
+  const footer = page.locator('.community-footer')
+  const footerPosition = await footer.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return {
+      position: getComputedStyle(element).position,
+      bottomGap: window.innerHeight - rect.bottom
+    }
+  })
+  expect(footerPosition.position).toBe('fixed')
+  expect(Math.abs(footerPosition.bottomGap)).toBeLessThanOrEqual(1)
+  await expect(footer.getByRole('button', { name: 'IDEへ戻る' })).toBeVisible()
+  await expect(footer.getByRole('button', { name: '利用規約' })).toBeVisible()
+  await expect(footer.getByRole('button', { name: 'プライバシーポリシー' })).toBeVisible()
+
+  const feedRequests = () => fixture.apiRequests.filter(request =>
+    request.method === 'GET' &&
+    ['/api/community/projects', '/api/community/featured', '/api/community/favorites'].includes(request.pathname)
+  )
+  expect(feedRequests().length).toBeLessThanOrEqual(2)
+
+  await page.getByRole('button', { name: '新着', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '新着', exact: true })).toBeVisible()
+  await expect(page.locator('.community-project-row')).toHaveCount(1)
+  const afterRecent = fixture.apiRequests.filter(request => request.method === 'GET' && request.pathname === '/api/community/projects').length
+  expect(afterRecent).toBe(1)
+
+  await page.getByRole('button', { name: '人気', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '人気', exact: true })).toBeVisible()
+  await expect(page.locator('.community-project-row')).toHaveCount(1)
+  const afterPopular = fixture.apiRequests.filter(request => request.method === 'GET' && request.pathname === '/api/community/projects').length
+  expect(afterPopular).toBe(2)
+
+  await page.getByRole('button', { name: '新着', exact: true }).click()
+  await expect(page.getByRole('heading', { name: '新着', exact: true })).toBeVisible()
+  const afterCachedRecent = fixture.apiRequests.filter(request => request.method === 'GET' && request.pathname === '/api/community/projects').length
+  expect(afterCachedRecent).toBe(afterPopular)
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.reload()
-  await expect(page.locator('.community-project-row')).toHaveCount(1)
+  await expect(page.locator('.community-footer')).toBeVisible()
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
     '.community-header', '.community-header-search', '.community-nav',
-    '.community-main', '.community-projects-toolbar', '.community-project-row'
+    '.community-main', '.community-projects-toolbar', '.community-project-row', '.community-footer'
   ])
 
   await page.setViewportSize({ width: 320, height: 740 })
   await page.reload()
-  await expect(page.locator('.community-project-row')).toHaveCount(1)
+  await expect(page.locator('.community-footer')).toBeVisible()
   await assertNoHorizontalOverflow(page)
   await assertFitsHorizontally(page, [
     '.community-header', '.community-header-search', '.community-nav',
-    '.community-main', '.community-projects-toolbar', '.community-project-row'
+    '.community-main', '.community-projects-toolbar', '.community-project-row', '.community-footer'
   ])
 })
 
