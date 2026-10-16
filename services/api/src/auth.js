@@ -9,7 +9,8 @@ import { kyselyAdapter } from '@better-auth/kysely-adapter'
 import { LibsqlDialect } from '@libsql/kysely-libsql'
 import { Kysely } from 'kysely'
 import { getDatabase } from './turso.js'
-import { ensureUserUsernameColumn } from './authSchema.js'
+import { ensureUserUsernameColumn, ensureUserPolicyColumns } from './authSchema.js'
+import { createPolicyConsentFields } from './policyConsent.js'
 import { getOriginPolicy } from './authPolicy.js'
 
 const databaseUrl = process.env.TURSO_DATABASE_URL || ''
@@ -86,6 +87,42 @@ export const auth = betterAuth({
         type: 'string',
         required: false,
         input: true
+      },
+      termsAccepted: {
+        type: 'boolean',
+        required: true,
+        input: true,
+        returned: false
+      },
+      privacyPolicyAccepted: {
+        type: 'boolean',
+        required: true,
+        input: true,
+        returned: false
+      },
+      termsAcceptedAt: {
+        type: 'string',
+        required: false,
+        input: false,
+        returned: false
+      },
+      privacyPolicyAcceptedAt: {
+        type: 'string',
+        required: false,
+        input: false,
+        returned: false
+      },
+      termsVersion: {
+        type: 'string',
+        required: false,
+        input: false,
+        returned: false
+      },
+      privacyPolicyVersion: {
+        type: 'string',
+        required: false,
+        input: false,
+        returned: false
       }
     }
   },
@@ -99,8 +136,10 @@ export const auth = betterAuth({
           let name
           let email
           let username
+          let consentFields
 
           try {
+            consentFields = createPolicyConsentFields(user)
             email = normalizeEmailAddress(user.email)
             name = typeof user.name === 'string' ? user.name.trim() : ''
 
@@ -151,7 +190,8 @@ export const auth = betterAuth({
               ...user,
               name,
               username,
-              email
+              email,
+              ...consentFields
             }
           }
         }
@@ -193,7 +233,13 @@ export async function initializeAuthDatabase() {
       emailVerified BOOLEAN NOT NULL,
       image TEXT,
       createdAt TIMESTAMP NOT NULL,
-      updatedAt TIMESTAMP NOT NULL
+      updatedAt TIMESTAMP NOT NULL,
+      termsAccepted BOOLEAN NOT NULL DEFAULT 0,
+      privacyPolicyAccepted BOOLEAN NOT NULL DEFAULT 0,
+      termsAcceptedAt TEXT,
+      privacyPolicyAcceptedAt TEXT,
+      termsVersion TEXT,
+      privacyPolicyVersion TEXT
     )`,
     `CREATE TABLE IF NOT EXISTS "session" (
       id TEXT PRIMARY KEY NOT NULL,
@@ -248,6 +294,7 @@ export async function initializeAuthDatabase() {
   ], 'immediate')
 
   await ensureUserUsernameColumn(database)
+  await ensureUserPolicyColumns(database)
 
   const adminUsername = 'maru_m4ru_maru'
   const adminUserStatement = await database.prepare(
