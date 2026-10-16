@@ -66,7 +66,7 @@ async function mockAuthenticatedApi(page) {
     favorited: false,
     files: {
       'main.py': 'print("Community layout")',
-      'src/utils.py': 'def greet():\\n    return "Nested source test"'
+      'src/utils.py': 'def greet():\n    return "Nested source test"'
     }
   }
 
