@@ -2830,25 +2830,6 @@ function IDE({ projectId }) {
                       <div className="ai-panel-head">
                         <div>
                           <strong>Poligo AI</strong>
-                          <span>OpenRouter</span>
-                        </div>
-                        <div className="ai-model-picker" role="group" aria-label="AIモデル">
-                          {[
-                            ['auto', '自動'],
-                            ['fast', '速度重視'],
-                            ['code', '賢さ重視'],
-                            ['reasoning', '推論重視']
-                          ].map(([id, label]) => (
-                            <button
-                              key={id}
-                              type="button"
-                              className={aiMode === id ? 'active' : ''}
-                              onClick={() => setAiMode(id)}
-                              disabled={aiBusy}
-                            >
-                              {label}
-                            </button>
-                          ))}
                         </div>
                       </div>
 
