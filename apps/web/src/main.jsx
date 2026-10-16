@@ -33,6 +33,7 @@ const AccountPage = lazy(() => import('./AccountPage'))
 const AdminPage = lazy(() => import('./AdminPage'))
 const CommunityPage = lazy(() => import('./CommunityPage'))
 const CommunityProjectPage = lazy(() => import('./CommunityProjectPage'))
+const CommunityProjectSourcePage = lazy(() => import('./CommunityProjectSourcePage'))
 
 const DEFAULT_FILES = {
   'index.html': '<!doctype html>\n<html>\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>Poligo</title>\n  </head>\n  <body>\n    <main class="app">\n      <h1>Hello, Poligo.</h1>\n      <p>IDEベンダーに縛られずに開発できます。</p>\n    </main>\n    <script src="app.js"></script>\n  </body>\n</html>',
@@ -75,11 +76,11 @@ const FILE_META = {
   json: { language: 'json', kind: 'json' },
   md: { language: 'markdown', kind: 'markdown' },
   txt: { language: 'plaintext', kind: 'text' },
-  xml: { language: 'xml', kind: 'text' },
-  svg: { language: 'xml', kind: 'text' },
-  yaml: { language: 'yaml', kind: 'text' },
-  yml: { language: 'yaml', kind: 'text' },
-  toml: { language: 'ini', kind: 'text' }
+  xml: { language: 'xml', kind: 'xml' },
+  svg: { language: 'xml', kind: 'svg' },
+  yaml: { language: 'yaml', kind: 'yaml' },
+  yml: { language: 'yaml', kind: 'yaml' },
+  toml: { language: 'ini', kind: 'toml' }
 }
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -105,16 +106,29 @@ const SERVER_LANGUAGES = new Set([
 ])
 
 const FILE_ICONS = {
-  html: '/icons/file-code.svg', css: '/icons/file-code.svg',
-  js: '/icons/file-code.svg', node: '/icons/file-code.svg',
-  python: '/icons/file-code.svg', java: '/icons/file-code.svg',
-  go: '/icons/file-code.svg', rust: '/icons/file-code.svg',
-  php: '/icons/file-code.svg', ruby: '/icons/file-code.svg',
-  kotlin: '/icons/file-code.svg', c: '/icons/file-code.svg',
-  cpp: '/icons/file-code.svg', csharp: '/icons/file-code.svg',
-  typescript: '/icons/file-code.svg',
-  json: '/icons/file-braces.svg', markdown: '/icons/file-text.svg',
-  env: '/icons/file-key.svg', config: '/icons/file-cog.svg',
+  html: '/icons/html5.svg',
+  css: '/icons/css.svg',
+  js: '/icons/javascript.svg',
+  node: '/icons/nodejs.svg',
+  python: '/icons/python.svg',
+  java: '/icons/java.svg',
+  go: '/icons/go.svg',
+  rust: '/icons/rust.svg',
+  php: '/icons/php.svg',
+  ruby: '/icons/ruby.svg',
+  kotlin: '/icons/kotlin.svg',
+  c: '/icons/c.svg',
+  cpp: '/icons/cplusplus.svg',
+  csharp: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',
+  typescript: '/icons/typescript.svg',
+  json: '/icons/file-braces.svg',
+  markdown: '/icons/file-text.svg',
+  env: '/icons/file-key.svg',
+  config: '/icons/file-cog.svg',
+  yaml: '/icons/file-cog.svg',
+  toml: '/icons/file-cog.svg',
+  xml: '/icons/file-code.svg',
+  svg: '/icons/file-code.svg',
   text: '/icons/file-text.svg'
 }
 function getFileMeta(name) {
@@ -3922,6 +3936,7 @@ function getRoutePath() {
     hashPath === '/admin' ||
     hashPath === '/community' ||
     /^\/community\/project\/[^/]+$/.test(hashPath) ||
+    /^\/community\/project\/[^/]+\/source\/[^/]+$/.test(hashPath) ||
     hashPath === '/ide' ||
     /^\/ide\/[^/]+$/.test(hashPath)
   ) {
@@ -3938,6 +3953,7 @@ function navigate(path) {
     path === '/admin' ||
     path === '/community' ||
     /^\/community\/project\/[^/]+$/.test(path) ||
+    /^\/community\/project\/[^/]+\/source\/[^/]+$/.test(path) ||
     path === '/ide' ||
     path.startsWith('/ide/')
   ) {
@@ -3958,7 +3974,8 @@ function AppRouter() {
   const accountPath = pathname === '/account'
   const communityPath = pathname === '/community'
   const communityProjectPath = /^\/community\/project\/[^/]+$/.test(pathname)
-  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community' || communityProjectPath
+  const communityProjectSourcePath = /^\/community\/project\/[^/]+\/source\/[^/]+$/.test(pathname)
+  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community' || communityProjectPath || communityProjectSourcePath
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
@@ -4030,6 +4047,13 @@ function AppRouter() {
 
   if (accountPath) {
     return <AccountPage session={session} />
+  }
+
+  if (communityProjectSourcePath) {
+    const routeMatch = pathname.match(/^\/community\/project\/([^/]+)\/source\/([^/]+)$/)
+    const projectId = decodeURIComponent(routeMatch[1])
+    const filePath = decodeURIComponent(routeMatch[2])
+    return <CommunityProjectSourcePage session={session} projectId={projectId} filePath={filePath} />
   }
 
   if (communityProjectPath) {

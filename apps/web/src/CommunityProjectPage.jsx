@@ -177,10 +177,21 @@ export default function CommunityProjectPage({ session, projectId }) {
               {Object.keys(project.files || {}).length ? (
                 <div className="community-detail-files">
                   {Object.keys(project.files || {}).sort().map(path => (
-                    <div key={path}>
+                    <button
+                      key={path}
+                      type="button"
+                      className="community-detail-file"
+                      onClick={() => {
+                        window.location.hash = '/community/project/' +
+                          encodeURIComponent(project.id) +
+                          '/source/' +
+                          encodeURIComponent(path)
+                      }}
+                      aria-label={path + ' のソースコードを表示'}
+                    >
                       <code><CommunityIcon name="file-code" size={14} /> {path}</code>
                       <span>{String(project.files[path]).split('\n').length} 行</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -190,18 +201,18 @@ export default function CommunityProjectPage({ session, projectId }) {
 
             <section className="community-detail-section community-detail-comments">
               <div className="community-detail-section-heading">
-                <h2>意見・改善案</h2>
+                <h2>コメント</h2>
                 <span>{comments.length} 件</span>
               </div>
 
               {session?.user ? (
                 <form className="community-comment-form" onSubmit={submitComment}>
-                  <textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder="改善案やフィードバックを書く..." disabled={busy} />
-                  <button type="submit" disabled={busy || !comment.trim()}>{busy ? '投稿中...' : '意見を投稿'}</button>
+                  <textarea rows={3} maxLength={2000} value={comment} onChange={event => setComment(event.target.value)} placeholder="コメントを書く..." disabled={busy} />
+                  <button type="submit" disabled={busy || !comment.trim()}>{busy ? '投稿中...' : 'コメントを投稿'}</button>
                 </form>
               ) : (
                 <div className="community-comment-login">
-                  <p>ログインすると、作品への感想や改善案を投稿できます。</p>
+                  <p>ログインすると、作品にコメントできます。</p>
                   <button type="button" onClick={() => { window.location.href = '/signin' }}>ログインして投稿</button>
                 </div>
               )}

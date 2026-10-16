@@ -89,5 +89,6 @@ test('official semantic file and utility SVGs are present', () => {
   }
   assert.match(main, /json: '\/icons\/file-braces\.svg'/)
   assert.match(main, /markdown: '\/icons\/file-text\.svg'/)
-  assert.doesNotMatch(main, /python: '\/icons\/python\.svg'/)
+  assert.match(main, /python: '\/icons\/python\.svg'/)
+  assert.match(main, /csharp: 'https:\/\/learn\.microsoft\.com\/en-us\/dotnet\/media\/logo_csharp\.png'/)
 })

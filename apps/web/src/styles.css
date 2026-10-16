@@ -4542,3 +4542,175 @@ button img{pointer-events:none}
   .community-project-detail-page .community-header-title{font-size:11px}
   .community-project-detail-page .community-back-button{gap:4px;padding:0 5px;font-size:9px}
 }
+
+
+
+.community-detail-files>.community-detail-file{
+  display:flex;
+  width:100%;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:39px;
+  padding:7px 8px;
+  border:0;
+  border-bottom:1px solid #e4e4e4;
+  color:#333;
+  background:#fff;
+  text-align:left;
+  cursor:pointer;
+}
+.community-detail-files>.community-detail-file:hover,
+.community-detail-files>.community-detail-file:focus-visible{
+  background:#f5f8fc;
+  outline:none;
+}
+.community-detail-files>.community-detail-file:focus-visible{
+  box-shadow:inset 0 0 0 2px #9cbce2;
+}
+.community-detail-files>.community-detail-file>code{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  color:#333;
+  font-size:11px;
+  overflow-wrap:anywhere;
+}
+.community-detail-files>.community-detail-file>code svg{flex:0 0 auto;color:#777}
+.community-detail-files>.community-detail-file>span{
+  flex:0 0 auto;
+  color:#888;
+  font-size:10px;
+}
+.community-source-main{
+  width:min(1100px,calc(100% - 32px));
+  padding-top:22px;
+  padding-bottom:calc(72px + env(safe-area-inset-bottom));
+}
+.community-source-viewer{
+  min-width:0;
+  border-top:1px solid #dedede;
+}
+.community-source-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-width:0;
+  padding:14px 4px;
+  border-bottom:1px solid #dedede;
+}
+.community-source-heading-file{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  min-width:0;
+}
+.community-source-heading-file>img{
+  display:block;
+  flex:0 0 25px;
+  width:25px;
+  height:25px;
+  object-fit:contain;
+}
+.community-source-heading-file>div{min-width:0}
+.community-source-heading-file h1{
+  margin:0;
+  color:#222;
+  font-size:15px;
+  font-weight:650;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.community-source-heading-file p{
+  margin:3px 0 0;
+  color:#777;
+  font-size:10px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.community-source-heading-file p span{margin:0 4px;color:#aaa}
+.community-source-line-count{
+  flex:0 0 auto;
+  color:#777;
+  font-size:10px;
+}
+.community-source-path{
+  padding:7px 10px;
+  border-bottom:1px solid #e5e5e5;
+  color:#737373;
+  background:#fafafa;
+  font-size:10px;
+  overflow-wrap:anywhere;
+}
+.community-source-code{
+  max-width:100%;
+  max-height:calc(100dvh - 290px);
+  min-height:170px;
+  overflow:auto;
+  border-bottom:1px solid #dedede;
+  background:#fbfbfb;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.community-source-code:focus-visible{
+  outline:2px solid #8db4e4;
+  outline-offset:-2px;
+}
+.community-source-lines{
+  display:block;
+  width:max-content;
+  min-width:100%;
+  margin:0;
+  padding:12px 28px 16px 60px;
+  color:#252525;
+  background:#fbfbfb;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:12px;
+  line-height:1.75;
+  list-style:decimal;
+  tab-size:2;
+}
+.community-source-lines li{
+  min-height:21px;
+  padding-left:14px;
+  border-left:1px solid #e1e1e1;
+  white-space:pre;
+}
+.community-source-lines li::marker{
+  color:#969696;
+  font-size:10px;
+}
+.community-source-lines code{
+  color:#252525;
+  font:inherit;
+  white-space:pre;
+}
+.community-source-page .community-simple-empty{
+  margin-top:10px;
+}
+@media(max-width:640px){
+  .community-detail-files>.community-detail-file{padding:7px 4px}
+  .community-source-main{
+    width:calc(100% - 24px);
+    padding-top:15px;
+    padding-bottom:calc(62px + env(safe-area-inset-bottom));
+  }
+  .community-source-heading{padding:11px 3px}
+  .community-source-heading-file{gap:8px}
+  .community-source-heading-file>img{width:22px;height:22px;flex-basis:22px}
+  .community-source-heading-file h1{font-size:13px}
+  .community-source-heading-file p{font-size:9px}
+  .community-source-line-count{font-size:9px}
+  .community-source-path{padding:7px 8px;font-size:9px}
+  .community-source-code{max-height:calc(100dvh - 255px)}
+  .community-source-lines{font-size:11px;padding-left:48px;padding-right:18px}
+  .community-source-lines li{padding-left:10px}
+}
+@media(max-width:360px){
+  .community-source-heading-file h1{font-size:12px}
+  .community-source-heading-file p{max-width:170px}
+  .community-source-lines{font-size:10px;padding-left:42px;padding-right:12px}
+  .community-source-lines li{padding-left:8px}
+}

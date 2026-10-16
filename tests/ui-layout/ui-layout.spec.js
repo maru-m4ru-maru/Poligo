@@ -44,7 +44,12 @@ async function mockAuthenticatedApi(page) {
     storageBytes: 512,
     files: {
       'index.html': '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><h1>Poligo layout</h1></body></html>',
-      'main.py': 'print("Layout test")'
+      'main.py': 'print("Layout test")',
+      'style.css': 'body { margin: 0; }',
+      'script.js': 'console.log("Poligo")',
+      'index.ts': 'const label: string = "Poligo"',
+      'Program.cs': 'Console.WriteLine("Poligo")',
+      'main.cpp': '#include <iostream>'
     }
   }
 
@@ -60,7 +65,8 @@ async function mockAuthenticatedApi(page) {
     starred: false,
     favorited: false,
     files: {
-      'main.py': 'print("Community layout")'
+      'main.py': 'print("Community layout")',
+      'src/utils.py': 'def greet():\n    return "Nested source test"'
     }
   }
 
@@ -309,6 +315,13 @@ test('IDE panels align at desktop and reflow into non-overlapping rows on mobile
   }
   await expect(page.locator('.activity-bar')).toBeVisible()
   await expect(page.locator('.explorer')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="/icons/html5.svg"]')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="/icons/python.svg"]')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="/icons/css.svg"]')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="/icons/javascript.svg"]')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="/icons/typescript.svg"]')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png"]')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="/icons/cplusplus.svg"]')).toBeVisible()
   await expect(page.locator('.editor-section')).toBeVisible()
   await expect(page.locator('.preview-section')).toBeVisible()
   await assertNoHorizontalOverflow(page)
@@ -467,9 +480,26 @@ test('opening a community project uses its own route and page', async ({ page })
   await expect(page).toHaveURL(/#\/community\/project\/ui-layout-community-project$/)
   await expect(page.getByRole('heading', { name: 'Community card layout', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'ソースファイル', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'コメント', exact: true })).toBeVisible()
   await expect(page.getByText('main.py', { exact: false })).toBeVisible()
   await expect(page.getByText('The project detail page is easy to read.')).toBeVisible()
   await expect(page.locator('.community-modal')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'main.py のソースコードを表示' }).click()
+  await expect(page).toHaveURL(/#\/community\/project\/ui-layout-community-project\/source\/main\.py$/)
+  await expect(page.getByRole('heading', { name: 'main.py', exact: true })).toBeVisible()
+  await expect(page.getByText('print("Community layout")', { exact: true })).toBeVisible()
+  await expect(page.locator('.community-source-code')).toBeVisible()
+  await expect(page.locator('.community-modal')).toHaveCount(0)
+
+  await page.goto('/#/community/project/ui-layout-community-project/source/src%2Futils.py')
+  await expect(page).toHaveURL(/source\/src%2Futils\.py$/)
+  await expect(page.getByRole('heading', { name: 'utils.py', exact: true })).toBeVisible()
+  await expect(page.getByText('return "Nested source test"', { exact: true })).toBeVisible()
+
+  await page.locator('.community-source-page .community-back-button').click()
+  await expect(page).toHaveURL(/#\/community\/project\/ui-layout-community-project$/)
+  await expect(page.getByRole('heading', { name: 'Community card layout', exact: true })).toBeVisible()
   await expect(page.locator('.community-detail-project')).toBeVisible()
   await expect(page.locator('.community-footer')).toBeVisible()
   await assertNoHorizontalOverflow(page)
