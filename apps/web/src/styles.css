@@ -2484,3 +2484,5 @@ button img{pointer-events:none}
 
 /* Keep the ambient accent inside the community viewport. */
 .community-page::after{right:0}
+
+.community-page::before{left:0}
