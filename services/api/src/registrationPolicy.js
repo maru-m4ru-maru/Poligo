@@ -46,6 +46,25 @@ const DISPOSABLE_DOMAINS = new Set([
   'yopmail.com'
 ])
 
+const TRUSTED_MAIL_DOMAINS = new Set([
+  'hotmail.co.jp',
+  'hotmail.com',
+  'hotmail.de',
+  'hotmail.fr',
+  'live.com',
+  'live.jp',
+  'msn.com',
+  'outlook.co.jp',
+  'outlook.com',
+  'outlook.de',
+  'outlook.fr',
+  'outlook.jp',
+  'pm.me',
+  'protonmail.ch',
+  'protonmail.com',
+  'proton.me'
+])
+
 let externalDisposableCheck = null
 
 try {
@@ -71,6 +90,12 @@ export function normalizeUsername(value) {
 }
 
 function isDisposableEmailAddress(email) {
+  const domain = email.split('@').at(-1).toLowerCase()
+
+  if (TRUSTED_MAIL_DOMAINS.has(domain)) {
+    return false
+  }
+
   if (externalDisposableCheck) {
     try {
       if (externalDisposableCheck(email)) {
@@ -78,8 +103,6 @@ function isDisposableEmailAddress(email) {
       }
     } catch {}
   }
-
-  const domain = email.split('@').at(-1).toLowerCase()
 
   for (const disposableDomain of DISPOSABLE_DOMAINS) {
     if (
