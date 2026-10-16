@@ -320,7 +320,7 @@ test('IDE panels align at desktop and reflow into non-overlapping rows on mobile
   await expect(page.locator('.explorer-file-main img[src="/icons/css.svg"]')).toBeVisible()
   await expect(page.locator('.explorer-file-main img[src="/icons/javascript.svg"]')).toBeVisible()
   await expect(page.locator('.explorer-file-main img[src="/icons/typescript.svg"]')).toBeVisible()
-  await expect(page.locator('.explorer-file-main img[src="/icons/csharp.svg"]')).toBeVisible()
+  await expect(page.locator('.explorer-file-main img[src="https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png"]')).toBeVisible()
   await expect(page.locator('.explorer-file-main img[src="/icons/cplusplus.svg"]')).toBeVisible()
   await expect(page.locator('.editor-section')).toBeVisible()
   await expect(page.locator('.preview-section')).toBeVisible()
