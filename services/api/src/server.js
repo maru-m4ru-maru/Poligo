@@ -34,6 +34,7 @@ import {
 } from './commitRetention.js'
 import { parseSourceControlRoute } from './sourceControlPolicy.js'
 import { consumeUserQuota, pruneUserQuotaState } from './rateLimitPolicy.js'
+import { getCloudflareWorkersAiConfig, requestCloudflareWorkersAi } from './aiProviders.js'
 
 const port = Number(process.env.PORT || 10000)
 const runnerUrl = process.env.RUNNER_URL || ''
@@ -49,6 +50,7 @@ const originPolicy = getOriginPolicy(configuredOrigin, runtimeEnvironment)
 const allowedOrigin = originPolicy.corsOrigin
 const allowedOrigins = originPolicy.allowedOrigins
 const openRouterApiKey = process.env.OPENROUTER_API_KEY || ''
+const cloudflareWorkersAi = getCloudflareWorkersAiConfig()
 const openRouterSiteUrl = process.env.OPENROUTER_SITE_URL || 'https://poligo-web-2n2l.onrender.com'
 const openRouterModels = {
   fast: process.env.OPENROUTER_MODEL_FAST || 'qwen/qwen-2.5-coder-7b-instruct:free',
@@ -66,7 +68,7 @@ const EXECUTION_WINDOW_MS = 5 * 60 * 1000
 const EXECUTION_REQUESTS_PER_WINDOW = 12
 const AI_REQUEST_WINDOW_MS = 5 * 60 * 1000
 const AI_REQUESTS_PER_WINDOW = 10
-const OPENROUTER_TIMEOUT_MS = 25_000
+const AI_PROVIDER_TIMEOUT_MS = 25_000
 const EXECUTION_RECORD_TTL_MS = 10 * 60 * 1000
 const EXECUTION_CPU_TIME_LIMIT = 2
 const EXECUTION_WALL_TIME_LIMIT = 5
@@ -3598,14 +3600,7 @@ async function handleExecutionStatus(request, response, id) {
 }
 
 
-function selectOpenRouterModel(mode, prompt) {
-  if (mode && mode !== 'auto' && openRouterModels[mode]) {
-    return {
-      mode,
-      model: openRouterModels[mode]
-    }
-  }
-
+function selectOpenRouterModel(prompt) {
   const lower = String(prompt || '').toLowerCase()
 
   if (
@@ -3614,10 +3609,7 @@ function selectOpenRouterModel(mode, prompt) {
     lower.includes('completion') ||
     lower.length < 80
   ) {
-    return {
-      mode: 'fast',
-      model: openRouterModels.fast
-    }
+    return openRouterModels.fast
   }
 
   if (
@@ -3630,16 +3622,10 @@ function selectOpenRouterModel(mode, prompt) {
     lower.includes('解析') ||
     lower.includes('why ')
   ) {
-    return {
-      mode: 'reasoning',
-      model: openRouterModels.reasoning
-    }
+    return openRouterModels.reasoning
   }
 
-  return {
-    mode: 'code',
-    model: openRouterModels.code
-  }
+  return openRouterModels.code
 }
 
 function trimAiFileContext(files) {
@@ -5788,9 +5774,9 @@ async function handleAiAssist(request, response) {
     return
   }
 
-  if (!openRouterApiKey) {
+  if (!cloudflareWorkersAi.enabled && !openRouterApiKey) {
     send(response, 503, {
-      error: 'OpenRouter API key is not configured on the server'
+      error: 'Poligo AI is temporarily unavailable. Please try again later.'
     })
     return
   }
@@ -5832,10 +5818,6 @@ async function handleAiAssist(request, response) {
   const projectName = typeof payload.projectName === 'string'
     ? payload.projectName.slice(0, 120)
     : 'Poligo project'
-  const mode = typeof payload.mode === 'string'
-    ? payload.mode
-    : 'auto'
-  const selectedModel = selectOpenRouterModel(mode, prompt)
   const files = trimAiFileContext(payload.files)
 
   const fileContext = Object.entries(files)
@@ -5859,69 +5841,106 @@ async function handleAiAssist(request, response) {
     prompt
   ].join('\n')
 
-  const upstreamResponse = await fetch(
-    'https://openrouter.ai/api/v1/chat/completions',
+  const messages = [
     {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + openRouterApiKey,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': openRouterSiteUrl,
-        'X-Title': 'Poligo'
-      },
-      signal: AbortSignal.timeout(OPENROUTER_TIMEOUT_MS),
-      body: JSON.stringify({
-        model: selectedModel.model,
-        messages: [
+      role: 'system',
+      content: buildAiSystemPrompt()
+    },
+    {
+      role: 'user',
+      content: userMessage
+    }
+  ]
+  const providers = []
+
+  if (cloudflareWorkersAi.enabled) {
+    providers.push({
+      name: 'Cloudflare Workers AI',
+      request: () => requestCloudflareWorkersAi({
+        ...cloudflareWorkersAi,
+        messages,
+        timeoutMs: AI_PROVIDER_TIMEOUT_MS
+      })
+    })
+  }
+
+  if (openRouterApiKey) {
+    providers.push({
+      name: 'OpenRouter',
+      request: async () => {
+        const model = selectOpenRouterModel(prompt)
+        const upstreamResponse = await fetch(
+          'https://openrouter.ai/api/v1/chat/completions',
           {
-            role: 'system',
-            content: buildAiSystemPrompt()
-          },
-          {
-            role: 'user',
-            content: userMessage
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + openRouterApiKey,
+              'Content-Type': 'application/json',
+              'HTTP-Referer': openRouterSiteUrl,
+              'X-Title': 'Poligo'
+            },
+            signal: AbortSignal.timeout(AI_PROVIDER_TIMEOUT_MS),
+            body: JSON.stringify({
+              model,
+              messages,
+              temperature: 0.2,
+              max_tokens: 8_000
+            })
           }
-        ],
-        temperature: 0.2,
-        max_tokens: 8_000
+        )
+
+        let upstreamBody
+
+        try {
+          upstreamBody = await upstreamResponse.json()
+        } catch {
+          upstreamBody = {}
+        }
+
+        if (!upstreamResponse.ok) {
+          throw new Error(
+            upstreamBody?.error?.message ||
+            upstreamBody?.message ||
+            'AI provider request failed'
+          )
+        }
+
+        const content = upstreamBody?.choices?.[0]?.message?.content
+
+        if (typeof content !== 'string' || !content.trim()) {
+          throw new Error('AI provider returned an empty response')
+        }
+
+        return content
+      }
+    })
+  }
+
+  let content = ''
+  let parsed = null
+
+  for (const provider of providers) {
+    try {
+      content = await provider.request()
+      const candidate = parseAiResponse(content)
+
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        throw new Error('AI response was not a JSON object')
+      }
+
+      parsed = candidate
+      break
+    } catch (error) {
+      console.warn('Poligo AI provider failed', {
+        provider: provider.name,
+        message: error instanceof Error ? error.message : String(error)
       })
     }
-  )
-
-  let upstreamBody
-
-  try {
-    upstreamBody = await upstreamResponse.json()
-  } catch {
-    upstreamBody = {}
   }
 
-  if (!upstreamResponse.ok) {
-    send(response, upstreamResponse.status === 429 ? 429 : 502, {
-      error:
-        upstreamBody?.error?.message ||
-        upstreamBody?.message ||
-        'OpenRouter request failed'
-    })
-    return
-  }
-
-  const content = upstreamBody?.choices?.[0]?.message?.content
-
-  if (typeof content !== 'string' || !content.trim()) {
+  if (!parsed) {
     send(response, 502, {
-      error: 'OpenRouter returned an empty response'
-    })
-    return
-  }
-
-  let parsed
-
-  try {
-    parsed = parseAiResponse(content)
-  } catch {
-    send(response, 502, {
-      error: 'AI returned an invalid coding response'
+      error: 'Poligo AI could not respond right now. Please try again.'
     })
     return
   }
@@ -5939,9 +5958,7 @@ async function handleAiAssist(request, response) {
 
   send(response, 200, {
     reply: typeof parsed.reply === 'string' ? parsed.reply : content,
-    edits,
-    model: selectedModel.model,
-    mode: selectedModel.mode
+    edits
   })
 }
 

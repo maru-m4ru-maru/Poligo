@@ -851,7 +851,6 @@ function IDE({ projectId }) {
   const [sourceError, setSourceError] = useState('')
   const [aiMessages, setAiMessages] = useState([])
   const [aiPrompt, setAiPrompt] = useState('')
-  const [aiMode, setAiMode] = useState('auto')
   const [aiBusy, setAiBusy] = useState(false)
   const [aiAutoApply, setAiAutoApply] = useState(() => localStorage.getItem('poligo-ai-auto-apply') === 'true')
   const [dialog, setDialog] = useState(null)
@@ -2437,7 +2436,6 @@ function IDE({ projectId }) {
         method: 'POST',
         body: JSON.stringify({
           prompt,
-          mode: aiMode,
           action: 'assist',
           projectName,
           currentFile: activeFile,
@@ -2452,7 +2450,6 @@ function IDE({ projectId }) {
         role: 'assistant',
         text: result.reply || 'AIから応答がありませんでした。',
         edits: Array.isArray(result.edits) ? result.edits : [],
-        model: result.model || '',
         applied: false,
         applyError: ''
       }
@@ -2479,7 +2476,6 @@ function IDE({ projectId }) {
           role: 'assistant',
           text: error instanceof Error ? error.message : 'AIリクエストに失敗しました。',
           edits: [],
-          model: '',
           applied: false,
           applyError: ''
         }
@@ -2831,25 +2827,6 @@ function IDE({ projectId }) {
                       <div className="ai-panel-head">
                         <div>
                           <strong>Poligo AI</strong>
-                          <span>OpenRouter</span>
-                        </div>
-                        <div className="ai-model-picker" role="group" aria-label="AIモデル">
-                          {[
-                            ['auto', '自動'],
-                            ['fast', '速度重視'],
-                            ['code', '賢さ重視'],
-                            ['reasoning', '推論重視']
-                          ].map(([id, label]) => (
-                            <button
-                              key={id}
-                              type="button"
-                              className={aiMode === id ? 'active' : ''}
-                              onClick={() => setAiMode(id)}
-                              disabled={aiBusy}
-                            >
-                              {label}
-                            </button>
-                          ))}
                         </div>
                       </div>
 
@@ -2865,7 +2842,6 @@ function IDE({ projectId }) {
                           <div key={index} className={'ai-message ai-message-' + message.role}>
                             <div className="ai-message-role">
                               {message.role === 'user' ? 'あなた' : 'Poligo AI'}
-                              {message.model && <span>{message.model}</span>}
                             </div>
                             <div className="ai-message-text">{message.text}</div>
 
