@@ -65,7 +65,7 @@ The following assets are copied from the upstream Lucide SVGs. The source geomet
 | file-cog.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-cog.svg | Configuration file |
 | file-text.svg | https://github.com/lucide-icons/lucide/blob/main/icons/file-text.svg | Text and Markdown documents |
 
-Language logos remain restricted to language and runtime cards; a file in the IDE tree never borrows a language's trademark logo. A generic source-file glyph is deliberately shared by source-code files, while JSON, environment, configuration, and text documents receive distinct file-type symbols. Decorative images use empty alt text; buttons keep accessible names in their text or ARIA labels.
+Recognized source files in the IDE tree use language-specific marks. HTML, CSS, JavaScript, TypeScript, Python, Java, Go, Rust, PHP, Ruby, Kotlin, C, and C++ use local SVG assets; C# uses Microsoft's published C# logo at the source URL above. JSON, Markdown, environment files, configuration files, and plain text keep file-type icons. Decorative images use empty alt text; file buttons keep accessible names in their text or ARIA labels.
 
 | ui-chevron-right.svg | https://github.com/lucide-icons/lucide/blob/main/icons/chevron-right.svg | Folder disclosure |
 | ui-play.svg | https://github.com/lucide-icons/lucide/blob/main/icons/play.svg | Run project |
