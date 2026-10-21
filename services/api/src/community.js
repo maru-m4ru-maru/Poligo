@@ -165,6 +165,9 @@ async function createCommunityNotification(db, notification) {
 }
 
 async function handleCommunityRequest(request, response, { createProject } = {}) {
+  send(response, 503, { error: 'Poligo Community is temporarily unavailable for maintenance.' })
+  return
+
   const url = new URL(request.url || '/', 'http://localhost')
   const parts = url.pathname.split('/').filter(Boolean)
   if (
