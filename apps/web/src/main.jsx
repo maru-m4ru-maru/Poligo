@@ -4038,7 +4038,14 @@ function AppRouter() {
   }
 
   if (communityPath) {
-    return <CommunityPage session={session} />
+    return (
+      <main className="community-maintenance-page">
+        <img src="/poligo-logo.svg" alt="Poligo" />
+        <h1>コミュニティは一時メンテナンス中です</h1>
+        <p>現在、コミュニティ機能を一時的に停止しています。</p>
+        <button type="button" onClick={() => { window.location.hash = '/dashboard' }}>ダッシュボードに戻る</button>
+      </main>
+    )
   }
 
   if (pathname === '/admin') {
