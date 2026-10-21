@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  isExecutionLanguageDisabled,
   normalizeJudge0Language,
   shouldUseJudge0
 } from '../../services/api/src/executionRouting.js'
@@ -23,7 +24,7 @@ test('keeps runner-supported languages on a healthy execution runner', () => {
 })
 
 test('falls back to Judge0 when the configured runner lacks execution capacity', () => {
-  for (const language of ['python', 'node', 'go', 'rust', 'java', 'php', 'ruby', 'kotlin', 'c', 'cpp', 'csharp']) {
+  for (const language of ['python', 'node', 'go', 'rust', 'java', 'ruby', 'kotlin', 'c', 'cpp', 'csharp']) {
     assert.equal(shouldUseJudge0(language, true, false), true, language)
   }
 })
@@ -32,4 +33,17 @@ test('maps the Node project runtime to the Judge0 JavaScript runtime', () => {
   assert.equal(normalizeJudge0Language('node'), 'javascript')
   assert.equal(normalizeJudge0Language('javascript'), 'javascript')
   assert.equal(normalizeJudge0Language('typescript'), 'typescript')
+})
+
+
+test('temporarily disables PHP execution regardless of letter case', () => {
+  assert.equal(isExecutionLanguageDisabled('php'), true)
+  assert.equal(isExecutionLanguageDisabled('PHP'), true)
+  assert.equal(isExecutionLanguageDisabled(' Php '), true)
+})
+
+test('keeps unrelated execution languages enabled', () => {
+  for (const language of ['python', 'node', 'javascript', 'typescript', 'ruby']) {
+    assert.equal(isExecutionLanguageDisabled(language), false, language)
+  }
 })

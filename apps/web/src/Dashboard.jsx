@@ -100,16 +100,6 @@ const TEMPLATES = [
     }
   },
   {
-    id: 'php',
-    title: 'PHP',
-    subtitle: 'PHP',
-    type: 'PHP',
-    categories: ['バックエンド', 'ネイティブ言語'],
-    files: {
-      'index.php': '<?php\necho "Hello from Poligo";\n'
-    }
-  },
-  {
     id: 'ruby',
     title: 'Ruby',
     subtitle: 'Ruby',
@@ -253,7 +243,6 @@ const TEMPLATE_ICONS = {
   Java: '/icons/java.svg',
   Go: '/icons/go.svg',
   Rust: '/icons/rust.svg',
-  PHP: '/icons/php.svg',
   Ruby: '/icons/ruby.svg',
   Kotlin: '/icons/kotlin.svg',
   'C#': 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png',

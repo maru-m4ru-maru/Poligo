@@ -23,7 +23,6 @@ const LANGUAGES = [
   { name: 'Java', icon: '/icons/java.svg' },
   { name: 'Go', icon: '/icons/go.svg' },
   { name: 'Rust', icon: '/icons/rust.svg' },
-  { name: 'PHP', icon: '/icons/php.svg' },
   { name: 'Ruby', icon: '/icons/ruby.svg' },
   { name: 'Kotlin', icon: '/icons/kotlin.svg' },
   { name: 'C#', icon: 'https://learn.microsoft.com/en-us/dotnet/media/logo_csharp.png' }

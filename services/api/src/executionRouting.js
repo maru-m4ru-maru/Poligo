@@ -5,3 +5,8 @@ export function shouldUseJudge0(language, runnerConfigured, runnerExecutionReady
 export function normalizeJudge0Language(language) {
   return language === 'node' ? 'javascript' : language
 }
+
+export function isExecutionLanguageDisabled(language) {
+  return typeof language === 'string' &&
+    language.trim().toLowerCase() === 'php'
+}

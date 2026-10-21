@@ -38,12 +38,6 @@ LANGUAGES = [
         "output": "TypeScript OK 日本語🚀",
     },
     {
-        "title": "PHP",
-        "file": "index.php",
-        "source": '<?php\necho "PHP OK 日本語🚀\\n";',
-        "output": "PHP OK 日本語🚀",
-    },
-    {
         "title": "C#",
         "file": "main.cs",
         "source": 'using System;\n\nclass Program {\n    static void Main() {\n        Console.WriteLine("C# OK 日本語🚀");\n    }\n}',
