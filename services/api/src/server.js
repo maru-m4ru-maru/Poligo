@@ -15,7 +15,7 @@ import {
   encryptProjectSecrets
 } from './secretStore.js'
 import { filesEqual, mergeTerminalFiles } from './terminalSync.js'
-import { normalizeJudge0Language, shouldUseJudge0 } from './executionRouting.js'
+import { isExecutionLanguageDisabled, normalizeJudge0Language, shouldUseJudge0 } from './executionRouting.js'
 import { isRunnerExecutionReady } from './runnerReadiness.js'
 import { getTypeScriptCompilerOptions } from './typescriptCompilerOptions.js'
 import { isConfiguredAdmin, isGeneratedE2EAccountEmail } from './adminPolicy.js'
@@ -3467,6 +3467,14 @@ async function handleExecution(request, response) {
   }
 
   const payload = await readJson(request)
+
+  if (isExecutionLanguageDisabled(payload?.language)) {
+    send(response, 503, {
+      error: 'PHP execution is temporarily disabled for security maintenance.',
+      code: 'language_temporarily_disabled'
+    })
+    return
+  }
 
   try {
     payload.files = normalizeExecutionFiles(payload.files)
