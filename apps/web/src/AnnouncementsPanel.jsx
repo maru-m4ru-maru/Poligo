@@ -19,7 +19,14 @@ export default function AnnouncementsPanel() {
         }
 
         if (active) {
-          setItems(Array.isArray(result.announcements) ? result.announcements : [])
+          setItems(
+            Array.isArray(result.announcements)
+              ? result.announcements.filter(item => {
+                  const announcementText = String(item.title || '') + '\n' + String(item.message || '')
+                  return !/community|コミュニティ/i.test(announcementText)
+                })
+              : []
+          )
         }
       } catch (reason) {
         if (active) {

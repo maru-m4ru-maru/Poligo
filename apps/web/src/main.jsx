@@ -903,48 +903,9 @@ function IDE({ projectId }) {
   )
 
   useEffect(() => {
-    let cancelled = false
-
-    async function loadCommunityPublication() {
-      setCommunityPublicationChecked(false)
-
-      if (!workspaceReady || !currentProjectId) {
-        setCommunityPublication(null)
-        setCommunityPublicationChecked(true)
-        return
-      }
-
-      if (!session?.user?.id) {
-        setCommunityPublication(null)
-        setCommunityPublicationChecked(true)
-        return
-      }
-
-      try {
-        const result = await request(
-          '/api/community/projects?sourceProjectId=' + encodeURIComponent(currentProjectId)
-        )
-
-        if (!cancelled) {
-          setCommunityPublication(result.projects?.[0] || null)
-        }
-      } catch {
-        if (!cancelled) {
-          setCommunityPublication(null)
-        }
-      } finally {
-        if (!cancelled) {
-          setCommunityPublicationChecked(true)
-        }
-      }
-    }
-
-    void loadCommunityPublication()
-
-    return () => {
-      cancelled = true
-    }
-  }, [workspaceReady, currentProjectId, session?.user?.id])
+    setCommunityPublication(null)
+    setCommunityPublicationChecked(true)
+  }, [currentProjectId])
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -3205,9 +3166,6 @@ function IDE({ projectId }) {
           >
             <span className="project-title">{projectName}</span>
             <span className="project-picker-arrow"><InterfaceIcon src="/icons/ui-chevron-down.svg" size={13} /></span>
-            <span className={'project-visibility' + (communityPublication ? ' is-public' : '')}>
-              {!communityPublicationChecked ? '確認中' : communityPublication ? '公開中' : '非公開'}
-            </span>
             <span className={'save-status ' + saveStatus.replace(/\s/g, '-').replace(' ', '-')}>
               {saveStatus}
             </span>
@@ -3242,15 +3200,6 @@ function IDE({ projectId }) {
           </span>
           <button className="dashboard-button" onClick={() => navigate('/dashboard')}>
             ダッシュボード
-          </button>
-          <button
-            className="community-share-button"
-            type="button"
-            onClick={() => void openCommunityShare()}
-            aria-label="コミュニティへの共有設定"
-            title="コミュニティへの共有設定"
-          >
-            共有
           </button>
           <button className="signout-button" onClick={handleSignOut}>
             サインアウト
@@ -3948,10 +3897,10 @@ function AppRouter() {
   const { data: session, isPending } = authClient.useSession()
   const authPath = pathname === '/signin' || pathname === '/createaccount'
   const accountPath = pathname === '/account'
-  const communityPath = pathname === '/community'
+  const communityPath = pathname === '/community' || pathname.startsWith('/community/')
   const communityProjectPath = /^\/community\/project\/[^/]+$/.test(pathname)
   const communityProjectSourcePath = /^\/community\/project\/[^/]+\/source\/[^/]+$/.test(pathname)
-  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || pathname === '/community' || communityProjectPath || communityProjectSourcePath
+  const publicPath = pathname === '/' || pathname === '/terms' || pathname === '/privacy' || communityPath
   const idePath = pathname === '/ide' || pathname.startsWith('/ide/')
 
   useEffect(() => {
@@ -4025,14 +3974,14 @@ function AppRouter() {
     return <AccountPage session={session} />
   }
 
-  if (communityProjectSourcePath) {
+  if (communityProjectSourcePath && !communityPath) {
     const routeMatch = pathname.match(/^\/community\/project\/([^/]+)\/source\/([^/]+)$/)
     const projectId = decodeURIComponent(routeMatch[1])
     const filePath = decodeURIComponent(routeMatch[2])
     return <CommunityProjectSourcePage session={session} projectId={projectId} filePath={filePath} />
   }
 
-  if (communityProjectPath) {
+  if (communityProjectPath && !communityPath) {
     const projectId = decodeURIComponent(pathname.slice('/community/project/'.length))
     return <CommunityProjectPage session={session} projectId={projectId} />
   }
