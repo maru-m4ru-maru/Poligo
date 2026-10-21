@@ -726,6 +726,11 @@ function isServerLanguage(language) {
   return SERVER_LANGUAGES.has(language)
 }
 
+function isExecutionLanguageTemporarilyDisabled(language) {
+  return typeof language === 'string' &&
+    language.trim().toLowerCase() === 'php'
+}
+
 function parseExecutionArguments(value) {
   const args = []
   let current = ''
@@ -2571,6 +2576,29 @@ function IDE({ projectId }) {
   }
 
   async function runProject() {
+    if (isExecutionLanguageTemporarilyDisabled(executionLanguage)) {
+      const message = 'PHPの実行はセキュリティ対応のため一時停止中です。'
+
+      setBottomOpen(true)
+      setBottomTab('debug')
+      setExecution({
+        id: '',
+        status: 'failed',
+        result: null,
+        error: message
+      })
+      setDebugOutput({
+        status: 'failed',
+        file: executionEntrypoint,
+        language: executionLanguage,
+        stdout: '',
+        stderr: '',
+        exitCode: null,
+        error: message
+      })
+      return
+    }
+
     const serverExecution = SERVER_LANGUAGES.has(executionLanguage)
 
     setBottomOpen(true)
